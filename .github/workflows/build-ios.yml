@@ -10,7 +10,9 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    # macos-14 chỉ có Xcode 15.4 sẵn — xcodegen bản mới ghi project file format 77 (Xcode 16+),
+    # Xcode 15.4 không mở được ("future Xcode project file format"). macos-15 có Xcode 16 mặc định.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
