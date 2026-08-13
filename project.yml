@@ -11,7 +11,6 @@ targets:
     platform: iOS
     sources:
       - path: Sources
-    resources:
       - path: Assets.xcassets
     info:
       path: Sources/Info.plist
