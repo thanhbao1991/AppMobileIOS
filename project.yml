@@ -22,6 +22,14 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
+        # Lưới an toàn: trang web thỉnh thoảng redirect nội bộ qua http:// trước khi Cloudflare
+        # nâng lại https:// — ATS chặn cứng hop http:// đó theo mặc định. Chỉ nới cho đúng domain
+        # này (không NSAllowsArbitraryLoads toàn cục).
+        NSAppTransportSecurity:
+          NSExceptionDomains:
+            denncoffee.uk:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: uk.denncoffee.appmobileios
