@@ -1,0 +1,48 @@
+name: Build unsigned iOS IPA
+
+# Build chạy trên macOS runner của GitHub (không cần Mac thật) — output là .ipa CHƯA KÝ.
+# Ký + cài thật làm ở máy Windows bằng Sideloadly (dùng Apple ID cá nhân), KHÔNG ký trong CI
+# để khỏi phải nhét Apple ID/2FA vào secrets.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build unsigned .app
+        run: |
+          xcodebuild \
+            -project AppMobileIOS.xcodeproj \
+            -scheme AppMobileIOS \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
+
+      - name: Package unsigned .ipa
+        run: |
+          set -e
+          APP_PATH="build/Build/Products/Release-iphoneos/AppMobileIOS.app"
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r AppMobileIOS-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AppMobileIOS-unsigned-ipa
+          path: AppMobileIOS-unsigned.ipa
