@@ -139,27 +139,23 @@ private struct HoaDonRowView: View {
                 .frame(width: 4)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(HoaDonFormatting.time(item.ngayGio)).font(.caption).foregroundColor(.textMuted)
                     Text(HoaDonFormatting.phanLoaiLabel(item.phanLoai))
                         .font(.caption.bold())
                         .foregroundColor(HoaDonFormatting.phanLoaiColor(item.phanLoai))
+                    if item.phanLoai == "Ship" {
+                        if let nguoiShip = item.nguoiShip, !nguoiShip.isEmpty {
+                            ShipperAvatarView(name: nguoiShip, size: 16)
+                        } else {
+                            Text("(chưa gán shipper)").font(.caption2).foregroundColor(.dangerColor)
+                        }
+                    }
                     Spacer()
                 }
                 Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
                     .font(.subheadline.bold())
-                if let mon = item.tenMonSummary, !mon.isEmpty {
-                    Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
-                }
                 if item.phanLoai == "Ship" {
-                    if item.nguoiShip?.isEmpty ?? true {
-                        Text("Chưa gán shipper").font(.footnote).foregroundColor(.dangerColor)
-                    } else {
-                        HStack(spacing: 4) {
-                            ShipperAvatarView(name: item.nguoiShip!, size: 18)
-                            Text(item.nguoiShip!).font(.footnote).foregroundColor(.textMuted)
-                        }
-                    }
                     if let diaChi = item.diaChiText, !diaChi.isEmpty {
                         HStack(spacing: 4) {
                             Image(systemName: "location.fill").font(.caption2).foregroundColor(.textMuted)
@@ -175,6 +171,9 @@ private struct HoaDonRowView: View {
                             .foregroundColor(.brandPrimary)
                         }
                     }
+                }
+                if let mon = item.tenMonSummary, !mon.isEmpty {
+                    Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
                 }
             }
             Spacer()
