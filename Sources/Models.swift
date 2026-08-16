@@ -125,6 +125,7 @@ struct ChiTietHoaDonThanhToanDto: Decodable, Identifiable {
     let hoaDonId: String
     let ghiChu: String?
     let tenMonSummary: String?
+    let phuongThucThanhToanId: String?
 }
 
 // ---- Chi tiêu hằng ngày ----

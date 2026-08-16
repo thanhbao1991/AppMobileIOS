@@ -19,6 +19,16 @@ struct ThanhToanListView: View {
         HoaDonFormatting.money(filteredItems.reduce(0) { $0 + $1.soTien })
     }
 
+    private var totalTienMat: Double {
+        filteredItems.filter { $0.phuongThucThanhToanId?.lowercased() == PaymentMethod.tienMatId }
+            .reduce(0) { $0 + $1.soTien }
+    }
+
+    private var totalChuyenKhoan: Double {
+        filteredItems.filter { $0.phuongThucThanhToanId?.lowercased() == PaymentMethod.chuyenKhoanId }
+            .reduce(0) { $0 + $1.soTien }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -53,10 +63,19 @@ struct ThanhToanListView: View {
                 }
 
                 Divider()
-                HStack {
-                    Text("Tổng thu").font(.subheadline).foregroundColor(.textMuted)
-                    Spacer()
-                    Text(totalText).font(.headline)
+                VStack(spacing: 2) {
+                    HStack {
+                        Text("Tổng thu").font(.subheadline).foregroundColor(.textMuted)
+                        Spacer()
+                        Text(totalText).font(.headline)
+                    }
+                    HStack {
+                        Spacer()
+                        Text("Tiền mặt: \(HoaDonFormatting.money(totalTienMat))")
+                            .font(.caption2).foregroundColor(.successColor)
+                        Text("Chuyển khoản: \(HoaDonFormatting.money(totalChuyenKhoan))")
+                            .font(.caption2).foregroundColor(.brandPrimary)
+                    }
                 }
                 .padding()
             }
@@ -85,26 +104,72 @@ private struct ThanhToanRowView: View {
     let item: ChiTietHoaDonThanhToanDto
     let deleting: Bool
 
+    /// "Thanh toán" là loại mặc định (thu đủ trong ngày) — không mang thông tin gì mới nên ẩn,
+    /// chỉ hiện các loại khác (Trong ngày/Trả nợ qua ngày/Trả nợ trong ngày).
+    private var loaiThanhToanText: String? {
+        guard let loai = item.loaiThanhToan, !loai.isEmpty, loai != "Thanh toán" else { return nil }
+        return loai
+    }
+
+    /// "Thanh toán đủ" chỉ là ghi chú mặc định khi thu đủ tiền — ẩn cho gọn (khớp web mobile,
+    /// xem PaymentLabels.ThanhToanDu bên Backend).
+    private var ghiChuDisplay: String? {
+        guard let ghiChu = item.ghiChu, !ghiChu.isEmpty, ghiChu != "Thanh toán đủ", ghiChu != "Shipper" else { return nil }
+        return ghiChu
+    }
+
+    private var isShipperNote: Bool {
+        item.ghiChu == "Shipper"
+    }
+
+    private var isBank: Bool {
+        item.phuongThucThanhToanId?.lowercased() == PaymentMethod.chuyenKhoanId
+    }
+
+    private var borderColor: Color {
+        switch item.loaiThanhToan {
+        case "Trả nợ qua ngày": return .dangerColor
+        case "Trả nợ trong ngày": return .pinkColor
+        default: return .successColor
+        }
+    }
+
     var body: some View {
         HStack(spacing: 10) {
+            Rectangle()
+                .fill(borderColor)
+                .frame(width: 4)
+
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(HoaDonFormatting.time(item.ngayGio)).font(.caption).foregroundColor(.textMuted)
-                    Text(item.loaiThanhToan ?? "").font(.caption.bold()).foregroundColor(.brandPrimary)
+                    if let loaiThanhToanText {
+                        Text(loaiThanhToanText).font(.caption.bold()).foregroundColor(borderColor)
+                    }
+                    if isShipperNote {
+                        ShipperAvatarView(name: "Khánh", size: 16)
+                    } else if let ghiChuDisplay {
+                        Text(ghiChuDisplay).font(.caption).foregroundColor(.textMuted).lineLimit(1)
+                    }
                 }
                 Text(item.ten).font(.subheadline.bold())
                 if let mon = item.tenMonSummary, !mon.isEmpty {
                     Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
-                }
-                if let ghiChu = item.ghiChu, !ghiChu.isEmpty {
-                    Text(ghiChu).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
                 }
             }
             Spacer()
             if deleting {
                 ProgressView()
             } else {
-                Text(HoaDonFormatting.money(item.soTien)).font(.subheadline.bold()).foregroundColor(.successColor)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(HoaDonFormatting.money(item.soTien)).font(.subheadline.bold())
+                    Text(isBank ? "Chuyển khoản" : "Tiền mặt")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .background((isBank ? Color.brandPrimary : Color.successColor).opacity(0.15))
+                        .foregroundColor(isBank ? .brandPrimary : .successColor)
+                        .clipShape(Capsule())
+                }
             }
         }
     }
