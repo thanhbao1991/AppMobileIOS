@@ -155,20 +155,25 @@ private struct HoaDonRowView: View {
                 }
                 Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
                     .font(.subheadline.bold())
-                if item.phanLoai == "Ship" {
-                    if let diaChi = item.diaChiText, !diaChi.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "location.fill").font(.caption2).foregroundColor(.textMuted)
-                            Text(diaChi).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
-                        }
-                    }
-                    if let phoneDigits, let sdt = item.soDienThoaiText, let url = URL(string: "tel:\(phoneDigits)") {
-                        Link(destination: url) {
+                if item.phanLoai == "Ship", (item.diaChiText?.isEmpty == false || phoneDigits != nil) {
+                    HStack(spacing: 6) {
+                        if let diaChi = item.diaChiText, !diaChi.isEmpty {
                             HStack(spacing: 4) {
-                                Image(systemName: "phone.fill").font(.caption2)
-                                Text(sdt).font(.footnote)
+                                Image(systemName: "location.fill").font(.caption2).foregroundColor(.textMuted)
+                                Text(diaChi).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
                             }
-                            .foregroundColor(.brandPrimary)
+                            .layoutPriority(0)
+                        }
+                        if let phoneDigits, let sdt = item.soDienThoaiText, let url = URL(string: "tel:\(phoneDigits)") {
+                            Link(destination: url) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "phone.fill").font(.caption2)
+                                    Text(sdt).font(.footnote)
+                                }
+                                .foregroundColor(.brandPrimary)
+                            }
+                            .fixedSize()
+                            .layoutPriority(1)
                         }
                     }
                 }
