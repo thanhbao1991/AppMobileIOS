@@ -6,20 +6,6 @@ struct HoaDonListView: View {
     @State private var loading = false
     @State private var selectedId: String?
 
-    private static let queryDateFormat: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f
-    }()
-
-    private static let dayTitleFormat: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "dd/MM/yyyy"
-        f.locale = Locale(identifier: "vi_VN")
-        return f
-    }()
-
     private var sortedItems: [HoaDonListDto] {
         items.sorted {
             let p0 = HoaDonFormatting.sortPriority($0)
@@ -36,7 +22,7 @@ struct HoaDonListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                dayNavBar
+                DayNavBar(date: $currentDate) { Task { await load() } }
 
                 if loading {
                     Spacer()
@@ -81,32 +67,15 @@ struct HoaDonListView: View {
         }
     }
 
-    private var dayNavBar: some View {
-        HStack {
-            Button { changeDay(-1) } label: { Image(systemName: "chevron.left") }
-            Spacer()
-            Text(Self.dayTitleFormat.string(from: currentDate)).font(.headline)
-            Spacer()
-            Button { changeDay(1) } label: { Image(systemName: "chevron.right") }
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-    }
-
-    private func changeDay(_ delta: Int) {
-        currentDate = Calendar.current.date(byAdding: .day, value: delta, to: currentDate) ?? currentDate
-        Task { await load() }
-    }
-
     private func load() async {
         loading = true
-        let dateIso = Self.queryDateFormat.string(from: currentDate)
+        let dateIso = DateNavFormat.queryDate.string(from: currentDate)
         items = await APIClient.shared.getHoaDonListByDay(dateIso)
         loading = false
     }
 }
 
-private struct IdentifiableId: Identifiable {
+struct IdentifiableId: Identifiable {
     let value: String
     var id: String { value }
     init(_ value: String) { self.value = value }

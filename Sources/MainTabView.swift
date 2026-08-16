@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Khung tab khớp 5 mục chính trong drawer Android (MainActivity.kt NavId) — chỉ "Hoá đơn" có nội
-/// dung thật, còn lại là vỏ "Sắp có" chờ làm sau (đúng yêu cầu: làm Hoá đơn ngày trước).
+/// 6 tab chính có nội dung thật + Tài khoản. Không có tab "Tạo hoá đơn" (bỏ qua theo yêu cầu —
+/// làm sau cùng CreatePlus). iOS TabView tự gom vào "More" nếu vượt 5 item, không giới hạn cứng
+/// như BottomNavigationView bên Android nên không cần Drawer riêng.
 struct MainTabView: View {
     @Binding var isLoggedIn: Bool
 
@@ -10,32 +11,23 @@ struct MainTabView: View {
             HoaDonListView()
                 .tabItem { Label("Hoá đơn", systemImage: "doc.text") }
 
-            PlaceholderTab(title: "Thanh toán", icon: "creditcard")
+            ThanhToanListView()
                 .tabItem { Label("Thanh toán", systemImage: "creditcard") }
 
-            PlaceholderTab(title: "Công nợ", icon: "exclamationmark.circle")
+            CongNoListView()
                 .tabItem { Label("Công nợ", systemImage: "exclamationmark.circle") }
 
-            PlaceholderTab(title: "Chi tiêu", icon: "banknote")
+            ChiTieuListView()
                 .tabItem { Label("Chi tiêu", systemImage: "banknote") }
+
+            CongViecListView()
+                .tabItem { Label("Công việc", systemImage: "checklist") }
+
+            BaoCaoMenuView()
+                .tabItem { Label("Báo cáo", systemImage: "chart.bar") }
 
             AccountTab(isLoggedIn: $isLoggedIn)
                 .tabItem { Label("Tài khoản", systemImage: "person.circle") }
-        }
-    }
-}
-
-private struct PlaceholderTab: View {
-    let title: String
-    let icon: String
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 48)).foregroundColor(.textMuted)
-                Text("Sắp có").foregroundColor(.textMuted)
-            }
-            .navigationTitle(title)
         }
     }
 }

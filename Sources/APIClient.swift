@@ -65,6 +65,85 @@ actor APIClient {
         return env.data ?? []
     }
 
+    func getCongNoList() async -> [HoaDonListDto] {
+        let req = makeRequest("/api/dashboard/cong-no-list")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[HoaDonListDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func getThanhToanByDay(_ dateIso: String) async -> [ChiTietHoaDonThanhToanDto] {
+        let req = makeRequest("/api/ChiTietHoaDonThanhToan?ngay=\(dateIso)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ChiTietHoaDonThanhToanDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func getChiTieuByDay(_ dateIso: String) async -> [ChiTieuHangNgayDto] {
+        let req = makeRequest("/api/ChiTieuHangNgay?ngay=\(dateIso)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ChiTieuHangNgayDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func getChiTieuByMonth(year: Int, month: Int) async -> [ChiTieuHangNgayDto] {
+        let req = makeRequest("/api/ChiTieuHangNgay/month?year=\(year)&month=\(month)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ChiTieuHangNgayDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func createChiTieu(_ body: ChiTieuHangNgayCreateRequest) async -> ActionResult {
+        let req = makeRequest("/api/ChiTieuHangNgay", method: "POST", body: jsonBody(body))
+        return await executeAction(req)
+    }
+
+    func getNguyenLieuBanHang() async -> [NguyenLieuBanHangDto] {
+        let req = makeRequest("/api/NguyenLieuBanHang?take=1000")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[NguyenLieuBanHangDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func getCongViecList() async -> [CongViecNoiBoDto] {
+        let req = makeRequest("/api/CongViecNoiBo")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[CongViecNoiBoDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func createCongViec(ten: String) async -> ActionResult {
+        let body = CongViecNoiBoRequest(ten: ten, daHoanThanh: false, ngayGio: isoNow())
+        let req = makeRequest("/api/CongViecNoiBo", method: "POST", body: jsonBody(body))
+        return await executeAction(req)
+    }
+
+    func updateCongViec(id: String, ten: String, daHoanThanh: Bool, ngayGio: String?) async -> ActionResult {
+        let body = CongViecNoiBoRequest(ten: ten, daHoanThanh: daHoanThanh, ngayGio: ngayGio)
+        let req = makeRequest("/api/CongViecNoiBo/\(id)", method: "PUT", body: jsonBody(body))
+        return await executeAction(req)
+    }
+
+    func getDonMuaHo(year: Int, month: Int) async -> [DonMuaHoDto] { await getDonMuaHoLike("get-don-mua-ho", year: year, month: month) }
+    func getDonApp(year: Int, month: Int) async -> [DonMuaHoDto] { await getDonMuaHoLike("get-don-app", year: year, month: month) }
+    func getDonShip(year: Int, month: Int) async -> [DonMuaHoDto] { await getDonMuaHoLike("get-don-ship", year: year, month: month) }
+    func getDonMuaVe(year: Int, month: Int) async -> [DonMuaHoDto] { await getDonMuaHoLike("get-don-mua-ve", year: year, month: month) }
+    func getDonTaiCho(year: Int, month: Int) async -> [DonMuaHoDto] { await getDonMuaHoLike("get-don-tai-cho", year: year, month: month) }
+
+    private func getDonMuaHoLike(_ endpoint: String, year: Int, month: Int) async -> [DonMuaHoDto] {
+        let req = makeRequest("/api/dashboard/\(endpoint)?thang=\(month)&nam=\(year)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[DonMuaHoDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func getChiTietThang(year: Int, month: Int) async -> [ChiTietThangDto] {
+        let req = makeRequest("/api/dashboard/get-chi-tiet-thang?thang=\(month)&nam=\(year)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ChiTietThangDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
     func getHoaDonDetail(_ id: String) async -> HoaDonDetailDto? {
         let req = makeRequest("/api/HoaDon/\(id)")
         let (data, _) = await send(req)

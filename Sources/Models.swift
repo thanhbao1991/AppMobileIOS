@@ -111,6 +111,84 @@ struct ThanhToanRequest: Encodable {
     let viTien: Bool = false
 }
 
+// ---- Thanh toán (chi tiết) ----
+
+struct ChiTietHoaDonThanhToanDto: Decodable, Identifiable {
+    let id: String
+    let ten: String
+    let loaiThanhToan: String?
+    let soTien: Double
+    let ngayGio: String?
+    let ngay: String?
+    let hoaDonId: String
+    let ghiChu: String?
+    let tenMonSummary: String?
+}
+
+// ---- Chi tiêu hằng ngày ----
+
+struct ChiTieuHangNgayDto: Decodable, Identifiable {
+    let id: String
+    let ten: String
+    let soLuong: Double
+    let donGia: Double
+    let thanhTien: Double
+    let ghiChu: String?
+    let ngay: String?
+    let ngayGio: String?
+    let nguyenLieuId: String
+    let billThang: Bool
+}
+
+struct ChiTieuHangNgayCreateRequest: Encodable {
+    let soLuong: Double
+    let donGia: Double
+    let thanhTien: Double
+    let ghiChu: String?
+    let ngay: String
+    let ngayGio: String
+    let nguyenLieuId: String
+    let billThang: Bool
+}
+
+struct NguyenLieuBanHangDto: Decodable, Identifiable {
+    let id: String
+    let ten: String
+    let donViTinh: String?
+}
+
+// ---- Công việc nội bộ ----
+
+struct CongViecNoiBoDto: Decodable, Identifiable {
+    let id: String
+    let ten: String
+    let daHoanThanh: Bool
+    let ngayGio: String?
+}
+
+struct CongViecNoiBoRequest: Encodable {
+    let ten: String
+    let daHoanThanh: Bool
+    let ngayGio: String?
+}
+
+// ---- 7 trang báo cáo tháng ----
+
+struct DonMuaHoDto: Decodable {
+    let ngayGio: String?
+    let tenKhachHangText: String?
+    let ghiChu: String?
+    let thanhTien: Double
+    let giamGia: Double
+}
+
+struct ChiTietThangDto: Decodable {
+    let ngayGio: String?
+    let tenKhachHang: String
+    let mons: [String]
+    let soLuong: Int
+}
+
 struct IdOnlyRequest: Encodable { let id: String }
 struct GanShipperRequest: Encodable { let id: String; let nguoiShip: String; let ngayShip: String; let ngayIn: String }
 
