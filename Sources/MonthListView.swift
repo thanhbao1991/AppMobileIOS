@@ -146,10 +146,10 @@ struct ChiTieuThangRowView: View {
     }
 }
 
-/// Màn "Báo cáo" liệt kê 7 trang tháng — mở NavigationStack riêng để có back button.
+/// Màn "Báo cáo" liệt kê 7 trang tháng — không tự mở NavigationStack (được push từ NavigationStack
+/// của tab "Thêm" trong MainTabView, back button tự có từ đó).
 struct BaoCaoMenuView: View {
     var body: some View {
-        NavigationStack {
             List {
                 NavigationLink("Đơn Tại chỗ") {
                     MonthListView(title: "Đơn Tại chỗ", loader: { y, m in await APIClient.shared.getDonTaiCho(year: y, month: m) },
@@ -189,6 +189,5 @@ struct BaoCaoMenuView: View {
             }
             .navigationTitle("Báo cáo")
             .navigationBarTitleDisplayMode(.inline)
-        }
     }
 }

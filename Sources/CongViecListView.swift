@@ -17,7 +17,6 @@ struct CongViecListView: View {
     }
 
     var body: some View {
-        NavigationStack {
             VStack(spacing: 0) {
                 SearchBar(text: $searchText, placeholder: "Tìm việc...")
 
@@ -53,8 +52,7 @@ struct CongViecListView: View {
             }
             .navigationTitle("Công việc")
             .navigationBarTitleDisplayMode(.inline)
-        }
-        .task { await load() }
+            .task { await load() }
     }
 
     private func load() async {

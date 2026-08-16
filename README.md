@@ -1,19 +1,24 @@
 # AppMobileIOS
 
 App **native thật** (SwiftUI, không phải WebView bọc web) cho ĐENN — gọi thẳng
-`TraSuaApp.Backend` API. 7 tab chính đều nối API thật (khác `AppMobileAndroid` — bản Android hiện
-vẫn còn sample data ở các tab này, iOS đã vượt qua port 1:1 để gọi API thật luôn). Tất cả tab danh
-sách đều có ô tìm kiếm client-side (lọc tên khách/món/ghi chú — khớp hành vi search trên
-`TraSuaApp.Mobile` web cũ):
+`TraSuaApp.Backend` API. Tất cả tính năng dưới đây đều nối API thật (khác `AppMobileAndroid` — bản
+Android hiện vẫn còn sample data ở nhiều tab, iOS đã vượt qua port 1:1 để gọi API thật luôn). Tất
+cả tab danh sách đều có ô tìm kiếm client-side (lọc tên khách/món/ghi chú — khớp hành vi search
+trên `TraSuaApp.Mobile` web cũ).
+
+Thanh tab chỉ có **5 mục** — 4 tab dùng hàng ngày + 1 tab "Thêm" gom phần còn lại (menu, không phải
+`TabView` tự động dồn — kiểm soát rõ ràng mục nào lộ ra ngoài):
 
 - **Hoá đơn** — theo ngày, chi tiết, thao tác thu tiền/ghi nợ/gán shipper/hoàn tác/xoá.
 - **Thanh toán** — chi tiết thanh toán theo ngày, vuốt trái để xoá 1 dòng.
 - **Công nợ** — danh sách hoá đơn còn nợ (bấm vào mở lại chi tiết Hoá đơn).
 - **Chi tiêu** — chi tiêu hằng ngày + thêm chi tiêu mới (chọn nguyên liệu thật), vuốt trái để sửa ghi chú/xoá.
-- **Công việc** — công việc nội bộ, tick hoàn thành + thêm việc mới.
-- **Báo cáo** — 7 trang theo tháng (Đơn Tại chỗ/Mua về/Ship/Mua hộ/App, Chi tiết tháng, Chi tiêu tháng).
-- **Thống kê** — doanh thu/thanh toán/chi tiêu/công nợ mới/trả nợ/đơn treo trong ngày + tổng công
-  nợ luỹ kế, port từ `TraSuaApp.Desktop/Controls/ThongKeTabControl` (7 endpoint `/api/ThongKe/*`).
+- **Thêm** →
+  - **Công việc** — công việc nội bộ, tick hoàn thành + thêm việc mới.
+  - **Báo cáo** — 7 trang theo tháng (Đơn Tại chỗ/Mua về/Ship/Mua hộ/App, Chi tiết tháng, Chi tiêu tháng).
+  - **Thống kê** — doanh thu/thanh toán/chi tiêu/công nợ mới/trả nợ/đơn treo trong ngày + tổng công
+    nợ luỹ kế, port từ `TraSuaApp.Desktop/Controls/ThongKeTabControl` (7 endpoint `/api/ThongKe/*`).
+  - **Tài khoản** — tên đăng nhập + đăng xuất.
 
 Còn thiếu (cố tình bỏ qua, làm sau): **Tạo hoá đơn** (CreatePlus) và tab **Đenn Signal**
 (SignalR real-time + TTS, đã có plan duyệt sẵn từ trước — xem memory

@@ -25,7 +25,6 @@ struct ThongKeView: View {
     }
 
     var body: some View {
-        NavigationStack {
             VStack(spacing: 0) {
                 DayNavBar(date: $currentDate) { Task { await load() } }
 
@@ -141,8 +140,7 @@ struct ThongKeView: View {
             }
             .navigationTitle("Thống kê")
             .navigationBarTitleDisplayMode(.inline)
-        }
-        .task { await load() }
+            .task { await load() }
     }
 
     private func load() async {
