@@ -6,6 +6,7 @@ import SwiftUI
 struct CongNoListView: View {
     @State private var items: [HoaDonListDto] = []
     @State private var loading = false
+    @State private var hasLoaded = false
     @State private var selectedId: String?
     @State private var searchText = ""
 
@@ -24,18 +25,23 @@ struct CongNoListView: View {
             VStack(spacing: 0) {
                 SearchBar(text: $searchText, placeholder: "Tìm khách, món, ghi chú...")
 
-                if loading {
+                if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
-                } else if sortedItems.isEmpty {
-                    Spacer()
-                    Text("Không có công nợ nào").foregroundColor(.textMuted)
-                    Spacer()
                 } else {
-                    List(sortedItems) { item in
-                        Button { selectedId = item.id } label: {
-                            CongNoRowView(item: item)
+                    List {
+                        if sortedItems.isEmpty {
+                            Text("Không có công nợ nào")
+                                .foregroundColor(.textMuted)
+                                .frame(maxWidth: .infinity)
+                                .listRowSeparator(.hidden)
+                        } else {
+                            ForEach(sortedItems) { item in
+                                CongNoRowView(item: item)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectedId = item.id }
+                                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                            }
                         }
-                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                     }
                     .listStyle(.plain)
                     .refreshable { await load() }
@@ -49,8 +55,6 @@ struct CongNoListView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Công nợ")
-            .navigationBarTitleDisplayMode(.inline)
         }
         .task { await load() }
         .sheet(item: Binding(
@@ -67,6 +71,7 @@ struct CongNoListView: View {
         loading = true
         items = await APIClient.shared.getCongNoList()
         loading = false
+        hasLoaded = true
     }
 }
 

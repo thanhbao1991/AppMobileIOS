@@ -6,6 +6,7 @@ import SwiftUI
 struct CongViecListView: View {
     @State private var items: [CongViecNoiBoDto] = []
     @State private var loading = false
+    @State private var hasLoaded = false
     @State private var newTen = ""
     @State private var adding = false
     @State private var searchText = ""
@@ -20,18 +21,23 @@ struct CongViecListView: View {
             VStack(spacing: 0) {
                 SearchBar(text: $searchText, placeholder: "Tìm việc...")
 
-                if loading {
+                if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
-                } else if sortedItems.isEmpty {
-                    Spacer()
-                    Text("Chưa có việc nào").foregroundColor(.textMuted)
-                    Spacer()
                 } else {
-                    List(sortedItems) { item in
-                        CongViecRowView(item: item) { toggled in
-                            Task { await toggle(item, done: toggled) }
+                    List {
+                        if sortedItems.isEmpty {
+                            Text("Chưa có việc nào")
+                                .foregroundColor(.textMuted)
+                                .frame(maxWidth: .infinity)
+                                .listRowSeparator(.hidden)
+                        } else {
+                            ForEach(sortedItems) { item in
+                                CongViecRowView(item: item) { toggled in
+                                    Task { await toggle(item, done: toggled) }
+                                }
+                                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                            }
                         }
-                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                     }
                     .listStyle(.plain)
                     .refreshable { await load() }
@@ -59,6 +65,7 @@ struct CongViecListView: View {
         loading = true
         items = await APIClient.shared.getCongViecList()
         loading = false
+        hasLoaded = true
     }
 
     private func toggle(_ item: CongViecNoiBoDto, done: Bool) async {

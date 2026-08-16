@@ -7,6 +7,7 @@ struct ChiTieuListView: View {
     @State private var currentDate = Date()
     @State private var items: [ChiTieuHangNgayDto] = []
     @State private var loading = false
+    @State private var hasLoaded = false
     @State private var showAddSheet = false
     @State private var searchText = ""
     @State private var editingItem: ChiTieuHangNgayDto?
@@ -25,29 +26,34 @@ struct ChiTieuListView: View {
                 DayNavBar(date: $currentDate) { Task { await load() } }
                 SearchBar(text: $searchText, placeholder: "Tìm nguyên liệu, ghi chú...")
 
-                if loading {
+                if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
-                } else if filteredItems.isEmpty {
-                    Spacer()
-                    Text("Chưa có chi tiêu nào").foregroundColor(.textMuted)
-                    Spacer()
                 } else {
-                    List(filteredItems) { item in
-                        ChiTieuRowView(item: item)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    Task { await delete(item) }
-                                } label: {
-                                    Label("Xoá", systemImage: "trash")
-                                }
-                                Button {
-                                    editingItem = item
-                                } label: {
-                                    Label("Sửa", systemImage: "pencil")
-                                }
-                                .tint(.brandPrimary)
+                    List {
+                        if filteredItems.isEmpty {
+                            Text("Chưa có chi tiêu nào")
+                                .foregroundColor(.textMuted)
+                                .frame(maxWidth: .infinity)
+                                .listRowSeparator(.hidden)
+                        } else {
+                            ForEach(filteredItems) { item in
+                                ChiTieuRowView(item: item)
+                                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                                    .swipeActions(edge: .trailing) {
+                                        Button(role: .destructive) {
+                                            Task { await delete(item) }
+                                        } label: {
+                                            Label("Xoá", systemImage: "trash")
+                                        }
+                                        Button {
+                                            editingItem = item
+                                        } label: {
+                                            Label("Sửa", systemImage: "pencil")
+                                        }
+                                        .tint(.brandPrimary)
+                                    }
                             }
+                        }
                     }
                     .listStyle(.plain)
                     .refreshable { await load() }
@@ -67,8 +73,6 @@ struct ChiTieuListView: View {
                 .buttonStyle(.borderedProminent)
                 .padding()
             }
-            .navigationTitle("Chi tiêu")
-            .navigationBarTitleDisplayMode(.inline)
         }
         .task { await load() }
         .sheet(isPresented: $showAddSheet) {
@@ -87,6 +91,7 @@ struct ChiTieuListView: View {
         loading = true
         items = await APIClient.shared.getChiTieuByDay(DateNavFormat.queryDate.string(from: currentDate))
         loading = false
+        hasLoaded = true
     }
 
     private func delete(_ item: ChiTieuHangNgayDto) async {

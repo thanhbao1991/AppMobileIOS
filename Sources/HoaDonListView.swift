@@ -4,6 +4,7 @@ struct HoaDonListView: View {
     @State private var currentDate = Date()
     @State private var items: [HoaDonListDto] = []
     @State private var loading = false
+    @State private var hasLoaded = false
     @State private var selectedId: String?
     @State private var searchText = ""
 
@@ -28,22 +29,25 @@ struct HoaDonListView: View {
                 DayNavBar(date: $currentDate) { Task { await load() } }
                 SearchBar(text: $searchText, placeholder: "Tìm khách, món, ghi chú...")
 
-                if loading {
+                if !hasLoaded {
                     Spacer()
                     ProgressView()
                     Spacer()
-                } else if sortedItems.isEmpty {
-                    Spacer()
-                    Text("Không có hoá đơn nào").foregroundColor(.textMuted)
-                    Spacer()
                 } else {
-                    List(sortedItems) { item in
-                        Button {
-                            selectedId = item.id
-                        } label: {
-                            HoaDonRowView(item: item)
+                    List {
+                        if sortedItems.isEmpty {
+                            Text("Không có hoá đơn nào")
+                                .foregroundColor(.textMuted)
+                                .frame(maxWidth: .infinity)
+                                .listRowSeparator(.hidden)
+                        } else {
+                            ForEach(sortedItems) { item in
+                                HoaDonRowView(item: item)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectedId = item.id }
+                                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                            }
                         }
-                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                     }
                     .listStyle(.plain)
                     .refreshable { await load() }
@@ -57,8 +61,6 @@ struct HoaDonListView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Hoá đơn")
-            .navigationBarTitleDisplayMode(.inline)
         }
         .task { await load() }
         .sheet(item: Binding(
@@ -76,6 +78,7 @@ struct HoaDonListView: View {
         let dateIso = DateNavFormat.queryDate.string(from: currentDate)
         items = await APIClient.shared.getHoaDonListByDay(dateIso)
         loading = false
+        hasLoaded = true
     }
 }
 
@@ -88,16 +91,22 @@ struct IdentifiableId: Identifiable {
 private struct HoaDonRowView: View {
     let item: HoaDonListDto
 
-    private var statusText: String {
+    /// Chỉ 3 trạng thái đã-xử-lý — "Chưa thu" bị bỏ hẳn (không mang thông tin gì mới, phần lớn đơn
+    /// đang ở trạng thái này nên hiện lên toàn màn hình đầy badge xám vô nghĩa).
+    private var statusText: String? {
         if !(item.ngayNo?.isEmpty ?? true) { return "Ghi nợ" }
         if item.conLai <= 0.0 { return (item.isBank == true) ? "Chuyển khoản" : "Tiền mặt" }
-        return "Chưa thu"
+        return nil
     }
 
     private var statusColor: Color {
         if !(item.ngayNo?.isEmpty ?? true) { return .dangerColor }
-        if item.conLai <= 0.0 { return .successColor }
-        return .textMuted
+        return (item.isBank == true) ? .brandPrimary : .successColor
+    }
+
+    private var phoneDigits: String? {
+        guard let sdt = item.soDienThoaiText, !sdt.isEmpty else { return nil }
+        return sdt.filter { $0.isNumber || $0 == "+" }
     }
 
     var body: some View {
@@ -113,12 +122,6 @@ private struct HoaDonRowView: View {
                         .font(.caption.bold())
                         .foregroundColor(HoaDonFormatting.phanLoaiColor(item.phanLoai))
                     Spacer()
-                    Text(statusText)
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 8).padding(.vertical, 2)
-                        .background(statusColor.opacity(0.15))
-                        .foregroundColor(statusColor)
-                        .clipShape(Capsule())
                 }
                 Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
                     .font(.subheadline.bold())
@@ -129,12 +132,40 @@ private struct HoaDonRowView: View {
                     if item.nguoiShip?.isEmpty ?? true {
                         Text("Chưa gán shipper").font(.footnote).foregroundColor(.dangerColor)
                     } else {
-                        Text("Ship: \(item.nguoiShip!)").font(.footnote).foregroundColor(.textMuted)
+                        HStack(spacing: 4) {
+                            Image(systemName: "bicycle").foregroundColor(.textMuted)
+                            Text(item.nguoiShip!).font(.footnote).foregroundColor(.textMuted)
+                        }
+                    }
+                    if let diaChi = item.diaChiText, !diaChi.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "location.fill").font(.caption2).foregroundColor(.textMuted)
+                            Text(diaChi).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
+                        }
+                    }
+                    if let phoneDigits, let sdt = item.soDienThoaiText, let url = URL(string: "tel:\(phoneDigits)") {
+                        Link(destination: url) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "phone.fill").font(.caption2)
+                                Text(sdt).font(.footnote)
+                            }
+                            .foregroundColor(.brandPrimary)
+                        }
                     }
                 }
             }
             Spacer()
-            Text(HoaDonFormatting.money(item.thanhTien)).font(.subheadline.bold())
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(HoaDonFormatting.money(item.thanhTien)).font(.subheadline.bold())
+                if let statusText {
+                    Text(statusText)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .background(statusColor.opacity(0.15))
+                        .foregroundColor(statusColor)
+                        .clipShape(Capsule())
+                }
+            }
         }
     }
 }

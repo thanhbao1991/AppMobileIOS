@@ -7,6 +7,7 @@ struct ThanhToanListView: View {
     @State private var currentDate = Date()
     @State private var items: [ChiTietHoaDonThanhToanDto] = []
     @State private var loading = false
+    @State private var hasLoaded = false
     @State private var searchText = ""
     @State private var deletingId: String?
 
@@ -24,23 +25,28 @@ struct ThanhToanListView: View {
                 DayNavBar(date: $currentDate) { Task { await load() } }
                 SearchBar(text: $searchText, placeholder: "Tìm khách, món, ghi chú...")
 
-                if loading {
+                if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
-                } else if filteredItems.isEmpty {
-                    Spacer()
-                    Text("Không có thanh toán nào").foregroundColor(.textMuted)
-                    Spacer()
                 } else {
-                    List(filteredItems) { item in
-                        ThanhToanRowView(item: item, deleting: deletingId == item.id)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    Task { await delete(item) }
-                                } label: {
-                                    Label("Xoá", systemImage: "trash")
-                                }
+                    List {
+                        if filteredItems.isEmpty {
+                            Text("Không có thanh toán nào")
+                                .foregroundColor(.textMuted)
+                                .frame(maxWidth: .infinity)
+                                .listRowSeparator(.hidden)
+                        } else {
+                            ForEach(filteredItems) { item in
+                                ThanhToanRowView(item: item, deleting: deletingId == item.id)
+                                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                                    .swipeActions(edge: .trailing) {
+                                        Button(role: .destructive) {
+                                            Task { await delete(item) }
+                                        } label: {
+                                            Label("Xoá", systemImage: "trash")
+                                        }
+                                    }
                             }
+                        }
                     }
                     .listStyle(.plain)
                     .refreshable { await load() }
@@ -54,8 +60,6 @@ struct ThanhToanListView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Thanh toán")
-            .navigationBarTitleDisplayMode(.inline)
         }
         .task { await load() }
     }
@@ -64,6 +68,7 @@ struct ThanhToanListView: View {
         loading = true
         items = await APIClient.shared.getThanhToanByDay(DateNavFormat.queryDate.string(from: currentDate))
         loading = false
+        hasLoaded = true
     }
 
     private func delete(_ item: ChiTietHoaDonThanhToanDto) async {

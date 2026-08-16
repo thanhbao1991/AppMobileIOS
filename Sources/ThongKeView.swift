@@ -16,6 +16,7 @@ struct ThongKeView: View {
     @State private var chuaThanhToan: ThongKeDonChuaThanhToanDto?
     @State private var tongNo: TongNoDto?
     @State private var loading = false
+    @State private var hasLoaded = false
 
     /// Tiền mặt tại quán trừ chi tiêu ngày — số tiền mặt lẽ ra còn trong ngăn kéo. Port y hệt cách
     /// Desktop tự cộng dồn 2 API (không phải field riêng từ server).
@@ -28,7 +29,7 @@ struct ThongKeView: View {
             VStack(spacing: 0) {
                 DayNavBar(date: $currentDate) { Task { await load() } }
 
-                if loading {
+                if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
                 } else {
                     List {
@@ -138,8 +139,6 @@ struct ThongKeView: View {
                     .refreshable { await load() }
                 }
             }
-            .navigationTitle("Thống kê")
-            .navigationBarTitleDisplayMode(.inline)
             .task { await load() }
     }
 
@@ -160,6 +159,7 @@ struct ThongKeView: View {
 
         (chiTieu, congNo, thanhToan, doanhThu, traNo, chuaThanhToan, tongNo) = await (a, b, c, d, e, f, g)
         loading = false
+        hasLoaded = true
     }
 }
 

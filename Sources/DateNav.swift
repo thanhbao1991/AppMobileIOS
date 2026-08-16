@@ -29,17 +29,40 @@ enum DateNavFormat {
 struct DayNavBar: View {
     @Binding var date: Date
     var onChange: () -> Void
+    @State private var showPicker = false
 
     var body: some View {
         HStack {
             Button { change(-1) } label: { Image(systemName: "chevron.left") }
             Spacer()
-            Text(DateNavFormat.dayTitle.string(from: date)).font(.headline)
+            Button { showPicker = true } label: {
+                Text(DateNavFormat.dayTitle.string(from: date)).font(.headline)
+            }
+            .buttonStyle(.plain)
             Spacer()
             Button { change(1) } label: { Image(systemName: "chevron.right") }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
+        .sheet(isPresented: $showPicker) {
+            NavigationStack {
+                DatePicker("Chọn ngày", selection: $date, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .padding()
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Xong") {
+                                showPicker = false
+                                onChange()
+                            }
+                        }
+                    }
+                Spacer()
+            }
+            .presentationDetents([.medium])
+        }
     }
 
     private func change(_ delta: Int) {
@@ -52,6 +75,8 @@ struct MonthNavBar: View {
     @Binding var year: Int
     @Binding var month: Int
     var onChange: () -> Void
+    @State private var showPicker = false
+    @State private var pickerDate = Date()
 
     private var titleText: String {
         String(format: "%02d/%d", month, year)
@@ -61,12 +86,41 @@ struct MonthNavBar: View {
         HStack {
             Button { change(-1) } label: { Image(systemName: "chevron.left") }
             Spacer()
-            Text(titleText).font(.headline)
+            Button {
+                var comps = DateComponents()
+                comps.year = year; comps.month = month; comps.day = 1
+                pickerDate = Calendar.current.date(from: comps) ?? Date()
+                showPicker = true
+            } label: {
+                Text(titleText).font(.headline)
+            }
+            .buttonStyle(.plain)
             Spacer()
             Button { change(1) } label: { Image(systemName: "chevron.right") }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
+        .sheet(isPresented: $showPicker) {
+            NavigationStack {
+                DatePicker("Chọn tháng", selection: $pickerDate, displayedComponents: .date)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .padding()
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Xong") {
+                                let cal = Calendar.current
+                                year = cal.component(.year, from: pickerDate)
+                                month = cal.component(.month, from: pickerDate)
+                                showPicker = false
+                                onChange()
+                            }
+                        }
+                    }
+            }
+            .presentationDetents([.medium])
+        }
     }
 
     private func change(_ delta: Int) {

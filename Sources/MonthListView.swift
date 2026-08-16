@@ -22,6 +22,7 @@ struct MonthListView<T, RowContent: View>: View {
     @State private var month: Int
     @State private var items: [T] = []
     @State private var loading = false
+    @State private var hasLoaded = false
     @State private var searchText = ""
 
     init(title: String, loader: @escaping (Int, Int) async -> [T], totalText: @escaping ([T]) -> String, matches: ((T, String) -> Bool)? = nil, @ViewBuilder rowContent: @escaping (T) -> RowContent) {
@@ -48,16 +49,21 @@ struct MonthListView<T, RowContent: View>: View {
                 SearchBar(text: $searchText, placeholder: "Tìm kiếm...")
             }
 
-            if loading {
+            if !hasLoaded {
                 Spacer(); ProgressView(); Spacer()
-            } else if filteredItems.isEmpty {
-                Spacer()
-                Text("Không có dữ liệu").foregroundColor(.textMuted)
-                Spacer()
             } else {
-                List(filteredItems.indices.map { IndexedItem(index: $0, value: filteredItems[$0]) }) { wrapped in
-                    rowContent(wrapped.value)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                List {
+                    if filteredItems.isEmpty {
+                        Text("Không có dữ liệu")
+                            .foregroundColor(.textMuted)
+                            .frame(maxWidth: .infinity)
+                            .listRowSeparator(.hidden)
+                    } else {
+                        ForEach(filteredItems.indices.map { IndexedItem(index: $0, value: filteredItems[$0]) }) { wrapped in
+                            rowContent(wrapped.value)
+                                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                        }
+                    }
                 }
                 .listStyle(.plain)
                 .refreshable { await load() }
@@ -80,6 +86,7 @@ struct MonthListView<T, RowContent: View>: View {
         loading = true
         items = await loader(year, month)
         loading = false
+        hasLoaded = true
     }
 }
 

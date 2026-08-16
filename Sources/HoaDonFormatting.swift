@@ -7,6 +7,7 @@ extension Color {
     static let successColor = Color(red: 0x19 / 255, green: 0x87 / 255, blue: 0x54 / 255)
     static let dangerColor = Color(red: 0xDC / 255, green: 0x35 / 255, blue: 0x45 / 255)
     static let warningColor = Color(red: 0xFF / 255, green: 0xC1 / 255, blue: 0x07 / 255)
+    static let pinkColor = Color(red: 0xD6 / 255, green: 0x33 / 255, blue: 0x84 / 255)
 }
 
 enum HoaDonFormatting {
@@ -61,7 +62,7 @@ enum HoaDonFormatting {
         switch phanLoai {
         case "Tại Chỗ": return .successColor
         case "Mv": return .warningColor
-        case "Mh": return .brandPrimary
+        case "Mh": return .pinkColor
         case "App": return .dangerColor
         default: return .brandPrimary
         }
