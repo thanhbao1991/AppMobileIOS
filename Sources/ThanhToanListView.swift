@@ -32,8 +32,7 @@ struct ThanhToanListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                DayNavBar(date: $currentDate) { Task { await load() } }
-                SearchBar(text: $searchText, placeholder: "Tìm khách, món, ghi chú...")
+                DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm khách, món, ghi chú...") { Task { await load() } }
 
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
@@ -65,16 +64,16 @@ struct ThanhToanListView: View {
                 Divider()
                 VStack(spacing: 2) {
                     HStack {
-                        Text("Tổng thu").font(.subheadline).foregroundColor(.textMuted)
-                        Spacer()
-                        Text(totalText).font(.headline)
-                    }
-                    HStack {
                         Spacer()
                         Text("Tiền mặt: \(HoaDonFormatting.money(totalTienMat))")
                             .font(.caption2).foregroundColor(.successColor)
                         Text("Chuyển khoản: \(HoaDonFormatting.money(totalChuyenKhoan))")
                             .font(.caption2).foregroundColor(.brandPrimary)
+                    }
+                    HStack {
+                        Text("Tổng thu").font(.subheadline).foregroundColor(.textMuted)
+                        Spacer()
+                        Text(totalText).font(.headline)
                     }
                 }
                 .padding()
@@ -126,12 +125,10 @@ private struct ThanhToanRowView: View {
         item.phuongThucThanhToanId?.lowercased() == PaymentMethod.chuyenKhoanId
     }
 
+    /// Chỉ 2 màu theo phương thức thanh toán (tiền mặt/chuyển khoản) — không còn phân biệt theo
+    /// loaiThanhToan (Trả nợ qua ngày/trong ngày) như trước.
     private var borderColor: Color {
-        switch item.loaiThanhToan {
-        case "Trả nợ qua ngày": return .dangerColor
-        case "Trả nợ trong ngày": return .pinkColor
-        default: return .successColor
-        }
+        isBank ? .brandPrimary : .successColor
     }
 
     var body: some View {

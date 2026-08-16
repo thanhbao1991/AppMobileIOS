@@ -26,8 +26,7 @@ struct HoaDonListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                DayNavBar(date: $currentDate) { Task { await load() } }
-                SearchBar(text: $searchText, placeholder: "Tìm khách, món, ghi chú...")
+                DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm khách, món, ghi chú...") { Task { await load() } }
 
                 if !hasLoaded {
                     Spacer()
@@ -116,20 +115,17 @@ private struct HoaDonRowView: View {
 
     /// Chỉ 3 trạng thái đã-xử-lý — "Chưa thu" bị bỏ hẳn (không mang thông tin gì mới, phần lớn đơn
     /// đang ở trạng thái này nên hiện lên toàn màn hình đầy badge xám vô nghĩa).
+    /// conLai<=0 phải check TRƯỚC ngayNo: khách ghi nợ rồi trả xong, ngayNo vẫn còn giá trị cũ
+    /// (backend không xoá), nên nếu check ngayNo trước sẽ hiện "Ghi nợ" sai dù đã thu đủ.
     private var statusText: String? {
-        if !(item.ngayNo?.isEmpty ?? true) { return "Ghi nợ" }
         if item.conLai <= 0.0 { return (item.isBank == true) ? "Chuyển khoản" : "Tiền mặt" }
+        if !(item.ngayNo?.isEmpty ?? true) { return "Ghi nợ" }
         return nil
     }
 
     private var statusColor: Color {
-        if !(item.ngayNo?.isEmpty ?? true) { return .dangerColor }
-        return (item.isBank == true) ? .brandPrimary : .successColor
-    }
-
-    private var phoneDigits: String? {
-        guard let sdt = item.soDienThoaiText, !sdt.isEmpty else { return nil }
-        return sdt.filter { $0.isNumber || $0 == "+" }
+        if item.conLai <= 0.0 { return (item.isBank == true) ? .brandPrimary : .successColor }
+        return .dangerColor
     }
 
     var body: some View {
@@ -155,26 +151,10 @@ private struct HoaDonRowView: View {
                 }
                 Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
                     .font(.subheadline.bold())
-                if item.phanLoai == "Ship", (item.diaChiText?.isEmpty == false || phoneDigits != nil) {
-                    HStack(spacing: 6) {
-                        if let diaChi = item.diaChiText, !diaChi.isEmpty {
-                            HStack(spacing: 4) {
-                                Image(systemName: "location.fill").font(.caption2).foregroundColor(.textMuted)
-                                Text(diaChi).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
-                            }
-                            .layoutPriority(0)
-                        }
-                        if let phoneDigits, let sdt = item.soDienThoaiText, let url = URL(string: "tel:\(phoneDigits)") {
-                            Link(destination: url) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "phone.fill").font(.caption2)
-                                    Text(sdt).font(.footnote)
-                                }
-                                .foregroundColor(.brandPrimary)
-                            }
-                            .fixedSize()
-                            .layoutPriority(1)
-                        }
+                if item.phanLoai == "Ship", let diaChi = item.diaChiText, !diaChi.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "location.fill").font(.caption2).foregroundColor(.textMuted)
+                        Text(diaChi).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
                     }
                 }
                 if let mon = item.tenMonSummary, !mon.isEmpty {

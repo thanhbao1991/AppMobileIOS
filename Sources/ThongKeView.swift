@@ -27,7 +27,7 @@ struct ThongKeView: View {
 
     var body: some View {
             VStack(spacing: 0) {
-                DayNavBar(date: $currentDate) { Task { await load() } }
+                DayDateBar(date: $currentDate) { Task { await load() } }
 
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()

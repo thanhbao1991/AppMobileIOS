@@ -5,7 +5,20 @@ import SwiftUI
 /// không gọi API riêng.
 struct SearchBar: View {
     @Binding var text: String
-    var placeholder: String = "Tìm kiếm..."
+    var placeholder: String = "Tìm..."
+
+    var body: some View {
+        SearchFieldRow(text: $text, placeholder: placeholder)
+            .padding(.horizontal)
+            .padding(.bottom, 6)
+    }
+}
+
+/// Phần lõi ô tìm kiếm (không padding ngoài) — dùng riêng khi cần đặt chung dòng với nút chọn
+/// ngày/tháng (xem DaySearchBar/MonthSearchBar trong DateNav.swift).
+struct SearchFieldRow: View {
+    @Binding var text: String
+    var placeholder: String = "Tìm..."
 
     var body: some View {
         HStack(spacing: 6) {
@@ -25,8 +38,6 @@ struct SearchBar: View {
         .padding(.vertical, 7)
         .background(Color.textMuted.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .padding(.horizontal)
-        .padding(.bottom, 6)
     }
 }
 

@@ -46,7 +46,7 @@ struct HoaDonDetailView: View {
 
                 Group {
                     infoRow("Khách hàng", d.tenKhachHangText?.isEmpty == false ? d.tenKhachHangText! : (d.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
-                    if let sdt = d.soDienThoaiText, !sdt.isEmpty { infoRow("SĐT", sdt) }
+                    if let sdt = d.soDienThoaiText, !sdt.isEmpty { phoneRow(sdt) }
                     if let dc = d.diaChiText, !dc.isEmpty { infoRow("Địa chỉ", dc) }
                     infoRow("Phân loại", HoaDonFormatting.phanLoaiLabel(d.phanLoai))
                     if d.phanLoai == "Ship" {
@@ -143,6 +143,27 @@ struct HoaDonDetailView: View {
             }
         }
         .presentationDetents([.height(180)])
+    }
+
+    /// SĐT dưới tên khách hàng — nhấp để gọi (thay cho icon SĐT trên card danh sách đã bỏ).
+    private func phoneRow(_ sdt: String) -> some View {
+        let digits = sdt.filter { $0.isNumber || $0 == "+" }
+        return HStack {
+            Text("SĐT").foregroundColor(.textMuted)
+            Spacer()
+            if let url = URL(string: "tel:\(digits)") {
+                Link(destination: url) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "phone.fill").font(.caption2)
+                        Text(sdt)
+                    }
+                    .foregroundColor(.brandPrimary)
+                }
+            } else {
+                Text(sdt)
+            }
+        }
+        .font(.subheadline)
     }
 
     private func infoRow(_ label: String, _ value: String) -> some View {

@@ -44,9 +44,10 @@ struct MonthListView<T, RowContent: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MonthNavBar(year: $year, month: $month) { Task { await load() } }
             if matches != nil {
-                SearchBar(text: $searchText, placeholder: "Tìm kiếm...")
+                MonthSearchBar(year: $year, month: $month, searchText: $searchText) { Task { await load() } }
+            } else {
+                MonthDateBar(year: $year, month: $month) { Task { await load() } }
             }
 
             if !hasLoaded {

@@ -48,6 +48,20 @@ enum HoaDonFormatting {
         return String(iso[start..<end])
     }
 
+    /// Dùng cho dòng "Ghi nợ" trên tab Công nợ — chỉ cần Ngày/Tháng Giờ:Phút, không cần năm/giây.
+    static func congNoTime(_ iso: String?) -> String {
+        guard let iso, !iso.isEmpty else { return "--/-- --:--" }
+        for f in isoInFormats {
+            if let date = f.date(from: iso) {
+                let out = DateFormatter()
+                out.dateFormat = "dd/MM HH:mm"
+                out.locale = Locale(identifier: "vi_VN")
+                return out.string(from: date)
+            }
+        }
+        return "--/-- --:--"
+    }
+
     static func phanLoaiLabel(_ phanLoai: String?) -> String {
         switch phanLoai {
         case "Tại Chỗ": return "Tại chỗ"

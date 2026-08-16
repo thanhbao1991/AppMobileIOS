@@ -23,8 +23,7 @@ struct ChiTieuListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                DayNavBar(date: $currentDate) { Task { await load() } }
-                SearchBar(text: $searchText, placeholder: "Tìm nguyên liệu, ghi chú...")
+                DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm nguyên liệu, ghi chú...") { Task { await load() } }
 
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()

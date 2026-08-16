@@ -11,9 +11,10 @@ enum DateNavFormat {
         return f
     }()
 
+    /// Chỉ Ngày/Tháng, bỏ năm — theo yêu cầu rút gọn UI (năm không cần thiết cho việc chọn nhanh).
     static let dayTitle: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "dd/MM/yyyy"
+        f.dateFormat = "dd/MM"
         f.locale = Locale(identifier: "vi_VN")
         return f
     }()
@@ -26,21 +27,29 @@ enum DateNavFormat {
     }()
 }
 
-struct DayNavBar: View {
+/// Gộp chọn ngày + ô tìm kiếm chung 1 dòng — thay cho DayNavBar+SearchBar 2 dòng riêng, bỏ hẳn 2 nút
+/// chevron điều hướng (chỉ còn bấm vào ngày để mở DatePicker).
+struct DaySearchBar: View {
     @Binding var date: Date
+    @Binding var searchText: String
+    var placeholder: String = "Tìm..."
     var onChange: () -> Void
     @State private var showPicker = false
 
     var body: some View {
-        HStack {
-            Button { change(-1) } label: { Image(systemName: "chevron.left") }
-            Spacer()
+        HStack(spacing: 8) {
             Button { showPicker = true } label: {
-                Text(DateNavFormat.dayTitle.string(from: date)).font(.headline)
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                    Text(DateNavFormat.dayTitle.string(from: date))
+                }
+                .font(.subheadline.bold())
+                .foregroundColor(.brandPrimary)
             }
             .buttonStyle(.plain)
-            Spacer()
-            Button { change(1) } label: { Image(systemName: "chevron.right") }
+            .fixedSize()
+
+            SearchFieldRow(text: $searchText, placeholder: placeholder)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -64,14 +73,87 @@ struct DayNavBar: View {
             .presentationDetents([.medium])
         }
     }
+}
 
-    private func change(_ delta: Int) {
-        date = Calendar.current.date(byAdding: .day, value: delta, to: date) ?? date
-        onChange()
+/// Chỉ chọn ngày, không search — dùng cho trang không có ô tìm kiếm (vd ThongKeView).
+struct DayDateBar: View {
+    @Binding var date: Date
+    var onChange: () -> Void
+    @State private var showPicker = false
+
+    var body: some View {
+        HStack {
+            Button { showPicker = true } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                    Text(DateNavFormat.dayTitle.string(from: date))
+                }
+                .font(.subheadline.bold())
+                .foregroundColor(.brandPrimary)
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .sheet(isPresented: $showPicker) {
+            NavigationStack {
+                DatePicker("Chọn ngày", selection: $date, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .padding()
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Xong") {
+                                showPicker = false
+                                onChange()
+                            }
+                        }
+                    }
+                Spacer()
+            }
+            .presentationDetents([.medium])
+        }
     }
 }
 
-struct MonthNavBar: View {
+/// Gộp chọn tháng + ô tìm kiếm chung 1 dòng, giống DaySearchBar. Dùng khi trang có search
+/// (MonthListView truyền `matches`); trang không có search dùng MonthDateBar (chỉ chọn tháng).
+struct MonthSearchBar: View {
+    @Binding var year: Int
+    @Binding var month: Int
+    @Binding var searchText: String
+    var placeholder: String = "Tìm..."
+    var onChange: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            MonthPickerButton(year: $year, month: $month, onChange: onChange)
+            SearchFieldRow(text: $searchText, placeholder: placeholder)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+}
+
+/// Chỉ chọn tháng, không search — trang report nào không truyền `matches` cho MonthListView.
+struct MonthDateBar: View {
+    @Binding var year: Int
+    @Binding var month: Int
+    var onChange: () -> Void
+
+    var body: some View {
+        HStack {
+            MonthPickerButton(year: $year, month: $month, onChange: onChange)
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+}
+
+private struct MonthPickerButton: View {
     @Binding var year: Int
     @Binding var month: Int
     var onChange: () -> Void
@@ -83,23 +165,21 @@ struct MonthNavBar: View {
     }
 
     var body: some View {
-        HStack {
-            Button { change(-1) } label: { Image(systemName: "chevron.left") }
-            Spacer()
-            Button {
-                var comps = DateComponents()
-                comps.year = year; comps.month = month; comps.day = 1
-                pickerDate = Calendar.current.date(from: comps) ?? Date()
-                showPicker = true
-            } label: {
-                Text(titleText).font(.headline)
+        Button {
+            var comps = DateComponents()
+            comps.year = year; comps.month = month; comps.day = 1
+            pickerDate = Calendar.current.date(from: comps) ?? Date()
+            showPicker = true
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                Text(titleText)
             }
-            .buttonStyle(.plain)
-            Spacer()
-            Button { change(1) } label: { Image(systemName: "chevron.right") }
+            .font(.subheadline.bold())
+            .foregroundColor(.brandPrimary)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .buttonStyle(.plain)
+        .fixedSize()
         .sheet(isPresented: $showPicker) {
             NavigationStack {
                 DatePicker("Chọn tháng", selection: $pickerDate, displayedComponents: .date)
@@ -121,12 +201,5 @@ struct MonthNavBar: View {
             }
             .presentationDetents([.medium])
         }
-    }
-
-    private func change(_ delta: Int) {
-        month += delta
-        if month < 1 { month = 12; year -= 1 }
-        if month > 12 { month = 1; year += 1 }
-        onChange()
     }
 }
