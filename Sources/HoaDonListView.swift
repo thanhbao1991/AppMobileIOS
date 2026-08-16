@@ -82,6 +82,29 @@ struct HoaDonListView: View {
     }
 }
 
+/// Avatar tròn khớp HoaDonTabControl.xaml bên Desktop (2 shipper cố định Khánh/Nhã có ảnh thật,
+/// tên khác dùng ảnh "ship" chung — Desktop chỉ có 2 DataTrigger này, chưa có shipper thứ 3 nào).
+struct ShipperAvatarView: View {
+    let name: String
+    var size: CGFloat = 36
+
+    private var assetName: String {
+        switch name {
+        case "Khánh": return "shipper_khanh"
+        case "Nhã": return "shipper_nha"
+        default: return "shipper_generic"
+        }
+    }
+
+    var body: some View {
+        Image(assetName)
+            .resizable()
+            .scaledToFill()
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+    }
+}
+
 struct IdentifiableId: Identifiable {
     let value: String
     var id: String { value }
@@ -133,7 +156,7 @@ private struct HoaDonRowView: View {
                         Text("Chưa gán shipper").font(.footnote).foregroundColor(.dangerColor)
                     } else {
                         HStack(spacing: 4) {
-                            Image(systemName: "bicycle").foregroundColor(.textMuted)
+                            ShipperAvatarView(name: item.nguoiShip!, size: 18)
                             Text(item.nguoiShip!).font(.footnote).foregroundColor(.textMuted)
                         }
                     }
