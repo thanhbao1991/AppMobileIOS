@@ -98,6 +98,21 @@ actor APIClient {
         return await executeAction(req)
     }
 
+    func updateChiTieu(id: String, _ body: ChiTieuHangNgayCreateRequest) async -> ActionResult {
+        let req = makeRequest("/api/ChiTieuHangNgay/\(id)", method: "PUT", body: jsonBody(body))
+        return await executeAction(req)
+    }
+
+    func deleteChiTieu(id: String) async -> ActionResult {
+        let req = makeRequest("/api/ChiTieuHangNgay/\(id)", method: "DELETE")
+        return await executeAction(req)
+    }
+
+    func deleteThanhToan(id: String) async -> ActionResult {
+        let req = makeRequest("/api/ChiTietHoaDonThanhToan/\(id)", method: "DELETE")
+        return await executeAction(req)
+    }
+
     func getNguyenLieuBanHang() async -> [NguyenLieuBanHangDto] {
         let req = makeRequest("/api/NguyenLieuBanHang?take=1000")
         let (data, _) = await send(req)
@@ -142,6 +157,38 @@ actor APIClient {
         let (data, _) = await send(req)
         guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ChiTietThangDto]>.self, from: data), env.isSuccess else { return [] }
         return env.data ?? []
+    }
+
+    func getThongKeChiTieu(ngay: Int, thang: Int, nam: Int) async -> ThongKeChiTieuDto? {
+        await getThongKe("chi-tieu-ngay", ngay: ngay, thang: thang, nam: nam)
+    }
+    func getThongKeCongNo(ngay: Int, thang: Int, nam: Int) async -> ThongKeCongNoDto? {
+        await getThongKe("cong-no-ngay", ngay: ngay, thang: thang, nam: nam)
+    }
+    func getThongKeThanhToan(ngay: Int, thang: Int, nam: Int) async -> ThongKeThanhToanDto? {
+        await getThongKe("thanh-toan-ngay", ngay: ngay, thang: thang, nam: nam)
+    }
+    func getThongKeDoanhThu(ngay: Int, thang: Int, nam: Int) async -> ThongKeDoanhThuNgayDto? {
+        await getThongKe("doanh-thu-ngay", ngay: ngay, thang: thang, nam: nam)
+    }
+    func getThongKeTraNo(ngay: Int, thang: Int, nam: Int) async -> ThongKeTraNoNgayDto? {
+        await getThongKe("tra-no-ngay", ngay: ngay, thang: thang, nam: nam)
+    }
+    func getThongKeDonChuaThanhToan(ngay: Int, thang: Int, nam: Int) async -> ThongKeDonChuaThanhToanDto? {
+        await getThongKe("don-chua-thanh-toan", ngay: ngay, thang: thang, nam: nam)
+    }
+    func getTongNo() async -> TongNoDto? {
+        let req = makeRequest("/api/ThongKe/tong-no")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<TongNoDto>.self, from: data), env.isSuccess else { return nil }
+        return env.data
+    }
+
+    private func getThongKe<T: Decodable>(_ endpoint: String, ngay: Int, thang: Int, nam: Int) async -> T? {
+        let req = makeRequest("/api/ThongKe/\(endpoint)?ngay=\(ngay)&thang=\(thang)&nam=\(nam)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<T>.self, from: data), env.isSuccess else { return nil }
+        return env.data
     }
 
     func getHoaDonDetail(_ id: String) async -> HoaDonDetailDto? {

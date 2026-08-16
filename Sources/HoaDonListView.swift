@@ -5,24 +5,28 @@ struct HoaDonListView: View {
     @State private var items: [HoaDonListDto] = []
     @State private var loading = false
     @State private var selectedId: String?
+    @State private var searchText = ""
 
     private var sortedItems: [HoaDonListDto] {
-        items.sorted {
-            let p0 = HoaDonFormatting.sortPriority($0)
-            let p1 = HoaDonFormatting.sortPriority($1)
-            if p0 != p1 { return p0 < p1 }
-            return ($0.ngayGio ?? "") > ($1.ngayGio ?? "")
-        }
+        items
+            .filter { anyMatchesSearch(searchText, $0.tenKhachHangText, $0.tenBan, $0.ghiChu, $0.ghiChuShipper, $0.tenMonSummary, $0.nguoiShip) }
+            .sorted {
+                let p0 = HoaDonFormatting.sortPriority($0)
+                let p1 = HoaDonFormatting.sortPriority($1)
+                if p0 != p1 { return p0 < p1 }
+                return ($0.ngayGio ?? "") > ($1.ngayGio ?? "")
+            }
     }
 
     private var totalText: String {
-        HoaDonFormatting.money(items.reduce(0) { $0 + $1.thanhTien })
+        HoaDonFormatting.money(sortedItems.reduce(0) { $0 + $1.thanhTien })
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 DayNavBar(date: $currentDate) { Task { await load() } }
+                SearchBar(text: $searchText, placeholder: "Tìm khách, món, ghi chú...")
 
                 if loading {
                     Spacer()

@@ -7,18 +7,23 @@ struct CongNoListView: View {
     @State private var items: [HoaDonListDto] = []
     @State private var loading = false
     @State private var selectedId: String?
+    @State private var searchText = ""
 
     private var sortedItems: [HoaDonListDto] {
-        items.sorted { ($0.ngayNo ?? "") > ($1.ngayNo ?? "") }
+        items
+            .filter { anyMatchesSearch(searchText, $0.tenKhachHangText, $0.tenBan, $0.ghiChu, $0.tenMonSummary) }
+            .sorted { ($0.ngayNo ?? "") > ($1.ngayNo ?? "") }
     }
 
     private var totalText: String {
-        HoaDonFormatting.money(items.reduce(0) { $0 + $1.conLai })
+        HoaDonFormatting.money(sortedItems.reduce(0) { $0 + $1.conLai })
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                SearchBar(text: $searchText, placeholder: "Tìm khách, món, ghi chú...")
+
                 if loading {
                     Spacer(); ProgressView(); Spacer()
                 } else if sortedItems.isEmpty {

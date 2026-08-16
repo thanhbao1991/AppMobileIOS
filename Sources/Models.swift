@@ -189,6 +189,91 @@ struct ChiTietThangDto: Decodable {
     let soLuong: Int
 }
 
+// ---- Thống kê (port từ TraSuaApp.Desktop ThongKeTabControl — nguồn chính xác, KHÔNG dùng
+// TraSuaApp.Mobile/Pages/ThongKe.cshtml vì trang đó không còn liên kết từ navbar) ----
+
+struct NamedAmountDto: Decodable, Identifiable {
+    let ten: String
+    let soTien: Double
+    var id: String { ten }
+}
+
+struct DoanhThuItemDto: Decodable, Identifiable {
+    let ten: String
+    let doanhThu: Double
+    var id: String { ten }
+}
+
+struct KhachTienDto: Decodable, Identifiable {
+    let tenKhachHang: String
+    let soTien: Double
+    var id: String { tenKhachHang }
+}
+
+struct CongNoItemDto: Decodable, Identifiable {
+    let khachHangId: String?
+    let hoaDonId: String?
+    let ngayGio: String?
+    let tenKhachHang: String
+    let soTienNo: Double
+    var id: String { hoaDonId ?? (khachHangId ?? tenKhachHang) }
+}
+
+struct DonChuaThanhToanItemDto: Decodable, Identifiable {
+    let khachHangId: String?
+    let hoaDonId: String?
+    let tenKhachHang: String
+    let soTien: Double
+    var id: String { hoaDonId ?? (khachHangId ?? tenKhachHang) }
+}
+
+struct TongNoItemDto: Decodable, Identifiable {
+    let khachHangId: String?
+    let tenKhachHang: String
+    let tongConLai: Double
+    var id: String { khachHangId ?? tenKhachHang }
+}
+
+struct ThongKeChiTieuDto: Decodable {
+    let chiTieuNgay: Double
+    let danhSachChiTieuNgay: [NamedAmountDto]
+    let chiTieuThang: Double
+    let danhSachChiTieuThang: [NamedAmountDto]
+}
+
+struct ThongKeCongNoDto: Decodable {
+    let tongCongNoNgay: Double
+    let danhSachCongNoNgay: [CongNoItemDto]
+}
+
+struct ThongKeThanhToanDto: Decodable {
+    let tongTienMat: Double
+    let tongChuyenKhoan: Double
+    let danhSachTienMat: [NamedAmountDto]
+}
+
+struct ThongKeDoanhThuNgayDto: Decodable {
+    let tongDoanhThu: Double
+    let danhSach: [DoanhThuItemDto]
+}
+
+struct ThongKeTraNoNgayDto: Decodable {
+    let tongTraNoTaiQuan: Double
+    let tongTraNoShipper: Double
+    let traNoTaiQuan: [KhachTienDto]
+    let traNoShipper: [KhachTienDto]
+}
+
+struct ThongKeDonChuaThanhToanDto: Decodable {
+    let tongChuaThanhToan: Double
+    let danhSach: [DonChuaThanhToanItemDto]
+}
+
+struct TongNoDto: Decodable {
+    let tongConLai: Double
+    let danhSach: [TongNoItemDto]
+}
+
 struct IdOnlyRequest: Encodable { let id: String }
 struct GanShipperRequest: Encodable { let id: String; let nguoiShip: String; let ngayShip: String; let ngayIn: String }
 

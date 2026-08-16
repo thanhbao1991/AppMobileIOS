@@ -8,14 +8,19 @@ struct CongViecListView: View {
     @State private var loading = false
     @State private var newTen = ""
     @State private var adding = false
+    @State private var searchText = ""
 
     private var sortedItems: [CongViecNoiBoDto] {
-        items.sorted { !$0.daHoanThanh && $1.daHoanThanh }
+        items
+            .filter { $0.ten.matchesSearch(searchText) }
+            .sorted { !$0.daHoanThanh && $1.daHoanThanh }
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                SearchBar(text: $searchText, placeholder: "Tìm việc...")
+
                 if loading {
                     Spacer(); ProgressView(); Spacer()
                 } else if sortedItems.isEmpty {

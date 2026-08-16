@@ -1,31 +1,46 @@
 import SwiftUI
 
-/// Danh sách chi tiết thanh toán theo ngày, GET /api/ChiTietHoaDonThanhToan?ngay=. Chỉ xem — xoá
-/// dòng thanh toán ảnh hưởng công nợ/tồn quỹ nên không đưa vào bản mobile này (Desktop mới có).
+/// Danh sách chi tiết thanh toán theo ngày, GET /api/ChiTietHoaDonThanhToan?ngay=. Vuốt trái để
+/// xoá 1 dòng (DELETE) — khớp web mobile (TraSuaApp.Mobile/Pages/ChiTietHoaDonThanhToanTab), trước
+/// tưởng chỉ Desktop mới có nên đã bỏ, hoá ra web mobile có sẵn.
 struct ThanhToanListView: View {
     @State private var currentDate = Date()
     @State private var items: [ChiTietHoaDonThanhToanDto] = []
     @State private var loading = false
+    @State private var searchText = ""
+    @State private var deletingId: String?
+
+    private var filteredItems: [ChiTietHoaDonThanhToanDto] {
+        items.filter { anyMatchesSearch(searchText, $0.ten, $0.ghiChu, $0.tenMonSummary, $0.loaiThanhToan) }
+    }
 
     private var totalText: String {
-        HoaDonFormatting.money(items.reduce(0) { $0 + $1.soTien })
+        HoaDonFormatting.money(filteredItems.reduce(0) { $0 + $1.soTien })
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 DayNavBar(date: $currentDate) { Task { await load() } }
+                SearchBar(text: $searchText, placeholder: "Tìm khách, món, ghi chú...")
 
                 if loading {
                     Spacer(); ProgressView(); Spacer()
-                } else if items.isEmpty {
+                } else if filteredItems.isEmpty {
                     Spacer()
                     Text("Không có thanh toán nào").foregroundColor(.textMuted)
                     Spacer()
                 } else {
-                    List(items) { item in
-                        ThanhToanRowView(item: item)
+                    List(filteredItems) { item in
+                        ThanhToanRowView(item: item, deleting: deletingId == item.id)
                             .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    Task { await delete(item) }
+                                } label: {
+                                    Label("Xoá", systemImage: "trash")
+                                }
+                            }
                     }
                     .listStyle(.plain)
                     .refreshable { await load() }
@@ -50,10 +65,20 @@ struct ThanhToanListView: View {
         items = await APIClient.shared.getThanhToanByDay(DateNavFormat.queryDate.string(from: currentDate))
         loading = false
     }
+
+    private func delete(_ item: ChiTietHoaDonThanhToanDto) async {
+        deletingId = item.id
+        let result = await APIClient.shared.deleteThanhToan(id: item.id)
+        deletingId = nil
+        if result.success {
+            items.removeAll { $0.id == item.id }
+        }
+    }
 }
 
 private struct ThanhToanRowView: View {
     let item: ChiTietHoaDonThanhToanDto
+    let deleting: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -71,7 +96,11 @@ private struct ThanhToanRowView: View {
                 }
             }
             Spacer()
-            Text(HoaDonFormatting.money(item.soTien)).font(.subheadline.bold()).foregroundColor(.successColor)
+            if deleting {
+                ProgressView()
+            } else {
+                Text(HoaDonFormatting.money(item.soTien)).font(.subheadline.bold()).foregroundColor(.successColor)
+            }
         }
     }
 }

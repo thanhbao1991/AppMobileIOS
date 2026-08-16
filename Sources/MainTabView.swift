@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 6 tab chính có nội dung thật + Tài khoản. Không có tab "Tạo hoá đơn" (bỏ qua theo yêu cầu —
+/// 7 tab chính có nội dung thật + Tài khoản. Không có tab "Tạo hoá đơn" (bỏ qua theo yêu cầu —
 /// làm sau cùng CreatePlus). iOS TabView tự gom vào "More" nếu vượt 5 item, không giới hạn cứng
 /// như BottomNavigationView bên Android nên không cần Drawer riêng.
 struct MainTabView: View {
@@ -25,6 +25,9 @@ struct MainTabView: View {
 
             BaoCaoMenuView()
                 .tabItem { Label("Báo cáo", systemImage: "chart.bar") }
+
+            ThongKeView()
+                .tabItem { Label("Thống kê", systemImage: "chart.pie") }
 
             AccountTab(isLoggedIn: $isLoggedIn)
                 .tabItem { Label("Tài khoản", systemImage: "person.circle") }

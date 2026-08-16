@@ -1,32 +1,53 @@
 import SwiftUI
 
-/// Chi tiêu hằng ngày — GET/POST /api/ChiTieuHangNgay (khác Android hiện vẫn sample). List theo
-/// ngày (DayNavBar) + nút "+" mở AddExpenseSheet chọn nguyên liệu thật từ /api/NguyenLieuBanHang.
+/// Chi tiêu hằng ngày — GET/POST/PUT/DELETE /api/ChiTieuHangNgay. List theo ngày (DayNavBar) +
+/// search + nút "+" mở AddExpenseSheet chọn nguyên liệu thật từ /api/NguyenLieuBanHang. Vuốt trái
+/// để sửa ghi chú / xoá — khớp web mobile (OnPostEditAsync/OnPostDeleteAsync).
 struct ChiTieuListView: View {
     @State private var currentDate = Date()
     @State private var items: [ChiTieuHangNgayDto] = []
     @State private var loading = false
     @State private var showAddSheet = false
+    @State private var searchText = ""
+    @State private var editingItem: ChiTieuHangNgayDto?
+
+    private var filteredItems: [ChiTieuHangNgayDto] {
+        items.filter { anyMatchesSearch(searchText, $0.ten, $0.ghiChu) }
+    }
 
     private var totalText: String {
-        HoaDonFormatting.money(items.reduce(0) { $0 + $1.thanhTien })
+        HoaDonFormatting.money(filteredItems.reduce(0) { $0 + $1.thanhTien })
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 DayNavBar(date: $currentDate) { Task { await load() } }
+                SearchBar(text: $searchText, placeholder: "Tìm nguyên liệu, ghi chú...")
 
                 if loading {
                     Spacer(); ProgressView(); Spacer()
-                } else if items.isEmpty {
+                } else if filteredItems.isEmpty {
                     Spacer()
                     Text("Chưa có chi tiêu nào").foregroundColor(.textMuted)
                     Spacer()
                 } else {
-                    List(items) { item in
+                    List(filteredItems) { item in
                         ChiTieuRowView(item: item)
                             .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    Task { await delete(item) }
+                                } label: {
+                                    Label("Xoá", systemImage: "trash")
+                                }
+                                Button {
+                                    editingItem = item
+                                } label: {
+                                    Label("Sửa", systemImage: "pencil")
+                                }
+                                .tint(.brandPrimary)
+                            }
                     }
                     .listStyle(.plain)
                     .refreshable { await load() }
@@ -55,12 +76,24 @@ struct ChiTieuListView: View {
                 Task { await load() }
             }
         }
+        .sheet(item: $editingItem) { item in
+            EditExpenseGhiChuSheet(item: item) {
+                Task { await load() }
+            }
+        }
     }
 
     private func load() async {
         loading = true
         items = await APIClient.shared.getChiTieuByDay(DateNavFormat.queryDate.string(from: currentDate))
         loading = false
+    }
+
+    private func delete(_ item: ChiTieuHangNgayDto) async {
+        let result = await APIClient.shared.deleteChiTieu(id: item.id)
+        if result.success {
+            items.removeAll { $0.id == item.id }
+        }
     }
 }
 
@@ -86,6 +119,70 @@ private struct ChiTieuRowView: View {
             }
             Spacer()
             Text(HoaDonFormatting.money(item.thanhTien)).font(.subheadline.bold())
+        }
+    }
+}
+
+/// Sửa ghi chú 1 dòng chi tiêu — khớp phạm vi web mobile (OnPostEditAsync chỉ đổi GhiChu, các field
+/// khác giữ nguyên nhưng vẫn gửi đủ trong body PUT vì backend UpdateAsync ghi đè toàn bộ).
+private struct EditExpenseGhiChuSheet: View {
+    let item: ChiTieuHangNgayDto
+    let onSaved: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var ghiChu: String
+    @State private var saving = false
+    @State private var errorMessage: String?
+
+    init(item: ChiTieuHangNgayDto, onSaved: @escaping () -> Void) {
+        self.item = item
+        self.onSaved = onSaved
+        _ghiChu = State(initialValue: item.ghiChu ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(item.ten) {
+                    TextField("Ghi chú", text: $ghiChu)
+                }
+                if let errorMessage {
+                    Text(errorMessage).foregroundColor(.dangerColor)
+                }
+            }
+            .navigationTitle("Sửa chi tiêu")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Huỷ") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Đang lưu..." : "Lưu") {
+                        Task { await save() }
+                    }
+                    .disabled(saving)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        errorMessage = nil
+        let ngayIso = (item.ngay ?? item.ngayGio) ?? ""
+        let ngayGioIso = item.ngayGio ?? ngayIso
+        let body = ChiTieuHangNgayCreateRequest(
+            soLuong: item.soLuong, donGia: item.donGia, thanhTien: item.thanhTien,
+            ghiChu: ghiChu.isEmpty ? nil : ghiChu, ngay: ngayIso, ngayGio: ngayGioIso,
+            nguyenLieuId: item.nguyenLieuId, billThang: item.billThang
+        )
+        let result = await APIClient.shared.updateChiTieu(id: item.id, body)
+        saving = false
+        if result.success {
+            onSaved()
+            dismiss()
+        } else {
+            errorMessage = result.message ?? "Không lưu được."
         }
     }
 }

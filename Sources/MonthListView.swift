@@ -13,17 +13,22 @@ struct MonthListView<T, RowContent: View>: View {
     let title: String
     let loader: (Int, Int) async -> [T]
     let totalText: ([T]) -> String
+    /// Trả về true nếu item khớp từ khoá tìm kiếm — truyền nil để ẩn hẳn ô search (không cần cho
+    /// mọi trang, nhưng cả 7 trang báo cáo đều có search bên web nên luôn truyền ở BaoCaoMenuView).
+    let matches: ((T, String) -> Bool)?
     @ViewBuilder let rowContent: (T) -> RowContent
 
     @State private var year: Int
     @State private var month: Int
     @State private var items: [T] = []
     @State private var loading = false
+    @State private var searchText = ""
 
-    init(title: String, loader: @escaping (Int, Int) async -> [T], totalText: @escaping ([T]) -> String, @ViewBuilder rowContent: @escaping (T) -> RowContent) {
+    init(title: String, loader: @escaping (Int, Int) async -> [T], totalText: @escaping ([T]) -> String, matches: ((T, String) -> Bool)? = nil, @ViewBuilder rowContent: @escaping (T) -> RowContent) {
         self.title = title
         self.loader = loader
         self.totalText = totalText
+        self.matches = matches
         self.rowContent = rowContent
         let now = Date()
         let cal = Calendar.current
@@ -31,18 +36,26 @@ struct MonthListView<T, RowContent: View>: View {
         _month = State(initialValue: cal.component(.month, from: now))
     }
 
+    private var filteredItems: [T] {
+        guard let matches, !searchText.isEmpty else { return items }
+        return items.filter { matches($0, searchText) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             MonthNavBar(year: $year, month: $month) { Task { await load() } }
+            if matches != nil {
+                SearchBar(text: $searchText, placeholder: "Tìm kiếm...")
+            }
 
             if loading {
                 Spacer(); ProgressView(); Spacer()
-            } else if items.isEmpty {
+            } else if filteredItems.isEmpty {
                 Spacer()
                 Text("Không có dữ liệu").foregroundColor(.textMuted)
                 Spacer()
             } else {
-                List(items.indices.map { IndexedItem(index: $0, value: items[$0]) }) { wrapped in
+                List(filteredItems.indices.map { IndexedItem(index: $0, value: filteredItems[$0]) }) { wrapped in
                     rowContent(wrapped.value)
                         .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                 }
@@ -54,7 +67,7 @@ struct MonthListView<T, RowContent: View>: View {
             HStack {
                 Text("Tổng").font(.subheadline).foregroundColor(.textMuted)
                 Spacer()
-                Text(totalText(items)).font(.headline)
+                Text(totalText(filteredItems)).font(.headline)
             }
             .padding()
         }
@@ -140,31 +153,38 @@ struct BaoCaoMenuView: View {
             List {
                 NavigationLink("Đơn Tại chỗ") {
                     MonthListView(title: "Đơn Tại chỗ", loader: { y, m in await APIClient.shared.getDonTaiCho(year: y, month: m) },
-                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) }) { DonMuaHoRowView(item: $0) }
+                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) },
+                                  matches: { anyMatchesSearch($1, $0.tenKhachHangText, $0.ghiChu) }) { DonMuaHoRowView(item: $0) }
                 }
                 NavigationLink("Đơn Mua về") {
                     MonthListView(title: "Đơn Mua về", loader: { y, m in await APIClient.shared.getDonMuaVe(year: y, month: m) },
-                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) }) { DonMuaHoRowView(item: $0) }
+                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) },
+                                  matches: { anyMatchesSearch($1, $0.tenKhachHangText, $0.ghiChu) }) { DonMuaHoRowView(item: $0) }
                 }
                 NavigationLink("Đơn Ship") {
                     MonthListView(title: "Đơn Ship", loader: { y, m in await APIClient.shared.getDonShip(year: y, month: m) },
-                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) }) { DonMuaHoRowView(item: $0) }
+                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) },
+                                  matches: { anyMatchesSearch($1, $0.tenKhachHangText, $0.ghiChu) }) { DonMuaHoRowView(item: $0) }
                 }
                 NavigationLink("Đơn Mua hộ") {
                     MonthListView(title: "Đơn Mua hộ", loader: { y, m in await APIClient.shared.getDonMuaHo(year: y, month: m) },
-                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) }) { DonMuaHoRowView(item: $0) }
+                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) },
+                                  matches: { anyMatchesSearch($1, $0.tenKhachHangText, $0.ghiChu) }) { DonMuaHoRowView(item: $0) }
                 }
                 NavigationLink("Đơn App") {
                     MonthListView(title: "Đơn App", loader: { y, m in await APIClient.shared.getDonApp(year: y, month: m) },
-                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) }) { DonMuaHoRowView(item: $0) }
+                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) },
+                                  matches: { anyMatchesSearch($1, $0.tenKhachHangText, $0.ghiChu) }) { DonMuaHoRowView(item: $0) }
                 }
                 NavigationLink("Chi tiết tháng") {
                     MonthListView(title: "Chi tiết tháng", loader: { y, m in await APIClient.shared.getChiTietThang(year: y, month: m) },
-                                  totalText: { "\($0.reduce(0) { $0 + $1.soLuong }) món" }) { ChiTietThangRowView(item: $0) }
+                                  totalText: { "\($0.reduce(0) { $0 + $1.soLuong }) món" },
+                                  matches: { anyMatchesSearch($1, $0.tenKhachHang, $0.mons.joined(separator: " ")) }) { ChiTietThangRowView(item: $0) }
                 }
                 NavigationLink("Chi tiêu tháng") {
                     MonthListView(title: "Chi tiêu tháng", loader: { y, m in await APIClient.shared.getChiTieuByMonth(year: y, month: m) },
-                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) }) { ChiTieuThangRowView(item: $0) }
+                                  totalText: { HoaDonFormatting.money($0.reduce(0) { $0 + $1.thanhTien }) },
+                                  matches: { anyMatchesSearch($1, $0.ten, $0.ghiChu) }) { ChiTieuThangRowView(item: $0) }
                 }
             }
             .navigationTitle("Báo cáo")
