@@ -83,6 +83,7 @@ struct HoaDonDetailDto: Decodable {
     let ghiChu: String?
     let ghiChuShipper: String?
     let nguoiShip: String?
+    let ngayNo: String?
     let tongTien: Double
     let giamGia: Double
     let thanhTien: Double

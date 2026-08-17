@@ -29,6 +29,18 @@ struct HoaDonDetailView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Đóng") { dismiss() }
                 }
+                if let detail {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        HStack(spacing: 6) {
+                            Text(HoaDonFormatting.phanLoaiLabel(detail.phanLoai))
+                                .font(.caption.bold())
+                                .foregroundColor(HoaDonFormatting.phanLoaiColor(detail.phanLoai))
+                            if detail.phanLoai == "Ship", let nguoiShip = detail.nguoiShip, !nguoiShip.isEmpty {
+                                ShipperAvatarView(name: nguoiShip, size: 20)
+                            }
+                        }
+                    }
+                }
             }
         }
         .task { await load() }
@@ -48,10 +60,6 @@ struct HoaDonDetailView: View {
                     infoRow("Khách hàng", d.tenKhachHangText?.isEmpty == false ? d.tenKhachHangText! : (d.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
                     if let sdt = d.soDienThoaiText, !sdt.isEmpty { phoneRow(sdt) }
                     if let dc = d.diaChiText, !dc.isEmpty { infoRow("Địa chỉ", dc) }
-                    infoRow("Phân loại", HoaDonFormatting.phanLoaiLabel(d.phanLoai))
-                    if d.phanLoai == "Ship" {
-                        infoRow("Shipper", d.nguoiShip?.isEmpty == false ? d.nguoiShip! : "Chưa gán")
-                    }
                     if let gc = d.ghiChu, !gc.isEmpty { infoRow("Ghi chú", gc) }
                 }
 
@@ -61,8 +69,11 @@ struct HoaDonDetailView: View {
                     Text("Món").font(.headline)
                     ForEach(chiTiet) { ct in
                         HStack {
+                            Image(systemName: "cup.and.saucer.fill")
+                                .font(.caption)
+                                .foregroundColor(.brandPrimary)
                             VStack(alignment: .leading) {
-                                Text("\(ct.tenSanPham)\(ct.tenBienThe.map { " (\($0))" } ?? "")")
+                                Text("\(ct.tenSanPham)\(bienTheSuffix(ct.tenBienThe))")
                                 if let note = ct.noteText, !note.isEmpty {
                                     Text(note).font(.caption).foregroundColor(.textMuted)
                                 }
@@ -79,7 +90,14 @@ struct HoaDonDetailView: View {
                 if d.giamGia > 0 { infoRow("Giảm giá", HoaDonFormatting.money(d.giamGia)) }
                 infoRow("Thành tiền", HoaDonFormatting.money(d.thanhTien))
                 infoRow("Đã thu", HoaDonFormatting.money(d.daThu))
-                infoRow("Còn lại", HoaDonFormatting.money(d.conLai))
+                HStack {
+                    Text("Còn lại").foregroundColor(.textMuted)
+                    Spacer()
+                    Text(HoaDonFormatting.money(d.conLai))
+                        .fontWeight(.bold)
+                        .foregroundColor(d.conLai > 0 ? .dangerColor : .successColor)
+                }
+                .font(.subheadline)
                 if let no = d.tongNoKhachHang, no != 0 { infoRow("Tổng nợ khách", HoaDonFormatting.money(no)) }
 
                 Divider()
@@ -91,36 +109,53 @@ struct HoaDonDetailView: View {
         .overlay { if busy { ProgressView() } }
     }
 
+    /// Thứ tự và label khớp WrapPanel "Action buttons" trong HoaDonTabControl.xaml (Desktop):
+    /// F1 Tiền mặt, F4 Chuyển khoản, Esc Ship/Hoàn tất (gán shipper), F12 Ghi nợ, Del Xoá đơn.
+    /// (F2/F3/F9 in/copy ảnh không áp dụng cho mobile.) Ghi nợ chỉ hiện khi CHƯA ghi nợ — khớp
+    /// guard "Hoá đơn đã ghi nợ rồi!" trong GhiNoAsync (Desktop Actions.cs); thiếu check này khiến
+    /// đơn mở từ tab Công nợ (đã có NgayNo) vẫn hiện nút Ghi nợ vô nghĩa.
     private func actionButtons(_ d: HoaDonDetailDto) -> some View {
-        VStack(spacing: 10) {
+        let chuaGhiNo = d.ngayNo?.isEmpty ?? true
+        return VStack(spacing: 10) {
             if d.conLai > 0 {
                 HStack(spacing: 10) {
-                    Button("Thu tiền mặt") { Task { await thuTien(isCash: true, d: d) } }
+                    Button("Tiền mặt") { Task { await thuTien(isCash: true, d: d) } }
                         .buttonStyle(.borderedProminent)
-                    Button("Thu chuyển khoản") { Task { await thuTien(isCash: false, d: d) } }
+                    Button("Chuyển khoản") { Task { await thuTien(isCash: false, d: d) } }
                         .buttonStyle(.bordered)
                 }
-                Button("Ghi nợ") { Task { await run { await APIClient.shared.ghiNo(hoaDonId: hoaDonId) } } }
-                    .buttonStyle(.bordered)
-                    .tint(.dangerColor)
             } else {
-                Button("Hoàn tác (chưa thu)") { Task { await run { await APIClient.shared.rollback(hoaDonId: hoaDonId) } } }
+                Button("Hoàn tác thanh toán") { Task { await run { await APIClient.shared.rollback(hoaDonId: hoaDonId) } } }
                     .buttonStyle(.bordered)
             }
 
             if d.phanLoai == "Ship" {
-                Button("Gán shipper") {
+                Button("Ship / Hoàn tất") {
                     shipperName = d.nguoiShip ?? ""
                     showGanShipperSheet = true
                 }
                 .buttonStyle(.bordered)
             }
 
-            Button("Xoá hoá đơn", role: .destructive) {
+            if d.conLai > 0 && chuaGhiNo {
+                Button("Ghi nợ") { Task { await run { await APIClient.shared.ghiNo(hoaDonId: hoaDonId) } } }
+                    .buttonStyle(.bordered)
+                    .tint(.dangerColor)
+            }
+
+            Button("Xoá đơn", role: .destructive) {
                 Task { await run { await APIClient.shared.delete(hoaDonId: hoaDonId) } }
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// "Mặc định"/"Size Chuẩn"/"Chuẩn" là biến thể mặc định — khớp HoaDonTabControl.Board.cs
+    /// và SanPhamSearchBox.xaml.cs (Desktop), không cần hiển thị vì không mang thêm thông tin.
+    private func bienTheSuffix(_ tenBienThe: String?) -> String {
+        guard let tenBienThe, !tenBienThe.isEmpty,
+              !["Mặc định", "Size Chuẩn", "Chuẩn"].contains(tenBienThe) else { return "" }
+        return " (\(tenBienThe))"
     }
 
     private var ganShipperSheet: some View {

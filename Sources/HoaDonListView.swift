@@ -20,7 +20,7 @@ struct HoaDonListView: View {
     }
 
     private var totalText: String {
-        HoaDonFormatting.moneyShort(sortedItems.reduce(0) { $0 + $1.thanhTien })
+        HoaDonFormatting.money(sortedItems.reduce(0) { $0 + $1.thanhTien })
     }
 
     /// Tổng tiền theo từng phân loại đơn, gộp trên 1 dòng gọn (vd "Ship 203k, T.chỗ 230k...").

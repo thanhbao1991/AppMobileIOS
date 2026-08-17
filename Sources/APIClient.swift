@@ -113,6 +113,11 @@ actor APIClient {
         return await executeAction(req)
     }
 
+    func doiPhuongThucThanhToan(id: String) async -> ActionResult {
+        let req = makeRequest("/api/ChiTietHoaDonThanhToan/\(id)/doi-phuong-thuc", method: "PUT")
+        return await executeAction(req)
+    }
+
     func getNguyenLieuBanHang() async -> [NguyenLieuBanHangDto] {
         let req = makeRequest("/api/NguyenLieuBanHang?take=1000")
         let (data, _) = await send(req)

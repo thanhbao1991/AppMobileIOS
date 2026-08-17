@@ -1,15 +1,15 @@
 import SwiftUI
 
-/// Danh sách chi tiết thanh toán theo ngày, GET /api/ChiTietHoaDonThanhToan?ngay=. Vuốt trái để
-/// xoá 1 dòng (DELETE) — khớp web mobile (TraSuaApp.Mobile/Pages/ChiTietHoaDonThanhToanTab), trước
-/// tưởng chỉ Desktop mới có nên đã bỏ, hoá ra web mobile có sẵn.
+/// Danh sách chi tiết thanh toán theo ngày, GET /api/ChiTietHoaDonThanhToan?ngay=. Nhấp vào dòng để
+/// mở sheet chi tiết (giống HoaDonDetailView) thay vì vuốt trái để xoá — vuốt dễ bấm nhầm với data
+/// đụng tiền thật, xem ThanhToanDetailView.
 struct ThanhToanListView: View {
     @State private var currentDate = Date()
     @State private var items: [ChiTietHoaDonThanhToanDto] = []
     @State private var loading = false
     @State private var hasLoaded = false
     @State private var searchText = ""
-    @State private var deletingId: String?
+    @State private var selectedId: String?
 
     private var filteredItems: [ChiTietHoaDonThanhToanDto] {
         items.filter { anyMatchesSearch(searchText, $0.ten, $0.ghiChu, $0.tenMonSummary, $0.loaiThanhToan) }
@@ -45,17 +45,12 @@ struct ThanhToanListView: View {
                                 .listRowSeparator(.hidden)
                         } else {
                             ForEach(filteredItems) { item in
-                                ThanhToanRowView(item: item, deleting: deletingId == item.id)
+                                ThanhToanRowView(item: item)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectedId = item.id }
                                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                                     .listRowBackground(Color.clear)
                                     .listRowSeparator(.hidden)
-                                    .swipeActions(edge: .trailing) {
-                                        Button(role: .destructive) {
-                                            Task { await delete(item) }
-                                        } label: {
-                                            Label("Xoá", systemImage: "trash")
-                                        }
-                                    }
                             }
                         }
                     }
@@ -82,6 +77,16 @@ struct ThanhToanListView: View {
             }
         }
         .task { await load() }
+        .sheet(item: Binding(
+            get: { selectedId.map { IdentifiableId($0) } },
+            set: { selectedId = $0?.value }
+        )) { wrapped in
+            if let item = items.first(where: { $0.id == wrapped.value }) {
+                ThanhToanDetailView(item: item) {
+                    Task { await load() }
+                }
+            }
+        }
     }
 
     private func load() async {
@@ -90,20 +95,10 @@ struct ThanhToanListView: View {
         loading = false
         hasLoaded = true
     }
-
-    private func delete(_ item: ChiTietHoaDonThanhToanDto) async {
-        deletingId = item.id
-        let result = await APIClient.shared.deleteThanhToan(id: item.id)
-        deletingId = nil
-        if result.success {
-            items.removeAll { $0.id == item.id }
-        }
-    }
 }
 
 private struct ThanhToanRowView: View {
     let item: ChiTietHoaDonThanhToanDto
-    let deleting: Bool
 
     /// "Thanh toán" (mặc định) và "Trong ngày" (đa số đơn không nợ) không mang thông tin gì mới nên
     /// ẩn, chỉ hiện 2 loại liên quan nợ (Trả nợ qua ngày/Trả nợ trong ngày).
@@ -157,18 +152,14 @@ private struct ThanhToanRowView: View {
                 }
             }
             Spacer()
-            if deleting {
-                ProgressView()
-            } else {
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(HoaDonFormatting.money(item.soTien)).font(.subheadline.bold())
-                    Text(isBank ? "Chuyển khoản" : "Tiền mặt")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 8).padding(.vertical, 2)
-                        .background((isBank ? Color.brandPrimary : Color.successColor).opacity(0.15))
-                        .foregroundColor(isBank ? .brandPrimary : .successColor)
-                        .clipShape(Capsule())
-                }
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(HoaDonFormatting.money(item.soTien)).font(.subheadline.bold())
+                Text(isBank ? "Chuyển khoản" : "Tiền mặt")
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background((isBank ? Color.brandPrimary : Color.successColor).opacity(0.15))
+                    .foregroundColor(isBank ? .brandPrimary : .successColor)
+                    .clipShape(Capsule())
             }
         }
         .padding(12)
