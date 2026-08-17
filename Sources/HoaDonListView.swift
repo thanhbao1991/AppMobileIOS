@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 struct HoaDonListView: View {
@@ -8,6 +9,10 @@ struct HoaDonListView: View {
     @State private var selectedId: String?
     @State private var searchText = ""
     @State private var showAddSheet = false
+    /// Tick định kỳ để buộc SwiftUI vẽ lại badge "chờ" trên các card — nếu không có state nào đổi,
+    /// waitingMinutes chỉ tính 1 lần lúc load rồi đứng yên mãi (không tự cập nhật theo thời gian thực).
+    @State private var now = Date()
+    private let clockTimer = Timer.publish(every: 20, on: .main, in: .common).autoconnect()
 
     private var sortedItems: [HoaDonListDto] {
         items
@@ -38,14 +43,16 @@ struct HoaDonListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm khách, món, ghi chú...") { Task { await load() } }
-                    Button { showAddSheet = true } label: {
-                        Image(systemName: "plus.circle.fill").font(.title2)
-                    }
-                    .foregroundColor(.brandPrimary)
-                    .padding(.trailing)
-                }
+                DaySearchBar(
+                    date: $currentDate, searchText: $searchText,
+                    placeholder: "Tìm khách, món, ghi chú...",
+                    leading: AnyView(
+                        Button { showAddSheet = true } label: {
+                            Image(systemName: "plus.circle.fill").font(.title2)
+                        }
+                        .foregroundColor(.brandPrimary)
+                    )
+                ) { Task { await load() } }
 
                 if !hasLoaded {
                     Spacer()
@@ -60,7 +67,7 @@ struct HoaDonListView: View {
                                 .listRowSeparator(.hidden)
                         } else {
                             ForEach(sortedItems) { item in
-                                HoaDonRowView(item: item)
+                                HoaDonRowView(item: item, now: now)
                                     .contentShape(Rectangle())
                                     .onTapGesture { selectedId = item.id }
                                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
@@ -94,6 +101,7 @@ struct HoaDonListView: View {
             }
         }
         .task { await load() }
+        .onReceive(clockTimer) { now = $0 }
         .onEntityChanged(["HoaDon"], tab: .hoaDon) { Task { await load() } }
         .sheet(item: Binding(
             get: { selectedId.map { IdentifiableId($0) } },
@@ -148,6 +156,7 @@ struct IdentifiableId: Identifiable {
 
 private struct HoaDonRowView: View {
     let item: HoaDonListDto
+    let now: Date
 
     /// Chỉ 3 trạng thái đã-xử-lý — "Chưa thu" bị bỏ hẳn (không mang thông tin gì mới, phần lớn đơn
     /// đang ở trạng thái này nên hiện lên toàn màn hình đầy badge xám vô nghĩa).
@@ -173,7 +182,7 @@ private struct HoaDonRowView: View {
 
     private var waitingMinutes: Int? {
         guard showWaiting else { return nil }
-        return HoaDonFormatting.minutesSince(item.ngayGio)
+        return HoaDonFormatting.minutesSince(item.ngayGio, now: now)
     }
 
     private var waitingColor: Color {
@@ -270,13 +279,17 @@ private struct AddHoaDonSheet: View {
         ("Mh", "hand.raised.fill"),
         ("App", "app.badge"),
     ]
+    /// Gộp chung style + lưới với 5 phân loại đơn phía trên (trước tách riêng bằng Divider, giờ
+    /// nhập chung 1 lưới cho đồng nhất).
+    private let extras: [(label: String, icon: String, color: Color)] = [
+        ("Đơn 7h", "clock.fill", .brandPrimary),
+        ("Bắt đơn App", "app.badge.checkmark", .dangerColor),
+    ]
     private let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                Text("Chọn phân loại đơn").font(.subheadline).foregroundColor(.textMuted)
-
                 LazyVGrid(columns: twoColumns, spacing: 12) {
                     ForEach(categories, id: \.code) { cat in
                         Button {} label: {
@@ -291,32 +304,25 @@ private struct AddHoaDonSheet: View {
                         .buttonBorderShape(.roundedRectangle(radius: 12))
                         .tint(HoaDonFormatting.phanLoaiColor(cat.code))
                     }
-                }
 
-                Divider()
-
-                VStack(spacing: 10) {
-                    Button {} label: {
-                        Label("Đơn 7h", systemImage: "clock.fill")
-                            .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    ForEach(extras, id: \.label) { extra in
+                        Button {} label: {
+                            VStack(spacing: 6) {
+                                Image(systemName: extra.icon).font(.title2)
+                                Text(extra.label).font(.subheadline.bold())
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: 12))
+                        .tint(extra.color)
                     }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.roundedRectangle(radius: 12))
-                    .tint(.brandPrimary)
-
-                    Button {} label: {
-                        Label("Bắt đơn App", systemImage: "app.badge.checkmark")
-                            .frame(maxWidth: .infinity).padding(.vertical, 10)
-                    }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.roundedRectangle(radius: 12))
-                    .tint(.dangerColor)
                 }
 
                 Spacer()
             }
             .padding()
-            .navigationTitle("Thêm hoá đơn")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

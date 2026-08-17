@@ -33,11 +33,15 @@ struct DaySearchBar: View {
     @Binding var date: Date
     @Binding var searchText: String
     var placeholder: String = "Tìm..."
+    /// Nút phụ (vd "+") đặt bên trái cùng, trước nút ngày — tìm kiếm vẫn luôn ở giữa.
+    var leading: AnyView? = nil
     var onChange: () -> Void
     @State private var showPicker = false
 
     var body: some View {
         HStack(spacing: 8) {
+            if let leading { leading }
+
             Button { showPicker = true } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")

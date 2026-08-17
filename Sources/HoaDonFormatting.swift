@@ -80,11 +80,11 @@ enum HoaDonFormatting {
 
     /// Số phút trôi qua từ ngayGio tới hiện tại — dùng cho badge "chờ" trên card list (chỉ áp dụng
     /// đơn Ship chưa gán shipper / Mua về chưa thanh toán, xem HoaDonRowView.waitingMinutes).
-    static func minutesSince(_ iso: String?) -> Int? {
+    static func minutesSince(_ iso: String?, now: Date = Date()) -> Int? {
         guard let iso, !iso.isEmpty else { return nil }
         for f in isoInFormats {
             if let date = f.date(from: iso) {
-                return max(0, Int(Date().timeIntervalSince(date) / 60))
+                return max(0, Int(now.timeIntervalSince(date) / 60))
             }
         }
         return nil

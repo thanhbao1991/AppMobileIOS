@@ -32,13 +32,16 @@ struct ChiTieuListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm nguyên liệu, ghi chú...") { Task { await load() } }
-                    Button { showAdd = true } label: {
-                        Image(systemName: "plus.circle.fill").font(.title2)
-                    }
-                    .padding(.trailing)
-                }
+                DaySearchBar(
+                    date: $currentDate, searchText: $searchText,
+                    placeholder: "Tìm nguyên liệu, ghi chú...",
+                    leading: AnyView(
+                        Button { showAdd = true } label: {
+                            Image(systemName: "plus.circle.fill").font(.title2)
+                        }
+                        .foregroundColor(.brandPrimary)
+                    )
+                ) { Task { await load() } }
 
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
