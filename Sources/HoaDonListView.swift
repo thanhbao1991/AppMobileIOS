@@ -64,6 +64,8 @@ struct HoaDonListView: View {
                                     .contentShape(Rectangle())
                                     .onTapGesture { selectedId = item.id }
                                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
                             }
                         }
                     }
@@ -200,5 +202,8 @@ private struct HoaDonRowView: View {
                 }
             }
         }
+        .padding(12)
+        .background(HoaDonFormatting.phanLoaiBgColor(item.phanLoai))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

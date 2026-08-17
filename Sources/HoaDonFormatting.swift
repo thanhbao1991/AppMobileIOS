@@ -87,6 +87,18 @@ enum HoaDonFormatting {
         }
     }
 
+    /// Nền tint card theo PhanLoai — khớp hex `.debt-card.detail-pl-*` bên Mobile web
+    /// (`TraSuaApp.Mobile/Pages/HoaDonTab.cshtml`), để người dùng quen mắt với web không thấy lạ.
+    static func phanLoaiBgColor(_ phanLoai: String?) -> Color {
+        switch phanLoai {
+        case "Tại Chỗ": return Color(red: 0xCD / 255, green: 0xED / 255, blue: 0xDA / 255)
+        case "Mv": return Color(red: 0xFC / 255, green: 0xDF / 255, blue: 0xC4 / 255)
+        case "Mh": return Color(red: 0xF7 / 255, green: 0xD3 / 255, blue: 0xE6 / 255)
+        case "App": return Color(red: 0xFB / 255, green: 0xE7 / 255, blue: 0xE9 / 255)
+        default: return Color(red: 0xD6 / 255, green: 0xE6 / 255, blue: 0xFB / 255) // Ship
+        }
+    }
+
     /// Port y hệt HoaDonSortService.GetSortOrder (Desktop) / AppMobileAndroid HoaDonTabFragment.sortPriority.
     /// Đơn Ghi nợ rớt xuống ưu tiên thấp nhất (7) BẤT KỂ phân loại — check "isNo" phải nằm TRƯỚC nhánh
     /// Ship-chưa-gán-shipper, sai thứ tự if/else ở đây từng khiến kết quả sai.
