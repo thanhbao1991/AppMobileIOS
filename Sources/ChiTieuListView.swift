@@ -11,6 +11,7 @@ struct ChiTieuListView: View {
     @State private var hasLoaded = false
     @State private var searchText = ""
     @State private var editingItem: ChiTieuHangNgayDto?
+    @State private var showAdd = false
 
     private var filteredItems: [ChiTieuHangNgayDto] {
         items.filter { anyMatchesSearch(searchText, $0.ten, $0.ghiChu) }
@@ -31,7 +32,13 @@ struct ChiTieuListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm nguyên liệu, ghi chú...") { Task { await load() } }
+                HStack(spacing: 8) {
+                    DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm nguyên liệu, ghi chú...") { Task { await load() } }
+                    Button { showAdd = true } label: {
+                        Image(systemName: "plus.circle.fill").font(.title2)
+                    }
+                    .padding(.trailing)
+                }
 
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
@@ -87,6 +94,11 @@ struct ChiTieuListView: View {
         .task { await load() }
         .sheet(item: $editingItem) { item in
             EditExpenseGhiChuSheet(item: item) {
+                Task { await load() }
+            }
+        }
+        .sheet(isPresented: $showAdd) {
+            AddExpenseSheet(date: currentDate) {
                 Task { await load() }
             }
         }

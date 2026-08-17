@@ -103,10 +103,10 @@ private struct ThanhToanRowView: View {
     let item: ChiTietHoaDonThanhToanDto
     let deleting: Bool
 
-    /// "Thanh toán" là loại mặc định (thu đủ trong ngày) — không mang thông tin gì mới nên ẩn,
-    /// chỉ hiện các loại khác (Trong ngày/Trả nợ qua ngày/Trả nợ trong ngày).
+    /// "Thanh toán" (mặc định) và "Trong ngày" (đa số đơn không nợ) không mang thông tin gì mới nên
+    /// ẩn, chỉ hiện 2 loại liên quan nợ (Trả nợ qua ngày/Trả nợ trong ngày).
     private var loaiThanhToanText: String? {
-        guard let loai = item.loaiThanhToan, !loai.isEmpty, loai != "Thanh toán" else { return nil }
+        guard let loai = item.loaiThanhToan, !loai.isEmpty, loai != "Thanh toán", loai != "Trong ngày" else { return nil }
         return loai
     }
 

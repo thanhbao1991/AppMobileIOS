@@ -50,16 +50,16 @@ enum HoaDonFormatting {
 
     /// Dùng cho dòng "Ghi nợ" trên tab Công nợ — chỉ cần Ngày/Tháng Giờ:Phút, không cần năm/giây.
     static func congNoTime(_ iso: String?) -> String {
-        guard let iso, !iso.isEmpty else { return "--/-- --:--" }
+        guard let iso, !iso.isEmpty else { return "--:-- --/--" }
         for f in isoInFormats {
             if let date = f.date(from: iso) {
                 let out = DateFormatter()
-                out.dateFormat = "dd/MM HH:mm"
+                out.dateFormat = "HH:mm dd/MM"
                 out.locale = Locale(identifier: "vi_VN")
                 return out.string(from: date)
             }
         }
-        return "--/-- --:--"
+        return "--:-- --/--"
     }
 
     static func phanLoaiLabel(_ phanLoai: String?) -> String {

@@ -17,6 +17,7 @@ struct ThongKeView: View {
     @State private var tongNo: TongNoDto?
     @State private var loading = false
     @State private var hasLoaded = false
+    @State private var showPicker = false
 
     /// Tiền mặt tại quán trừ chi tiêu ngày — số tiền mặt lẽ ra còn trong ngăn kéo. Port y hệt cách
     /// Desktop tự cộng dồn 2 API (không phải field riêng từ server).
@@ -27,8 +28,6 @@ struct ThongKeView: View {
 
     var body: some View {
             VStack(spacing: 0) {
-                DayDateBar(date: $currentDate) { Task { await load() } }
-
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
                 } else {
@@ -48,10 +47,10 @@ struct ThongKeView: View {
                                 ForEach(thanhToan.danhSachTienMat) { item in
                                     AmountRow(label: item.ten, value: item.soTien)
                                 }
+                                AmountRow(label: "Tổng chuyển khoản", value: thanhToan.tongChuyenKhoan)
                                 if let kiemTien {
-                                    AmountRow(label: "Kiểm tiền (mặt − chi tiêu ngày)", value: kiemTien, emphasize: true)
+                                    AmountRow(label: "Kiểm tiền (Nhã - Chi tiêu ngày)", value: kiemTien, color: .dangerColor)
                                 }
-                                AmountRow(label: "Tổng chuyển khoản", value: thanhToan.tongChuyenKhoan, emphasize: true)
                             } header: {
                                 TotalHeader(title: "Thanh toán trong ngày", value: thanhToan.tongTienMat + thanhToan.tongChuyenKhoan)
                             }
@@ -141,6 +140,37 @@ struct ThongKeView: View {
             }
             .navigationTitle("Thống kê")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showPicker = true } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "calendar")
+                            Text(DateNavFormat.dayTitle.string(from: currentDate))
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundColor(.brandPrimary)
+                    }
+                }
+            }
+            .sheet(isPresented: $showPicker) {
+                NavigationStack {
+                    DatePicker("Chọn ngày", selection: $currentDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .padding()
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Xong") {
+                                    showPicker = false
+                                    Task { await load() }
+                                }
+                            }
+                        }
+                    Spacer()
+                }
+                .presentationDetents([.medium])
+            }
             .task { await load() }
     }
 
@@ -183,7 +213,7 @@ private struct AmountRow: View {
     let label: String
     var sub: String?
     let value: Double
-    var emphasize: Bool = false
+    var color: Color = .primary
 
     var body: some View {
         HStack {
@@ -196,8 +226,7 @@ private struct AmountRow: View {
             Spacer()
             Text(HoaDonFormatting.money(value))
                 .font(.subheadline)
-                .fontWeight(emphasize ? .bold : .regular)
-                .foregroundColor(emphasize ? .brandPrimary : .primary)
+                .foregroundColor(color)
         }
     }
 }

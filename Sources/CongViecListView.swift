@@ -7,6 +7,7 @@ struct CongViecListView: View {
     @State private var loading = false
     @State private var hasLoaded = false
     @State private var searchText = ""
+    @State private var showAdd = false
 
     private var sortedItems: [CongViecNoiBoDto] {
         items
@@ -42,7 +43,7 @@ struct CongViecListView: View {
 
                 Divider()
                 HStack {
-                    Text("Còn lại").font(.subheadline).foregroundColor(.textMuted)
+                    Text("Chưa làm").font(.subheadline).foregroundColor(.textMuted)
                     Spacer()
                     Text("\(items.filter { !$0.daHoanThanh }.count) việc").font(.headline)
                 }
@@ -50,7 +51,19 @@ struct CongViecListView: View {
             }
             .navigationTitle("Công việc")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showAdd = true } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
             .task { await load() }
+            .sheet(isPresented: $showAdd) {
+                AddCongViecSheet {
+                    Task { await load() }
+                }
+            }
     }
 
     private func load() async {
@@ -65,6 +78,54 @@ struct CongViecListView: View {
         await load()
     }
 
+}
+
+private struct AddCongViecSheet: View {
+    let onSaved: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var ten = ""
+    @State private var saving = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Việc cần làm") {
+                    TextField("Nội dung...", text: $ten)
+                }
+                if let errorMessage {
+                    Text(errorMessage).foregroundColor(.dangerColor)
+                }
+            }
+            .navigationTitle("Thêm công việc")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Huỷ") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Đang lưu..." : "Lưu") {
+                        Task { await save() }
+                    }
+                    .disabled(ten.trimmingCharacters(in: .whitespaces).isEmpty || saving)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        errorMessage = nil
+        let result = await APIClient.shared.createCongViec(ten: ten.trimmingCharacters(in: .whitespaces))
+        saving = false
+        if result.success {
+            onSaved()
+            dismiss()
+        } else {
+            errorMessage = result.message ?? "Không thêm được công việc."
+        }
+    }
 }
 
 private struct CongViecRowView: View {

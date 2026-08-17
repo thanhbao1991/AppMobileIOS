@@ -23,10 +23,29 @@ struct HoaDonListView: View {
         HoaDonFormatting.money(sortedItems.reduce(0) { $0 + $1.thanhTien })
     }
 
+    /// Tổng tiền theo từng phân loại đơn, gộp trên 1 dòng gọn (vd "Ship 203k, T.chỗ 230k...").
+    private var phanLoaiTotals: [(label: String, color: Color, text: String)] {
+        let order = ["Ship", "Tại Chỗ", "Mv", "Mh", "App"]
+        let shortLabel: [String: String] = ["Ship": "Ship", "Tại Chỗ": "T.chỗ", "Mv": "M.về", "Mh": "M.hộ", "App": "App"]
+        return order.compactMap { phanLoai in
+            let total = sortedItems.filter { $0.phanLoai == phanLoai }.reduce(0) { $0 + $1.thanhTien }
+            guard total > 0 else { return nil }
+            return (shortLabel[phanLoai] ?? phanLoai, HoaDonFormatting.phanLoaiColor(phanLoai), HoaDonFormatting.money(total))
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm khách, món, ghi chú...") { Task { await load() } }
+                HStack(spacing: 8) {
+                    DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm khách, món, ghi chú...") { Task { await load() } }
+                    Button {} label: {
+                        Image(systemName: "plus.circle.fill").font(.title2)
+                    }
+                    .disabled(true)
+                    .foregroundColor(.textMuted)
+                    .padding(.trailing)
+                }
 
                 if !hasLoaded {
                     Spacer()
@@ -53,10 +72,21 @@ struct HoaDonListView: View {
                 }
 
                 Divider()
-                HStack {
-                    Text("Tổng").font(.subheadline).foregroundColor(.textMuted)
-                    Spacer()
-                    Text(totalText).font(.headline)
+                VStack(spacing: 2) {
+                    if !phanLoaiTotals.isEmpty {
+                        HStack(spacing: 8) {
+                            Spacer()
+                            ForEach(phanLoaiTotals, id: \.label) { item in
+                                Text("\(item.label) \(item.text)")
+                                    .font(.caption2).foregroundColor(item.color)
+                            }
+                        }
+                    }
+                    HStack {
+                        Text("Tổng tiền").font(.subheadline).foregroundColor(.textMuted)
+                        Spacer()
+                        Text(totalText).font(.headline)
+                    }
                 }
                 .padding()
             }
@@ -140,12 +170,8 @@ private struct HoaDonRowView: View {
                     Text(HoaDonFormatting.phanLoaiLabel(item.phanLoai))
                         .font(.caption.bold())
                         .foregroundColor(HoaDonFormatting.phanLoaiColor(item.phanLoai))
-                    if item.phanLoai == "Ship" {
-                        if let nguoiShip = item.nguoiShip, !nguoiShip.isEmpty {
-                            ShipperAvatarView(name: nguoiShip, size: 16)
-                        } else {
-                            Text("(chưa gán shipper)").font(.caption2).foregroundColor(.dangerColor)
-                        }
+                    if item.phanLoai == "Ship", let nguoiShip = item.nguoiShip, !nguoiShip.isEmpty {
+                        ShipperAvatarView(name: nguoiShip, size: 16)
                     }
                     Spacer()
                 }
