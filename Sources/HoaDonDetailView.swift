@@ -347,7 +347,9 @@ struct HoaDonDetailView: View {
     }
 }
 
-private struct ActionButtonView: View {
+/// Dùng chung cho mọi màn "chi tiết" có action button (HoaDonDetailView, ThanhToanDetailView) —
+/// khớp icon + mã tắt + caption 1 kiểu xuyên suốt app.
+struct ActionButtonView: View {
     let icon: String
     let code: String?
     let caption: String

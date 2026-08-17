@@ -43,16 +43,17 @@ struct ThanhToanDetailView: View {
                     Divider()
 
                     VStack(spacing: 10) {
-                        Button(isBank ? "Đổi sang Tiền mặt" : "Đổi sang Chuyển khoản") {
+                        ActionButtonView(
+                            icon: "arrow.left.arrow.right", code: nil,
+                            caption: isBank ? "Đổi sang Tiền mặt" : "Đổi sang Chuyển khoản",
+                            color: isBank ? .successColor : .brandPrimary
+                        ) {
                             showDoiPhuongThucConfirm = true
                         }
-                        .buttonStyle(.bordered)
-                        .frame(maxWidth: .infinity)
 
-                        Button("Xoá", role: .destructive) {
+                        ActionButtonView(icon: "trash", code: nil, caption: "Xoá", color: .dangerColor) {
                             showDeleteConfirm = true
                         }
-                        .frame(maxWidth: .infinity)
                     }
                 }
                 .padding()
