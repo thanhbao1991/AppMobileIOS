@@ -87,33 +87,11 @@ enum HoaDonFormatting {
         }
     }
 
-    /// Nền tint card theo PhanLoai — khớp hex `.debt-card.detail-pl-*` bên Mobile web
-    /// (`TraSuaApp.Mobile/Pages/HoaDonTab.cshtml`), để người dùng quen mắt với web không thấy lạ.
+    /// Nền tint card theo PhanLoai — dùng chính màu accent/border đã có sẵn trên card (phanLoaiColor),
+    /// pha nhạt để làm nền cả card thay vì chỉ 1 thanh 4px bên trái.
     static func phanLoaiBgColor(_ phanLoai: String?) -> Color {
-        switch phanLoai {
-        case "Tại Chỗ": return Color(red: 0xCD / 255, green: 0xED / 255, blue: 0xDA / 255)
-        case "Mv": return Color(red: 0xFC / 255, green: 0xDF / 255, blue: 0xC4 / 255)
-        case "Mh": return Color(red: 0xF7 / 255, green: 0xD3 / 255, blue: 0xE6 / 255)
-        case "App": return Color(red: 0xFB / 255, green: 0xE7 / 255, blue: 0xE9 / 255)
-        default: return Color(red: 0xD6 / 255, green: 0xE6 / 255, blue: 0xFB / 255) // Ship
-        }
+        phanLoaiColor(phanLoai).opacity(0.16)
     }
-
-    private static func hexColor(_ hex: UInt32) -> Color {
-        Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
-    }
-
-    /// Gradient tint cho các card khác — port các `.card-red/.card-blue/.card-green/.card-day/
-    /// .card-month/.card-working/.card-done` bên Mobile web (ChiTietHoaDonThanhToanTab, ChiTieuTab,
-    /// HoaDonNoTab, CongViecNoiBoTab), cùng lý do đồng bộ hình ảnh 2 nền tảng như phanLoaiBgColor.
-    static func cardGradient(from: UInt32, to: UInt32) -> LinearGradient {
-        LinearGradient(colors: [hexColor(from), hexColor(to)], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-
-    static let cardGradientRed = cardGradient(from: 0xFEE2E2, to: 0xFECACA)
-    static let cardGradientBlue = cardGradient(from: 0xDBEAFE, to: 0xBFDBFE)
-    static let cardGradientGreen = cardGradient(from: 0xDCFCE7, to: 0xBBF7D0)
-    static let cardGradientGray = cardGradient(from: 0xF8FAFC, to: 0xE2E8F0)
 
     /// Port y hệt HoaDonSortService.GetSortOrder (Desktop) / AppMobileAndroid HoaDonTabFragment.sortPriority.
     /// Đơn Ghi nợ rớt xuống ưu tiên thấp nhất (7) BẤT KỂ phân loại — check "isNo" phải nằm TRƯỚC nhánh

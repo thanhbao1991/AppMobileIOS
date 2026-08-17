@@ -154,7 +154,7 @@ private struct ChiTieuRowView: View {
             }
         }
         .padding(12)
-        .background(item.billThang ? HoaDonFormatting.cardGradientBlue : HoaDonFormatting.cardGradientGreen)
+        .background(borderColor.opacity(0.16))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

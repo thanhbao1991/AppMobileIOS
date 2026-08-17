@@ -227,7 +227,7 @@ private struct CongNoRowView: View {
             }
         }
         .padding(12)
-        .background(HoaDonFormatting.cardGradientRed)
+        .background(Color.dangerColor.opacity(0.16))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
