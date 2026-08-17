@@ -9,8 +9,8 @@ struct HoaDonDetailView: View {
     @State private var loading = true
     @State private var busy = false
     @State private var errorText: String?
-    @State private var showGanShipperSheet = false
-    @State private var shipperName = ""
+    @State private var showShipperPicker = false
+    @State private var pendingAction: PendingAction?
 
     var body: some View {
         NavigationStack {
@@ -44,8 +44,66 @@ struct HoaDonDetailView: View {
             }
         }
         .task { await load() }
-        .sheet(isPresented: $showGanShipperSheet) {
-            ganShipperSheet
+        .sheet(isPresented: $showShipperPicker) {
+            shipperPickerSheet
+        }
+        .confirmationDialog(
+            pendingAction?.title ?? "",
+            isPresented: Binding(get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }),
+            titleVisibility: .visible
+        ) {
+            if let pendingAction {
+                Button(pendingAction.confirmLabel, role: pendingAction.destructive ? .destructive : nil) {
+                    Task { await execute(pendingAction) }
+                }
+                Button("Huỷ", role: .cancel) {}
+            }
+        }
+    }
+
+    /// Mọi thao tác đụng tiền/dữ liệu thật đều phải qua bước "Xác nhận" — khớp ConfirmDialog.Show
+    /// bên Desktop (DeleteAsync/RollbackAsync/GhiNoAsync đều mở dialog trước khi gọi API).
+    private enum PendingAction: Identifiable {
+        case tienMat, chuyenKhoan, rollback, ghiNo, xoa, doiPhuongThuc
+        case ship(String)
+
+        var id: String {
+            switch self {
+            case .tienMat: return "tienMat"
+            case .chuyenKhoan: return "chuyenKhoan"
+            case .rollback: return "rollback"
+            case .ghiNo: return "ghiNo"
+            case .xoa: return "xoa"
+            case .doiPhuongThuc: return "doiPhuongThuc"
+            case .ship(let name): return "ship-\(name)"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .tienMat: return "Thu tiền mặt?"
+            case .chuyenKhoan: return "Thu chuyển khoản?"
+            case .rollback: return "Hoàn tác thanh toán?"
+            case .ghiNo: return "Ghi nợ hoá đơn này?"
+            case .xoa: return "Xoá hoá đơn này?"
+            case .doiPhuongThuc: return "Đổi phương thức thanh toán?"
+            case .ship(let name): return "Gán shipper \(name)?"
+            }
+        }
+
+        var confirmLabel: String {
+            switch self {
+            case .xoa: return "Xoá"
+            case .ghiNo: return "Ghi nợ"
+            case .rollback: return "Hoàn tác"
+            case .ship: return "Xác nhận"
+            default: return "Xác nhận"
+            }
+        }
+
+        var destructive: Bool {
+            if case .xoa = self { return true }
+            return false
         }
     }
 
@@ -98,7 +156,10 @@ struct HoaDonDetailView: View {
                         .foregroundColor(d.conLai > 0 ? .dangerColor : .successColor)
                 }
                 .font(.subheadline)
-                if let no = d.tongNoKhachHang, no != 0 { infoRow("Tổng nợ khách", HoaDonFormatting.money(no)) }
+                // "Nợ đơn khác" (không phải "Tổng nợ khách") vì con số này CHỈ TÍNH các đơn khác của
+                // cùng khách — KHÔNG gồm "Còn lại" của chính đơn đang xem (xem HoaDonQueryService.
+                // GetByIdAsync, subquery loại trừ "AND h.Id != @id"). Nhãn cũ dễ hiểu lầm là đã gộp.
+                if let no = d.tongNoKhachHang, no != 0 { infoRow("Nợ đơn khác", HoaDonFormatting.money(no)) }
 
                 Divider()
                 actionButtons(d)
@@ -109,42 +170,55 @@ struct HoaDonDetailView: View {
         .overlay { if busy { ProgressView() } }
     }
 
-    /// Thứ tự và label khớp WrapPanel "Action buttons" trong HoaDonTabControl.xaml (Desktop):
-    /// F1 Tiền mặt, F4 Chuyển khoản, Esc Ship/Hoàn tất (gán shipper), F12 Ghi nợ, Del Xoá đơn.
-    /// (F2/F3/F9 in/copy ảnh không áp dụng cho mobile.) Ghi nợ chỉ hiện khi CHƯA ghi nợ — khớp
-    /// guard "Hoá đơn đã ghi nợ rồi!" trong GhiNoAsync (Desktop Actions.cs); thiếu check này khiến
-    /// đơn mở từ tab Công nợ (đã có NgayNo) vẫn hiện nút Ghi nợ vô nghĩa.
+    /// Icon + mã phím tắt (F1/F4/Esc/F12/Del) khớp WrapPanel "Action buttons" trong
+    /// HoaDonTabControl.xaml (Desktop) — nhân viên đã quen dùng phím tắt này hàng ngày trên máy tính
+    /// quán, mã tắt "quen mặt" với họ hơn là chữ đầy đủ; caption nhỏ bên dưới giữ lại chữ đầy đủ cho
+    /// người mới. (F2/F3/F9 in/copy ảnh không áp dụng cho mobile.)
     private func actionButtons(_ d: HoaDonDetailDto) -> some View {
         let chuaGhiNo = d.ngayNo?.isEmpty ?? true
+        let payments = d.payments ?? []
+        let singlePaymentBank = payments.count == 1 ? payments[0].phuongThucThanhToanId.lowercased() == PaymentMethod.chuyenKhoanId : nil
+
         return VStack(spacing: 10) {
             if d.conLai > 0 {
                 HStack(spacing: 10) {
-                    Button("Tiền mặt") { Task { await thuTien(isCash: true, d: d) } }
-                        .buttonStyle(.borderedProminent)
-                    Button("Chuyển khoản") { Task { await thuTien(isCash: false, d: d) } }
-                        .buttonStyle(.bordered)
+                    ActionButtonView(icon: "banknote", code: "F1", caption: "Tiền mặt", color: .successColor, prominent: true) {
+                        pendingAction = .tienMat
+                    }
+                    ActionButtonView(icon: "creditcard", code: "F4", caption: "Chuyển khoản", color: .brandPrimary, prominent: true) {
+                        pendingAction = .chuyenKhoan
+                    }
                 }
             } else {
-                Button("Hoàn tác thanh toán") { Task { await run { await APIClient.shared.rollback(hoaDonId: hoaDonId) } } }
-                    .buttonStyle(.bordered)
+                ActionButtonView(icon: "arrow.uturn.backward.circle", code: nil, caption: "Hoàn tác thanh toán", color: .warningColor) {
+                    pendingAction = .rollback
+                }
+
+                if let singlePaymentBank {
+                    ActionButtonView(
+                        icon: "arrow.left.arrow.right", code: nil,
+                        caption: singlePaymentBank ? "Đổi sang Tiền mặt" : "Đổi sang Chuyển khoản",
+                        color: singlePaymentBank ? .successColor : .brandPrimary
+                    ) {
+                        pendingAction = .doiPhuongThuc
+                    }
+                }
             }
 
             if d.phanLoai == "Ship" {
-                Button("Ship / Hoàn tất") {
-                    shipperName = d.nguoiShip ?? ""
-                    showGanShipperSheet = true
+                ActionButtonView(icon: "bicycle", code: "Esc", caption: "Ship / Hoàn tất", color: .pinkColor) {
+                    showShipperPicker = true
                 }
-                .buttonStyle(.bordered)
             }
 
             if d.conLai > 0 && chuaGhiNo {
-                Button("Ghi nợ") { Task { await run { await APIClient.shared.ghiNo(hoaDonId: hoaDonId) } } }
-                    .buttonStyle(.bordered)
-                    .tint(.dangerColor)
+                ActionButtonView(icon: "exclamationmark.circle", code: "F12", caption: "Ghi nợ", color: .dangerColor) {
+                    pendingAction = .ghiNo
+                }
             }
 
-            Button("Xoá đơn", role: .destructive) {
-                Task { await run { await APIClient.shared.delete(hoaDonId: hoaDonId) } }
+            ActionButtonView(icon: "trash", code: "Del", caption: "Xoá đơn", color: .dangerColor) {
+                pendingAction = .xoa
             }
         }
         .frame(maxWidth: .infinity)
@@ -158,26 +232,36 @@ struct HoaDonDetailView: View {
         return " (\(tenBienThe))"
     }
 
-    private var ganShipperSheet: some View {
+    /// Chọn shipper bằng thẻ bấm (khớp ShipperDialog bên Desktop — 2 shipper cố định Khánh/Nhã,
+    /// KHÔNG cho gõ tay tên tuỳ ý) thay vì TextField tự do như trước.
+    private var shipperPickerSheet: some View {
         NavigationStack {
-            Form {
-                TextField("Tên shipper", text: $shipperName)
+            VStack(spacing: 16) {
+                Text("Chọn shipper").font(.headline)
+                HStack(spacing: 20) {
+                    ForEach(["Khánh", "Nhã"], id: \.self) { name in
+                        Button {
+                            showShipperPicker = false
+                            pendingAction = .ship(name)
+                        } label: {
+                            VStack(spacing: 8) {
+                                ShipperAvatarView(name: name, size: 68)
+                                Text(name).font(.subheadline.bold())
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Spacer()
             }
-            .navigationTitle("Gán shipper")
-            .navigationBarTitleDisplayMode(.inline)
+            .padding(.top, 24)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Huỷ") { showGanShipperSheet = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Lưu") {
-                        showGanShipperSheet = false
-                        Task { await run { await APIClient.shared.ganShipper(hoaDonId: hoaDonId, nguoiShip: shipperName) } } }
-                    .disabled(shipperName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Huỷ") { showShipperPicker = false }
                 }
             }
         }
-        .presentationDetents([.height(180)])
+        .presentationDetents([.height(220)])
     }
 
     /// SĐT dưới tên khách hàng — nhấp để gọi (thay cho icon SĐT trên card danh sách đã bỏ).
@@ -210,13 +294,32 @@ struct HoaDonDetailView: View {
         .font(.subheadline)
     }
 
-    private func thuTien(isCash: Bool, d: HoaDonDetailDto) async {
-        await run {
-            await APIClient.shared.thuTien(
-                hoaDonId: hoaDonId, isCash: isCash, soTien: d.conLai,
-                ten: d.tenKhachHangText ?? "Khách lẻ", khachHangId: d.khachHangId
-            )
+    private func execute(_ action: PendingAction) async {
+        guard let d = detail else { return }
+        switch action {
+        case .tienMat:
+            await run { await thuTien(isCash: true, d: d) }
+        case .chuyenKhoan:
+            await run { await thuTien(isCash: false, d: d) }
+        case .rollback:
+            await run { await APIClient.shared.rollback(hoaDonId: hoaDonId) }
+        case .ghiNo:
+            await run { await APIClient.shared.ghiNo(hoaDonId: hoaDonId) }
+        case .xoa:
+            await run { await APIClient.shared.delete(hoaDonId: hoaDonId) }
+        case .doiPhuongThuc:
+            guard let paymentId = d.payments?.first?.id else { return }
+            await run { await APIClient.shared.doiPhuongThucThanhToan(id: paymentId) }
+        case .ship(let name):
+            await run { await APIClient.shared.ganShipper(hoaDonId: hoaDonId, nguoiShip: name) }
         }
+    }
+
+    private func thuTien(isCash: Bool, d: HoaDonDetailDto) async -> ActionResult {
+        await APIClient.shared.thuTien(
+            hoaDonId: hoaDonId, isCash: isCash, soTien: d.conLai,
+            ten: d.tenKhachHangText ?? "Khách lẻ", khachHangId: d.khachHangId
+        )
     }
 
     private func run(_ action: () async -> ActionResult) async {
@@ -235,5 +338,41 @@ struct HoaDonDetailView: View {
         loading = true
         detail = await APIClient.shared.getHoaDonDetail(hoaDonId)
         loading = false
+    }
+}
+
+private struct ActionButtonView: View {
+    let icon: String
+    let code: String?
+    let caption: String
+    let color: Color
+    var prominent: Bool = false
+    let action: () -> Void
+
+    init(icon: String, code: String?, caption: String, color: Color, prominent: Bool = false, action: @escaping () -> Void) {
+        self.icon = icon
+        self.code = code
+        self.caption = caption
+        self.color = color
+        self.prominent = prominent
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    Image(systemName: icon)
+                    if let code {
+                        Text(code).fontWeight(.bold)
+                    }
+                }
+                Text(caption).font(.caption2)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(prominent ? .borderedProminent : .bordered)
+        .tint(color)
     }
 }

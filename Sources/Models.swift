@@ -71,6 +71,11 @@ struct ChiTietHoaDonResponseDto: Decodable, Identifiable {
     let toppingText: String?
 }
 
+struct HoaDonPaymentBriefDto: Decodable, Identifiable {
+    let id: String
+    let phuongThucThanhToanId: String
+}
+
 struct HoaDonDetailDto: Decodable {
     let id: String
     let khachHangId: String?
@@ -92,6 +97,7 @@ struct HoaDonDetailDto: Decodable {
     let tongNoKhachHang: Double?
     let chiTietHoaDons: [ChiTietHoaDonResponseDto]?
     let chiTietHoaDonToppings: [ChiTietHoaDonToppingResponseDto]?
+    let payments: [HoaDonPaymentBriefDto]?
 }
 
 // ---- Thao tác nhanh trên hoá đơn ----

@@ -7,23 +7,39 @@ import SwiftUI
 /// Không có tab "Tạo hoá đơn" (bỏ qua theo yêu cầu — làm sau cùng CreatePlus).
 struct MainTabView: View {
     @Binding var isLoggedIn: Bool
+    @ObservedObject private var activeTab = ActiveTab.shared
+    @State private var selection = 0
 
     var body: some View {
-        TabView {
+        TabView(selection: $selection) {
             HoaDonListView()
                 .tabItem { Label("Hoá đơn", systemImage: "doc.text") }
+                .tag(0)
 
             ThanhToanListView()
                 .tabItem { Label("Thanh toán", systemImage: "creditcard") }
+                .tag(1)
 
             CongNoListView()
                 .tabItem { Label("Công nợ", systemImage: "exclamationmark.circle") }
+                .tag(2)
 
             ChiTieuListView()
                 .tabItem { Label("Chi tiêu", systemImage: "banknote") }
+                .tag(3)
 
             MoreMenuView(isLoggedIn: $isLoggedIn)
                 .tabItem { Label("Menu", systemImage: "ellipsis.circle") }
+                .tag(4)
+        }
+        .onChange(of: selection) { newValue in
+            switch newValue {
+            case 0: activeTab.tab = .hoaDon
+            case 1: activeTab.tab = .thanhToan
+            case 2: activeTab.tab = .congNo
+            case 3: activeTab.tab = .chiTieu
+            default: activeTab.tab = .other
+            }
         }
     }
 }

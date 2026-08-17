@@ -94,6 +94,7 @@ struct HoaDonListView: View {
             }
         }
         .task { await load() }
+        .onEntityChanged(["HoaDon"], tab: .hoaDon) { Task { await load() } }
         .sheet(item: Binding(
             get: { selectedId.map { IdentifiableId($0) } },
             set: { selectedId = $0?.value }

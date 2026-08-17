@@ -7,10 +7,28 @@ struct ContentView: View {
     @State private var isLoggedIn = Prefs.isLoggedIn
 
     var body: some View {
-        if isLoggedIn {
-            MainTabView(isLoggedIn: $isLoggedIn)
-        } else {
-            LoginView(isLoggedIn: $isLoggedIn)
+        Group {
+            if isLoggedIn {
+                MainTabView(isLoggedIn: $isLoggedIn)
+            } else {
+                LoginView(isLoggedIn: $isLoggedIn)
+            }
+        }
+        .onChange(of: isLoggedIn) { loggedIn in
+            if loggedIn {
+                Task { await SignalRClient.shared.start { entity, action, id in
+                    EntityChangeBus.shared.post(entity, action, id)
+                } }
+            } else {
+                Task { await SignalRClient.shared.stop() }
+            }
+        }
+        .task {
+            if isLoggedIn {
+                await SignalRClient.shared.start { entity, action, id in
+                    EntityChangeBus.shared.post(entity, action, id)
+                }
+            }
         }
     }
 }

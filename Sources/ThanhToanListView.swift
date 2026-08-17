@@ -77,6 +77,7 @@ struct ThanhToanListView: View {
             }
         }
         .task { await load() }
+        .onEntityChanged(["HoaDon", "ChiTietHoaDonThanhToan"], tab: .thanhToan) { Task { await load() } }
         .sheet(item: Binding(
             get: { selectedId.map { IdentifiableId($0) } },
             set: { selectedId = $0?.value }

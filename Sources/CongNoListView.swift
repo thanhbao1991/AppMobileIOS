@@ -108,6 +108,7 @@ struct CongNoListView: View {
             }
         }
         .task { await load() }
+        .onEntityChanged(["HoaDon"], tab: .congNo) { Task { await load() } }
         .sheet(item: Binding(
             get: { selectedId.map { IdentifiableId($0) } },
             set: { selectedId = $0?.value }
