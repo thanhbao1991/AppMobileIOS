@@ -358,21 +358,29 @@ private struct ActionButtonView: View {
         self.action = action
     }
 
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 2) {
-                HStack(spacing: 4) {
-                    Image(systemName: icon)
-                    if let code {
-                        Text(code).fontWeight(.bold)
-                    }
+    private var label: some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                if let code {
+                    Text(code).fontWeight(.bold)
                 }
-                Text(caption).font(.caption2)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            Text(caption).font(.caption2)
         }
-        .buttonStyle(prominent ? .borderedProminent : .bordered)
-        .tint(color)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+
+    var body: some View {
+        if prominent {
+            Button(action: action) { label }
+                .buttonStyle(.borderedProminent)
+                .tint(color)
+        } else {
+            Button(action: action) { label }
+                .buttonStyle(.bordered)
+                .tint(color)
+        }
     }
 }
