@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct HoaDonDetailView: View {
     let hoaDonId: String
@@ -11,6 +12,7 @@ struct HoaDonDetailView: View {
     @State private var errorText: String?
     @State private var showShipperPicker = false
     @State private var pendingAction: PendingAction?
+    @State private var copiedFeedback = false
 
     var body: some View {
         NavigationStack {
@@ -149,7 +151,7 @@ struct HoaDonDetailView: View {
                     }
                 }
 
-                DetailCard {
+                DetailCard(tint: (d.tongNoKhachHang ?? 0) > 0 ? .dangerColor : nil) {
                     infoRow("Tổng tiền", HoaDonFormatting.money(d.tongTien))
                     if d.giamGia > 0 { infoRow("Giảm giá", HoaDonFormatting.money(d.giamGia)) }
                     infoRow("Thành tiền", HoaDonFormatting.money(d.thanhTien))
@@ -167,6 +169,18 @@ struct HoaDonDetailView: View {
                     // HoaDonQueryService.GetByIdAsync, subquery loại trừ "AND h.Id != @id"). Nhãn cũ
                     // dễ hiểu lầm là đã gộp.
                     if let no = d.tongNoKhachHang, no != 0 { infoRow("Nợ đơn khác", HoaDonFormatting.money(no)) }
+                    // Khách có nợ đơn khác > 0 → cộng sẵn "Tổng cộng" (Còn lại + Nợ đơn khác) để nhân
+                    // viên khỏi cộng tay khi thu tiền khách tại quầy/ship.
+                    if let no = d.tongNoKhachHang, no > 0 {
+                        Divider()
+                        HStack {
+                            Text("TỔNG CỘNG").font(.caption.bold()).foregroundColor(.dangerColor)
+                            Spacer()
+                            Text(HoaDonFormatting.money(d.conLai + no))
+                                .font(.title3.bold())
+                                .foregroundColor(.dangerColor)
+                        }
+                    }
                 }
 
                 actionButtons(d)
@@ -209,6 +223,13 @@ struct HoaDonDetailView: View {
         let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
         return VStack(spacing: 10) {
+            ActionButtonView(
+                icon: copiedFeedback ? "checkmark" : "doc.on.doc", code: nil,
+                caption: copiedFeedback ? "Đã copy" : "Gửi Bill", color: .brandPrimary
+            ) {
+                copyBillImage(d)
+            }
+
             if d.conLai > 0 {
                 HStack(spacing: 10) {
                     ActionButtonView(icon: "banknote", code: "F1", caption: "Tiền mặt", color: .successColor, prominent: true) {
@@ -379,6 +400,86 @@ struct HoaDonDetailView: View {
         detail = await APIClient.shared.getHoaDonDetail(hoaDonId)
         loading = false
     }
+
+    /// Render chi tiết hoá đơn thành ảnh, copy vào clipboard để dán thẳng vào chat Zalo/Facebook —
+    /// khớp cách "Gửi Bill Nợ" bên CongNoListView, dùng ImageRenderer để vẽ hết nội dung kể cả phần
+    /// đang cuộn ngoài viewport.
+    private func copyBillImage(_ d: HoaDonDetailDto) {
+        let content = BillDetailSnapshotView(d: d)
+            .frame(width: UIScreen.main.bounds.width)
+
+        let renderer = ImageRenderer(content: content)
+        renderer.scale = UIScreen.main.scale
+        guard let uiImage = renderer.uiImage else { return }
+        UIPasteboard.general.image = uiImage
+
+        copiedFeedback = true
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            copiedFeedback = false
+        }
+    }
+}
+
+/// Layout riêng để render ảnh "Gửi Bill" — nền trắng cố định để ảnh dán vào chat luôn đọc được bất
+/// kể theme máy, độc lập với ScrollView (không rasterize hết nội dung ngoài viewport).
+private struct BillDetailSnapshotView: View {
+    let d: HoaDonDetailDto
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(d.tenKhachHangText?.isEmpty == false ? d.tenKhachHangText! : (d.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
+                .font(.title3.bold())
+            if let sdt = d.soDienThoaiText, !sdt.isEmpty {
+                Text(sdt).font(.subheadline).foregroundColor(.textMuted)
+            }
+            if let dc = d.diaChiText, !dc.isEmpty {
+                Text(dc).font(.subheadline).foregroundColor(.textMuted)
+            }
+
+            Divider()
+
+            ForEach(d.chiTietHoaDons ?? [], id: \.id) { ct in
+                HStack {
+                    Text("\(ct.soLuong)x \(ct.tenSanPham)")
+                    Spacer()
+                    Text(HoaDonFormatting.money(ct.donGia * Double(ct.soLuong)))
+                }
+                .font(.subheadline)
+            }
+
+            Divider()
+
+            HStack {
+                Text("Thành tiền").foregroundColor(.textMuted)
+                Spacer()
+                Text(HoaDonFormatting.money(d.thanhTien)).font(.subheadline.bold())
+            }
+            HStack {
+                Text("Còn lại").foregroundColor(.textMuted)
+                Spacer()
+                Text(HoaDonFormatting.money(d.conLai))
+                    .font(.title3.bold())
+                    .foregroundColor(d.conLai > 0 ? .dangerColor : .successColor)
+            }
+            if let no = d.tongNoKhachHang, no > 0 {
+                HStack {
+                    Text("Nợ đơn khác").foregroundColor(.textMuted)
+                    Spacer()
+                    Text(HoaDonFormatting.money(no))
+                }
+                HStack {
+                    Text("TỔNG CỘNG").font(.subheadline.bold()).foregroundColor(.dangerColor)
+                    Spacer()
+                    Text(HoaDonFormatting.money(d.conLai + no))
+                        .font(.title3.bold())
+                        .foregroundColor(.dangerColor)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+    }
 }
 
 /// Khối card bo góc dùng cho từng nhóm thông tin trong các màn "chi tiết" (HoaDonDetailView,
@@ -386,15 +487,19 @@ struct HoaDonDetailView: View {
 /// ràng hơn. Internal để dùng chung xuyên suốt app.
 struct DetailCard<Content: View>: View {
     let content: Content
+    /// Khi set (vd .dangerColor cho đơn có nợ), nền card đổi sang pastel màu này thay vì màu xám
+    /// mặc định — nhấn mạnh trực quan ngay trên card, không cần đọc số.
+    var tint: Color?
 
-    init(@ViewBuilder content: () -> Content) {
+    init(tint: Color? = nil, @ViewBuilder content: () -> Content) {
+        self.tint = tint
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) { content }
             .padding(14)
-            .background(Color(.secondarySystemBackground))
+            .background(tint?.pastelBackground() ?? Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

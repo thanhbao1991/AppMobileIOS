@@ -78,6 +78,26 @@ enum HoaDonFormatting {
         return "--:-- --/--"
     }
 
+    /// Số phút trôi qua từ ngayGio tới hiện tại — dùng cho badge "chờ" trên card list (chỉ áp dụng
+    /// đơn Ship chưa gán shipper / Mua về chưa thanh toán, xem HoaDonRowView.waitingMinutes).
+    static func minutesSince(_ iso: String?) -> Int? {
+        guard let iso, !iso.isEmpty else { return nil }
+        for f in isoInFormats {
+            if let date = f.date(from: iso) {
+                return max(0, Int(Date().timeIntervalSince(date) / 60))
+            }
+        }
+        return nil
+    }
+
+    /// "12 phút" nếu <1h, "1g05p" nếu >=1h.
+    static func waitingText(_ minutes: Int) -> String {
+        if minutes < 60 { return "\(minutes) phút" }
+        let h = minutes / 60
+        let m = minutes % 60
+        return "\(h)g\(String(format: "%02d", m))p"
+    }
+
     static func phanLoaiLabel(_ phanLoai: String?) -> String {
         switch phanLoai {
         case "Tại Chỗ": return "Tại chỗ"

@@ -7,6 +7,7 @@ struct HoaDonListView: View {
     @State private var hasLoaded = false
     @State private var selectedId: String?
     @State private var searchText = ""
+    @State private var showAddSheet = false
 
     private var sortedItems: [HoaDonListDto] {
         items
@@ -39,11 +40,10 @@ struct HoaDonListView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm khách, món, ghi chú...") { Task { await load() } }
-                    Button {} label: {
+                    Button { showAddSheet = true } label: {
                         Image(systemName: "plus.circle.fill").font(.title2)
                     }
-                    .disabled(true)
-                    .foregroundColor(.textMuted)
+                    .foregroundColor(.brandPrimary)
                     .padding(.trailing)
                 }
 
@@ -103,6 +103,9 @@ struct HoaDonListView: View {
                 Task { await load() }
             }
         }
+        .sheet(isPresented: $showAddSheet) {
+            AddHoaDonSheet()
+        }
     }
 
     private func load() async {
@@ -161,10 +164,35 @@ private struct HoaDonRowView: View {
         return .dangerColor
     }
 
+    /// Chỉ hiện "chờ" cho 2 trường hợp cần nhân viên xử lý sớm: Ship chưa gán shipper, hoặc Mua về
+    /// chưa thanh toán — đơn khác đã có shipper/đã thu thì hiển thị thêm không có ý nghĩa gì.
+    private var showWaiting: Bool {
+        (item.phanLoai == "Ship" && (item.nguoiShip?.isEmpty ?? true))
+            || (item.phanLoai == "Mv" && item.conLai > 0)
+    }
+
+    private var waitingMinutes: Int? {
+        guard showWaiting else { return nil }
+        return HoaDonFormatting.minutesSince(item.ngayGio)
+    }
+
+    private var waitingColor: Color {
+        guard let waitingMinutes else { return .textMuted }
+        if waitingMinutes >= 30 { return .dangerColor }
+        if waitingMinutes >= 15 { return .warningColor }
+        return .textMuted
+    }
+
+    /// Shipper đánh dấu "Tí nữa chuyển khoản" (GhiChuShipper == chuỗi cố định, xem
+    /// ShipperActionService.TiNuaChuyenKhoanAsync) — cần nổi bật để nhân viên chủ động xử lý.
+    private var isTiNuaChuyenKhoan: Bool {
+        item.phanLoai == "Mv" && item.ghiChuShipper == "Tí nữa chuyển khoản"
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Rectangle()
-                .fill(HoaDonFormatting.phanLoaiColor(item.phanLoai))
+                .fill(isTiNuaChuyenKhoan ? Color.warningColor : HoaDonFormatting.phanLoaiColor(item.phanLoai))
                 .frame(width: 4)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -177,6 +205,13 @@ private struct HoaDonRowView: View {
                         ShipperAvatarView(name: nguoiShip, size: 16)
                     }
                     Spacer()
+                    if let waitingMinutes {
+                        HStack(spacing: 3) {
+                            Image(systemName: "clock.fill").font(.caption2)
+                            Text(HoaDonFormatting.waitingText(waitingMinutes)).font(.caption2.bold())
+                        }
+                        .foregroundColor(waitingColor)
+                    }
                 }
                 Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
                     .font(.subheadline.bold())
@@ -188,6 +223,16 @@ private struct HoaDonRowView: View {
                 }
                 if let mon = item.tenMonSummary, !mon.isEmpty {
                     Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
+                }
+                if isTiNuaChuyenKhoan {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bell.fill").font(.caption2)
+                        Text("Tí nữa chuyển khoản").font(.caption.bold())
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Color.warningColor)
+                    .clipShape(Capsule())
                 }
             }
             Spacer()
@@ -204,7 +249,81 @@ private struct HoaDonRowView: View {
             }
         }
         .padding(12)
-        .background(HoaDonFormatting.phanLoaiBgColor(item.phanLoai))
+        .background(isTiNuaChuyenKhoan ? Color.warningColor.pastelBackground() : HoaDonFormatting.phanLoaiBgColor(item.phanLoai))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(isTiNuaChuyenKhoan ? Color.warningColor : Color.clear, lineWidth: 2)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+/// Khung chọn phân loại đơn khi bấm "+" — CHỈ giao diện, chưa nối API tạo hoá đơn thật (theo yêu
+/// cầu "làm khung trước", các Button đều rỗng action).
+private struct AddHoaDonSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private let categories: [(code: String, icon: String)] = [
+        ("Ship", "bicycle"),
+        ("Tại Chỗ", "cup.and.saucer.fill"),
+        ("Mv", "bag.fill"),
+        ("Mh", "hand.raised.fill"),
+        ("App", "app.badge"),
+    ]
+    private let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Chọn phân loại đơn").font(.subheadline).foregroundColor(.textMuted)
+
+                LazyVGrid(columns: twoColumns, spacing: 12) {
+                    ForEach(categories, id: \.code) { cat in
+                        Button {} label: {
+                            VStack(spacing: 6) {
+                                Image(systemName: cat.icon).font(.title2)
+                                Text(HoaDonFormatting.phanLoaiLabel(cat.code)).font(.subheadline.bold())
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: 12))
+                        .tint(HoaDonFormatting.phanLoaiColor(cat.code))
+                    }
+                }
+
+                Divider()
+
+                VStack(spacing: 10) {
+                    Button {} label: {
+                        Label("Đơn 7h", systemImage: "clock.fill")
+                            .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 12))
+                    .tint(.brandPrimary)
+
+                    Button {} label: {
+                        Label("Bắt đơn App", systemImage: "app.badge.checkmark")
+                            .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 12))
+                    .tint(.dangerColor)
+                }
+
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Thêm hoá đơn")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
