@@ -24,6 +24,11 @@ enum HoaDonFormatting {
         (moneyFormatter.string(from: NSNumber(value: value)) ?? "\(Int(value))") + " đ"
     }
 
+    /// Viết tắt cho footer (vd "1807k") — không cần rõ số, chỉ cần ước lượng nhanh.
+    static func moneyShort(_ value: Double) -> String {
+        "\(Int((value / 1000).rounded()))k"
+    }
+
     private static let isoInFormats: [DateFormatter] = {
         ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss.SSS"].map {
             let f = DateFormatter()
