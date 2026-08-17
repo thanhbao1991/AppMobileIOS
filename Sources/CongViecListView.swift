@@ -1,14 +1,11 @@
 import SwiftUI
 
-/// Công việc nội bộ — GET/POST/PUT /api/CongViecNoiBo. Có API thật (khác Android hiện vẫn sample),
-/// nên làm đủ: tick hoàn thành (PUT) + thêm việc mới (POST). Không làm cảnh báo/xoá (NgayCanhBao,
-/// XNgayCanhBao) — đơn giản hoá cho bản mobile.
+/// Công việc nội bộ — GET/PUT /api/CongViecNoiBo. Chỉ tick hoàn thành, không thêm/xoá/cảnh báo
+/// (NgayCanhBao, XNgayCanhBao) — đơn giản hoá cho bản mobile, footer chỉ hiện số việc còn lại.
 struct CongViecListView: View {
     @State private var items: [CongViecNoiBoDto] = []
     @State private var loading = false
     @State private var hasLoaded = false
-    @State private var newTen = ""
-    @State private var adding = false
     @State private var searchText = ""
 
     private var sortedItems: [CongViecNoiBoDto] {
@@ -45,14 +42,9 @@ struct CongViecListView: View {
 
                 Divider()
                 HStack {
-                    TextField("Thêm việc mới...", text: $newTen)
-                        .textFieldStyle(.roundedBorder)
-                    Button {
-                        Task { await addNew() }
-                    } label: {
-                        if adding { ProgressView() } else { Image(systemName: "plus.circle.fill").font(.title2) }
-                    }
-                    .disabled(newTen.trimmingCharacters(in: .whitespaces).isEmpty || adding)
+                    Text("Còn lại").font(.subheadline).foregroundColor(.textMuted)
+                    Spacer()
+                    Text("\(items.filter { !$0.daHoanThanh }.count) việc").font(.headline)
                 }
                 .padding()
             }
@@ -73,15 +65,6 @@ struct CongViecListView: View {
         await load()
     }
 
-    private func addNew() async {
-        let ten = newTen.trimmingCharacters(in: .whitespaces)
-        guard !ten.isEmpty else { return }
-        adding = true
-        _ = await APIClient.shared.createCongViec(ten: ten)
-        newTen = ""
-        await load()
-        adding = false
-    }
 }
 
 private struct CongViecRowView: View {

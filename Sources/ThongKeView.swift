@@ -139,6 +139,8 @@ struct ThongKeView: View {
                     .refreshable { await load() }
                 }
             }
+            .navigationTitle("Thống kê")
+            .navigationBarTitleDisplayMode(.inline)
             .task { await load() }
     }
 

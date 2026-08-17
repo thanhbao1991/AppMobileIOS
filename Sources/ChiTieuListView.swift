@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// Chi tiêu hằng ngày — GET/POST/PUT/DELETE /api/ChiTieuHangNgay. List theo ngày (DayNavBar) +
-/// search + nút "+" mở AddExpenseSheet chọn nguyên liệu thật từ /api/NguyenLieuBanHang. Vuốt trái
-/// để sửa ghi chú / xoá — khớp web mobile (OnPostEditAsync/OnPostDeleteAsync).
+/// Chi tiêu hằng ngày — GET/PUT/DELETE /api/ChiTieuHangNgay. List theo ngày (DayNavBar) + search.
+/// Vuốt trái để sửa ghi chú / xoá — khớp web mobile (OnPostEditAsync/OnPostDeleteAsync). Không còn
+/// thêm chi tiêu trực tiếp trên tab này (footer chỉ hiện tổng); AddExpenseSheet giữ lại cho luồng
+/// "Tạo" (CreatePlus) dùng sau.
 struct ChiTieuListView: View {
     @State private var currentDate = Date()
     @State private var items: [ChiTieuHangNgayDto] = []
     @State private var loading = false
     @State private var hasLoaded = false
-    @State private var showAddSheet = false
     @State private var searchText = ""
     @State private var editingItem: ChiTieuHangNgayDto?
 
@@ -18,6 +18,14 @@ struct ChiTieuListView: View {
 
     private var totalText: String {
         HoaDonFormatting.money(filteredItems.reduce(0) { $0 + $1.thanhTien })
+    }
+
+    private var totalNgayText: String {
+        HoaDonFormatting.money(filteredItems.filter { !$0.billThang }.reduce(0) { $0 + $1.thanhTien })
+    }
+
+    private var totalThangText: String {
+        HoaDonFormatting.money(filteredItems.filter { $0.billThang }.reduce(0) { $0 + $1.thanhTien })
     }
 
     var body: some View {
@@ -59,26 +67,24 @@ struct ChiTieuListView: View {
                 }
 
                 Divider()
-                Button {
-                    showAddSheet = true
-                } label: {
+                VStack(spacing: 2) {
                     HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Thêm chi tiêu · \(totalText)")
+                        Spacer()
+                        Text("Ngày: \(totalNgayText)")
+                            .font(.caption2).foregroundColor(.successColor)
+                        Text("Tháng: \(totalThangText)")
+                            .font(.caption2).foregroundColor(.brandPrimary)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                    HStack {
+                        Text("Tổng chi").font(.subheadline).foregroundColor(.textMuted)
+                        Spacer()
+                        Text(totalText).font(.headline)
+                    }
                 }
-                .buttonStyle(.borderedProminent)
                 .padding()
             }
         }
         .task { await load() }
-        .sheet(isPresented: $showAddSheet) {
-            AddExpenseSheet(date: currentDate) {
-                Task { await load() }
-            }
-        }
         .sheet(item: $editingItem) { item in
             EditExpenseGhiChuSheet(item: item) {
                 Task { await load() }
@@ -104,25 +110,34 @@ struct ChiTieuListView: View {
 private struct ChiTieuRowView: View {
     let item: ChiTieuHangNgayDto
 
+    private var borderColor: Color {
+        item.billThang ? .brandPrimary : .successColor
+    }
+
     var body: some View {
         HStack(spacing: 10) {
+            Rectangle().fill(borderColor).frame(width: 4)
+
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(item.ten).font(.subheadline.bold())
-                    if item.billThang {
-                        Text("#tháng").font(.caption2.bold()).foregroundColor(.brandPrimary)
-                    } else {
-                        Text("#ngày").font(.caption2.bold()).foregroundColor(.textMuted)
+                    if let ghiChu = item.ghiChu, !ghiChu.isEmpty {
+                        Text(ghiChu).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
                     }
                 }
                 Text("\(HoaDonFormatting.money(item.donGia)) × \(item.soLuong.formatted())")
                     .font(.footnote).foregroundColor(.textMuted)
-                if let ghiChu = item.ghiChu, !ghiChu.isEmpty {
-                    Text(ghiChu).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
-                }
             }
             Spacer()
-            Text(HoaDonFormatting.money(item.thanhTien)).font(.subheadline.bold())
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(HoaDonFormatting.money(item.thanhTien)).font(.subheadline.bold())
+                Text(item.billThang ? "#tháng" : "#ngày")
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(borderColor.opacity(0.15))
+                    .foregroundColor(borderColor)
+                    .clipShape(Capsule())
+            }
         }
     }
 }

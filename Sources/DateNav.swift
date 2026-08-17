@@ -75,7 +75,8 @@ struct DaySearchBar: View {
     }
 }
 
-/// Chỉ chọn ngày, không search — dùng cho trang không có ô tìm kiếm (vd ThongKeView).
+/// Chỉ chọn ngày, không search — dùng cho trang không có ô tìm kiếm (vd ThongKeView). Canh giữa
+/// (không Spacer 1 bên) vì trang này không có phần tử nào khác cùng hàng cần cân bằng.
 struct DayDateBar: View {
     @Binding var date: Date
     var onChange: () -> Void
@@ -83,6 +84,7 @@ struct DayDateBar: View {
 
     var body: some View {
         HStack {
+            Spacer()
             Button { showPicker = true } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")
@@ -118,88 +120,3 @@ struct DayDateBar: View {
     }
 }
 
-/// Gộp chọn tháng + ô tìm kiếm chung 1 dòng, giống DaySearchBar. Dùng khi trang có search
-/// (MonthListView truyền `matches`); trang không có search dùng MonthDateBar (chỉ chọn tháng).
-struct MonthSearchBar: View {
-    @Binding var year: Int
-    @Binding var month: Int
-    @Binding var searchText: String
-    var placeholder: String = "Tìm..."
-    var onChange: () -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            MonthPickerButton(year: $year, month: $month, onChange: onChange)
-            SearchFieldRow(text: $searchText, placeholder: placeholder)
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-    }
-}
-
-/// Chỉ chọn tháng, không search — trang report nào không truyền `matches` cho MonthListView.
-struct MonthDateBar: View {
-    @Binding var year: Int
-    @Binding var month: Int
-    var onChange: () -> Void
-
-    var body: some View {
-        HStack {
-            MonthPickerButton(year: $year, month: $month, onChange: onChange)
-            Spacer()
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-    }
-}
-
-private struct MonthPickerButton: View {
-    @Binding var year: Int
-    @Binding var month: Int
-    var onChange: () -> Void
-    @State private var showPicker = false
-    @State private var pickerDate = Date()
-
-    private var titleText: String {
-        String(format: "%02d/%d", month, year)
-    }
-
-    var body: some View {
-        Button {
-            var comps = DateComponents()
-            comps.year = year; comps.month = month; comps.day = 1
-            pickerDate = Calendar.current.date(from: comps) ?? Date()
-            showPicker = true
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "calendar")
-                Text(titleText)
-            }
-            .font(.subheadline.bold())
-            .foregroundColor(.brandPrimary)
-        }
-        .buttonStyle(.plain)
-        .fixedSize()
-        .sheet(isPresented: $showPicker) {
-            NavigationStack {
-                DatePicker("Chọn tháng", selection: $pickerDate, displayedComponents: .date)
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .padding()
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Xong") {
-                                let cal = Calendar.current
-                                year = cal.component(.year, from: pickerDate)
-                                month = cal.component(.month, from: pickerDate)
-                                showPicker = false
-                                onChange()
-                            }
-                        }
-                    }
-            }
-            .presentationDetents([.medium])
-        }
-    }
-}

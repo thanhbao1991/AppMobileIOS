@@ -175,23 +175,6 @@ struct CongViecNoiBoRequest: Encodable {
     let ngayGio: String?
 }
 
-// ---- 7 trang báo cáo tháng ----
-
-struct DonMuaHoDto: Decodable {
-    let ngayGio: String?
-    let tenKhachHangText: String?
-    let ghiChu: String?
-    let thanhTien: Double
-    let giamGia: Double
-}
-
-struct ChiTietThangDto: Decodable {
-    let ngayGio: String?
-    let tenKhachHang: String
-    let mons: [String]
-    let soLuong: Int
-}
-
 // ---- Thống kê (port từ TraSuaApp.Desktop ThongKeTabControl — nguồn chính xác, KHÔNG dùng
 // TraSuaApp.Mobile/Pages/ThongKe.cshtml vì trang đó không còn liên kết từ navbar) ----
 

@@ -10,12 +10,12 @@ struct SearchBar: View {
     var body: some View {
         SearchFieldRow(text: $text, placeholder: placeholder)
             .padding(.horizontal)
-            .padding(.bottom, 6)
+            .padding(.vertical, 8)
     }
 }
 
 /// Phần lõi ô tìm kiếm (không padding ngoài) — dùng riêng khi cần đặt chung dòng với nút chọn
-/// ngày/tháng (xem DaySearchBar/MonthSearchBar trong DateNav.swift).
+/// ngày (xem DaySearchBar trong DateNav.swift).
 struct SearchFieldRow: View {
     @Binding var text: String
     var placeholder: String = "Tìm..."

@@ -139,26 +139,6 @@ actor APIClient {
         return await executeAction(req)
     }
 
-    func getDonMuaHo(year: Int, month: Int) async -> [DonMuaHoDto] { await getDonMuaHoLike("get-don-mua-ho", year: year, month: month) }
-    func getDonApp(year: Int, month: Int) async -> [DonMuaHoDto] { await getDonMuaHoLike("get-don-app", year: year, month: month) }
-    func getDonShip(year: Int, month: Int) async -> [DonMuaHoDto] { await getDonMuaHoLike("get-don-ship", year: year, month: month) }
-    func getDonMuaVe(year: Int, month: Int) async -> [DonMuaHoDto] { await getDonMuaHoLike("get-don-mua-ve", year: year, month: month) }
-    func getDonTaiCho(year: Int, month: Int) async -> [DonMuaHoDto] { await getDonMuaHoLike("get-don-tai-cho", year: year, month: month) }
-
-    private func getDonMuaHoLike(_ endpoint: String, year: Int, month: Int) async -> [DonMuaHoDto] {
-        let req = makeRequest("/api/dashboard/\(endpoint)?thang=\(month)&nam=\(year)")
-        let (data, _) = await send(req)
-        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[DonMuaHoDto]>.self, from: data), env.isSuccess else { return [] }
-        return env.data ?? []
-    }
-
-    func getChiTietThang(year: Int, month: Int) async -> [ChiTietThangDto] {
-        let req = makeRequest("/api/dashboard/get-chi-tiet-thang?thang=\(month)&nam=\(year)")
-        let (data, _) = await send(req)
-        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ChiTietThangDto]>.self, from: data), env.isSuccess else { return [] }
-        return env.data ?? []
-    }
-
     func getThongKeChiTieu(ngay: Int, thang: Int, nam: Int) async -> ThongKeChiTieuDto? {
         await getThongKe("chi-tieu-ngay", ngay: ngay, thang: thang, nam: nam)
     }

@@ -23,6 +23,15 @@ struct CongNoListView: View {
         HoaDonFormatting.money(sortedItems.reduce(0) { $0 + $1.conLai })
     }
 
+    /// Nợ phát sinh hôm nay — cùng logic gộp NgayNo với sortedItems, chỉ lọc thêm theo ngày hiện tại.
+    private var todayText: String {
+        let today = DateNavFormat.queryDate.string(from: Date())
+        let total = sortedItems
+            .filter { ($0.ngayNo ?? "").hasPrefix(today) }
+            .reduce(0) { $0 + $1.conLai }
+        return HoaDonFormatting.money(total)
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -70,21 +79,28 @@ struct CongNoListView: View {
                 }
 
                 Divider()
-                HStack {
-                    Text("Tổng nợ").font(.subheadline).foregroundColor(.textMuted)
-                    Spacer()
-                    if !searchText.isEmpty {
-                        Button {
-                            copyBillImage()
-                        } label: {
-                            Label(copiedFeedback ? "Đã copy" : "Gửi Bill Nợ", systemImage: copiedFeedback ? "checkmark" : "doc.on.doc")
-                                .font(.caption.bold())
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.brandPrimary)
+                VStack(spacing: 2) {
+                    HStack {
                         Spacer()
+                        Text("Hôm nay: \(todayText)")
+                            .font(.caption2).foregroundColor(.dangerColor)
                     }
-                    Text(totalText).font(.headline).foregroundColor(.dangerColor)
+                    HStack {
+                        Text("Tổng nợ").font(.subheadline).foregroundColor(.textMuted)
+                        Spacer()
+                        if !searchText.isEmpty {
+                            Button {
+                                copyBillImage()
+                            } label: {
+                                Label(copiedFeedback ? "Đã copy" : "Gửi Bill Nợ", systemImage: copiedFeedback ? "checkmark" : "doc.on.doc")
+                                    .font(.caption.bold())
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.brandPrimary)
+                            Spacer()
+                        }
+                        Text(totalText).font(.headline).foregroundColor(.dangerColor)
+                    }
                 }
                 .padding()
             }
@@ -133,7 +149,7 @@ struct CongNoListView: View {
     /// giới hạn bởi viewport như chụp màn hình thường.
     private func copyBillImage() {
         let snapshot = sortedItems
-        let content = BillSnapshotView(items: snapshot, totalText: totalText)
+        let content = BillSnapshotView(items: snapshot, totalText: totalText, todayText: todayText)
             .frame(width: UIScreen.main.bounds.width)
 
         let renderer = ImageRenderer(content: content)
@@ -154,6 +170,7 @@ struct CongNoListView: View {
 private struct BillSnapshotView: View {
     let items: [HoaDonListDto]
     let totalText: String
+    let todayText: String
 
     var body: some View {
         VStack(spacing: 0) {
@@ -163,10 +180,17 @@ private struct BillSnapshotView: View {
                     .padding(.vertical, 8)
                 Divider()
             }
-            HStack {
-                Text("Tổng nợ").font(.subheadline).foregroundColor(.textMuted)
-                Spacer()
-                Text(totalText).font(.headline).foregroundColor(.dangerColor)
+            VStack(spacing: 2) {
+                HStack {
+                    Spacer()
+                    Text("Hôm nay: \(todayText)")
+                        .font(.caption2).foregroundColor(.dangerColor)
+                }
+                HStack {
+                    Text("Tổng nợ").font(.subheadline).foregroundColor(.textMuted)
+                    Spacer()
+                    Text(totalText).font(.headline).foregroundColor(.dangerColor)
+                }
             }
             .padding(12)
         }
@@ -183,21 +207,21 @@ private struct CongNoRowView: View {
             Rectangle().fill(Color.dangerColor).frame(width: 4)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
-                        .font(.subheadline.bold())
-                    Text(HoaDonFormatting.congNoTime(item.ngayNo))
-                        .font(.footnote).foregroundColor(.textMuted)
-                }
+                Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
+                    .font(.subheadline.bold())
                 if let mon = item.tenMonSummary, !mon.isEmpty {
                     Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
                 }
             }
             Spacer()
-            if busy {
-                ProgressView()
-            } else {
-                Text(HoaDonFormatting.money(item.conLai)).font(.subheadline.bold()).foregroundColor(.dangerColor)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(HoaDonFormatting.congNoTime(item.ngayNo))
+                    .font(.footnote).foregroundColor(.textMuted)
+                if busy {
+                    ProgressView()
+                } else {
+                    Text(HoaDonFormatting.money(item.conLai)).font(.subheadline.bold()).foregroundColor(.dangerColor)
+                }
             }
         }
     }
