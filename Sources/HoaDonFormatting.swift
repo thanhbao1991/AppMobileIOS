@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // Màu khớp AppMobileAndroid/res/values/colors.xml (Bootstrap-style) — giữ đồng bộ hình ảnh 2 nền tảng.
 extension Color {
@@ -8,6 +9,16 @@ extension Color {
     static let dangerColor = Color(red: 0xDC / 255, green: 0x35 / 255, blue: 0x45 / 255)
     static let warningColor = Color(red: 0xFF / 255, green: 0xC1 / 255, blue: 0x07 / 255)
     static let pinkColor = Color(red: 0xD6 / 255, green: 0x33 / 255, blue: 0x84 / 255)
+
+    /// Trộn với trắng ra bản pastel đặc (không dùng opacity) — dùng làm nền card, giống cách Mobile
+    /// web tô nền card bằng 1 màu pastel cố định thay vì border color mờ đi (opacity phụ thuộc nền
+    /// phía sau, dễ ra xám/đậm khác ý muốn, nhất là dark mode).
+    func pastelBackground(_ amount: CGFloat = 0.82) -> Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        func mix(_ c: CGFloat) -> CGFloat { c + (1 - c) * amount }
+        return Color(red: mix(r), green: mix(g), blue: mix(b))
+    }
 }
 
 enum HoaDonFormatting {
@@ -90,7 +101,7 @@ enum HoaDonFormatting {
     /// Nền tint card theo PhanLoai — dùng chính màu accent/border đã có sẵn trên card (phanLoaiColor),
     /// pha nhạt để làm nền cả card thay vì chỉ 1 thanh 4px bên trái.
     static func phanLoaiBgColor(_ phanLoai: String?) -> Color {
-        phanLoaiColor(phanLoai).opacity(0.16)
+        phanLoaiColor(phanLoai).pastelBackground()
     }
 
     /// Port y hệt HoaDonSortService.GetSortOrder (Desktop) / AppMobileAndroid HoaDonTabFragment.sortPriority.

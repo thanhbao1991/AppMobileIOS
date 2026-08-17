@@ -227,7 +227,7 @@ private struct CongNoRowView: View {
             }
         }
         .padding(12)
-        .background(Color.dangerColor.opacity(0.16))
+        .background(Color.dangerColor.pastelBackground())
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

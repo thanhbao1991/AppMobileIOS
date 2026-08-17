@@ -172,7 +172,7 @@ private struct ThanhToanRowView: View {
             }
         }
         .padding(12)
-        .background(borderColor.opacity(0.16))
+        .background(borderColor.pastelBackground())
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

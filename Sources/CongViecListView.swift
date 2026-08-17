@@ -148,7 +148,7 @@ private struct CongViecRowView: View {
                 Spacer()
             }
             .padding(12)
-            .background((item.daHoanThanh ? Color.successColor : Color.textMuted).opacity(0.16))
+            .background((item.daHoanThanh ? Color.successColor : Color.textMuted).pastelBackground())
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
