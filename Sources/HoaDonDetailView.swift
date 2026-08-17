@@ -109,69 +109,91 @@ struct HoaDonDetailView: View {
 
     private func content(_ d: HoaDonDetailDto) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(spacing: 14) {
                 if let errorText {
                     Text(errorText).foregroundColor(.dangerColor).font(.footnote)
                 }
 
-                Group {
-                    infoRow("Khách hàng", d.tenKhachHangText?.isEmpty == false ? d.tenKhachHangText! : (d.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
-                    if let sdt = d.soDienThoaiText, !sdt.isEmpty { phoneRow(sdt) }
-                    if let dc = d.diaChiText, !dc.isEmpty { infoRow("Địa chỉ", dc) }
-                    if let gc = d.ghiChu, !gc.isEmpty { infoRow("Ghi chú", gc) }
+                DetailCard {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.brandPrimary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(d.tenKhachHangText?.isEmpty == false ? d.tenKhachHangText! : (d.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
+                                .font(.title3.bold())
+                            if let sdt = d.soDienThoaiText, !sdt.isEmpty { phoneRow(sdt) }
+                        }
+                        Spacer()
+                    }
+                    if let dc = d.diaChiText, !dc.isEmpty { iconRow("location.fill", dc) }
+                    if let gc = d.ghiChu, !gc.isEmpty { iconRow("note.text", gc) }
                 }
-
-                Divider()
 
                 if let chiTiet = d.chiTietHoaDons, !chiTiet.isEmpty {
-                    HStack {
-                        Text("Món").font(.headline)
-                        Spacer()
-                        Text("\(chiTiet.reduce(0) { $0 + $1.soLuong }) ly").font(.subheadline).foregroundColor(.textMuted)
-                    }
-                    ForEach(chiTiet) { ct in
+                    DetailCard {
                         HStack {
-                            Image(systemName: "cup.and.saucer.fill")
-                                .font(.caption)
-                                .foregroundColor(.brandPrimary)
-                            VStack(alignment: .leading) {
-                                Text("\(ct.tenSanPham)\(bienTheSuffix(ct.tenBienThe))")
-                                if let note = ct.noteText, !note.isEmpty {
-                                    Text(note).font(.caption).foregroundColor(.textMuted)
-                                }
-                            }
+                            Label("Món", systemImage: "cup.and.saucer.fill").font(.headline)
                             Spacer()
-                            Text("x\(ct.soLuong)").foregroundColor(.textMuted)
-                            Text(HoaDonFormatting.money(ct.donGia * Double(ct.soLuong))).frame(width: 100, alignment: .trailing)
+                            Text("\(chiTiet.reduce(0) { $0 + $1.soLuong }) ly")
+                                .font(.caption.bold())
+                                .foregroundColor(.brandPrimary)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(Color.brandPrimary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                        ForEach(Array(chiTiet.enumerated()), id: \.element.id) { index, ct in
+                            if index > 0 { Divider() }
+                            itemRow(ct)
                         }
                     }
+                }
+
+                DetailCard {
+                    infoRow("Tổng tiền", HoaDonFormatting.money(d.tongTien))
+                    if d.giamGia > 0 { infoRow("Giảm giá", HoaDonFormatting.money(d.giamGia)) }
+                    infoRow("Thành tiền", HoaDonFormatting.money(d.thanhTien))
+                    infoRow("Đã thu", HoaDonFormatting.money(d.daThu))
                     Divider()
+                    HStack {
+                        Text("CÒN LẠI").font(.caption.bold()).foregroundColor(.textMuted)
+                        Spacer()
+                        Text(HoaDonFormatting.money(d.conLai))
+                            .font(.title3.bold())
+                            .foregroundColor(d.conLai > 0 ? .dangerColor : .successColor)
+                    }
+                    // "Nợ đơn khác" (không phải "Tổng nợ khách") vì con số này CHỈ TÍNH các đơn khác
+                    // của cùng khách — KHÔNG gồm "Còn lại" của chính đơn đang xem (xem
+                    // HoaDonQueryService.GetByIdAsync, subquery loại trừ "AND h.Id != @id"). Nhãn cũ
+                    // dễ hiểu lầm là đã gộp.
+                    if let no = d.tongNoKhachHang, no != 0 { infoRow("Nợ đơn khác", HoaDonFormatting.money(no)) }
                 }
 
-                infoRow("Tổng tiền", HoaDonFormatting.money(d.tongTien))
-                if d.giamGia > 0 { infoRow("Giảm giá", HoaDonFormatting.money(d.giamGia)) }
-                infoRow("Thành tiền", HoaDonFormatting.money(d.thanhTien))
-                infoRow("Đã thu", HoaDonFormatting.money(d.daThu))
-                HStack {
-                    Text("Còn lại").foregroundColor(.textMuted)
-                    Spacer()
-                    Text(HoaDonFormatting.money(d.conLai))
-                        .fontWeight(.bold)
-                        .foregroundColor(d.conLai > 0 ? .dangerColor : .successColor)
-                }
-                .font(.subheadline)
-                // "Nợ đơn khác" (không phải "Tổng nợ khách") vì con số này CHỈ TÍNH các đơn khác của
-                // cùng khách — KHÔNG gồm "Còn lại" của chính đơn đang xem (xem HoaDonQueryService.
-                // GetByIdAsync, subquery loại trừ "AND h.Id != @id"). Nhãn cũ dễ hiểu lầm là đã gộp.
-                if let no = d.tongNoKhachHang, no != 0 { infoRow("Nợ đơn khác", HoaDonFormatting.money(no)) }
-
-                Divider()
                 actionButtons(d)
             }
             .padding()
         }
         .disabled(busy)
         .overlay { if busy { ProgressView() } }
+    }
+
+    private func itemRow(_ ct: ChiTietHoaDonResponseDto) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text("\(ct.soLuong)")
+                .font(.caption.bold())
+                .foregroundColor(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color.brandPrimary))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(ct.tenSanPham)\(bienTheSuffix(ct.tenBienThe))").font(.subheadline.bold())
+                if let note = ct.noteText, !note.isEmpty {
+                    Text(note).font(.caption).italic().foregroundColor(.warningColor)
+                }
+            }
+            Spacer()
+            Text(HoaDonFormatting.money(ct.donGia * Double(ct.soLuong)))
+                .font(.subheadline.bold())
+        }
     }
 
     /// Icon + mã phím tắt (F1/F4/Esc/F12/Del) khớp WrapPanel "Action buttons" trong
@@ -184,6 +206,7 @@ struct HoaDonDetailView: View {
         let chuaGhiNo = d.ngayNo?.isEmpty ?? true
         let payments = d.payments ?? []
         let singlePaymentBank = payments.count == 1 ? payments[0].phuongThucThanhToanId.lowercased() == PaymentMethod.chuyenKhoanId : nil
+        let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
         return VStack(spacing: 10) {
             if d.conLai > 0 {
@@ -195,36 +218,40 @@ struct HoaDonDetailView: View {
                         pendingAction = .chuyenKhoan
                     }
                 }
-            } else {
-                ActionButtonView(icon: "arrow.uturn.backward.circle", code: nil, caption: "Hoàn tác thanh toán", color: .warningColor) {
-                    pendingAction = .rollback
-                }
+            }
 
-                if let singlePaymentBank {
-                    ActionButtonView(
-                        icon: "arrow.left.arrow.right", code: nil,
-                        caption: singlePaymentBank ? "Đổi sang Tiền mặt" : "Đổi sang Chuyển khoản",
-                        color: singlePaymentBank ? .successColor : .brandPrimary
-                    ) {
-                        pendingAction = .doiPhuongThuc
+            LazyVGrid(columns: twoColumns, spacing: 10) {
+                if d.conLai <= 0 {
+                    ActionButtonView(icon: "arrow.uturn.backward.circle", code: nil, caption: "Hoàn tác thanh toán", color: .warningColor) {
+                        pendingAction = .rollback
+                    }
+
+                    if let singlePaymentBank {
+                        ActionButtonView(
+                            icon: "arrow.left.arrow.right", code: nil,
+                            caption: singlePaymentBank ? "Đổi sang Tiền mặt" : "Đổi sang Chuyển khoản",
+                            color: singlePaymentBank ? .successColor : .brandPrimary
+                        ) {
+                            pendingAction = .doiPhuongThuc
+                        }
                     }
                 }
-            }
 
-            if d.phanLoai == "Ship" {
-                ActionButtonView(icon: "bicycle", code: "Esc", caption: "Đi Ship", color: .pinkColor) {
-                    showShipperPicker = true
+                if d.phanLoai == "Ship" {
+                    ActionButtonView(icon: "bicycle", code: "Esc", caption: "Đi Ship", color: .pinkColor) {
+                        showShipperPicker = true
+                    }
                 }
-            }
 
-            if d.conLai > 0 && chuaGhiNo && d.khachHangId != nil {
-                ActionButtonView(icon: "exclamationmark.circle", code: "F12", caption: "Ghi nợ", color: .dangerColor) {
-                    pendingAction = .ghiNo
+                if d.conLai > 0 && chuaGhiNo && d.khachHangId != nil {
+                    ActionButtonView(icon: "exclamationmark.circle", code: "F12", caption: "Ghi nợ", color: .dangerColor) {
+                        pendingAction = .ghiNo
+                    }
                 }
-            }
 
-            ActionButtonView(icon: "trash", code: "Del", caption: "Xoá đơn", color: .dangerColor) {
-                pendingAction = .xoa
+                ActionButtonView(icon: "trash", code: "Del", caption: "Xoá đơn", color: .dangerColor) {
+                    pendingAction = .xoa
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -273,9 +300,7 @@ struct HoaDonDetailView: View {
     /// SĐT dưới tên khách hàng — nhấp để gọi (thay cho icon SĐT trên card danh sách đã bỏ).
     private func phoneRow(_ sdt: String) -> some View {
         let digits = sdt.filter { $0.isNumber || $0 == "+" }
-        return HStack {
-            Text("SĐT").foregroundColor(.textMuted)
-            Spacer()
+        return Group {
             if let url = URL(string: "tel:\(digits)") {
                 Link(destination: url) {
                     HStack(spacing: 4) {
@@ -285,7 +310,7 @@ struct HoaDonDetailView: View {
                     .foregroundColor(.brandPrimary)
                 }
             } else {
-                Text(sdt)
+                Text(sdt).foregroundColor(.textMuted)
             }
         }
         .font(.subheadline)
@@ -298,6 +323,15 @@ struct HoaDonDetailView: View {
             Text(value).multilineTextAlignment(.trailing)
         }
         .font(.subheadline)
+    }
+
+    /// Dòng phụ trong card khách hàng (địa chỉ/ghi chú) — icon nhỏ bên trái thay vì nhãn chữ, gọn hơn.
+    private func iconRow(_ icon: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: icon).font(.caption).foregroundColor(.textMuted).frame(width: 14)
+            Text(text).font(.subheadline).foregroundColor(.textMuted)
+            Spacer()
+        }
     }
 
     private func execute(_ action: PendingAction) async {
@@ -347,6 +381,24 @@ struct HoaDonDetailView: View {
     }
 }
 
+/// Khối card bo góc dùng cho từng nhóm thông tin trong các màn "chi tiết" (HoaDonDetailView,
+/// ThanhToanDetailView) — thay cho danh sách phẳng ngăn cách bằng Divider trước đây, phân tách rõ
+/// ràng hơn. Internal để dùng chung xuyên suốt app.
+struct DetailCard<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) { content }
+            .padding(14)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
 /// Dùng chung cho mọi màn "chi tiết" có action button (HoaDonDetailView, ThanhToanDetailView) —
 /// khớp icon + mã tắt + caption 1 kiểu xuyên suốt app.
 struct ActionButtonView: View {
@@ -384,10 +436,12 @@ struct ActionButtonView: View {
         if prominent {
             Button(action: action) { label }
                 .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle(radius: 12))
                 .tint(color)
         } else {
             Button(action: action) { label }
                 .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: 12))
                 .tint(color)
         }
     }

@@ -20,27 +20,26 @@ struct ThanhToanDetailView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(spacing: 14) {
                     if let errorText {
                         Text(errorText).foregroundColor(.dangerColor).font(.footnote)
                     }
 
-                    infoRow("Khách hàng", item.ten)
-                    infoRow("Thời gian", HoaDonFormatting.congNoTime(item.ngayGio))
-                    if let loai = item.loaiThanhToan, !loai.isEmpty { infoRow("Loại", loai) }
-                    if let mon = item.tenMonSummary, !mon.isEmpty { infoRow("Món", mon) }
-                    if let gc = item.ghiChu, !gc.isEmpty { infoRow("Ghi chú", gc) }
-                    infoRow("Phương thức", isBank ? "Chuyển khoản" : "Tiền mặt")
-
-                    HStack {
-                        Text("Số tiền").foregroundColor(.textMuted)
-                        Spacer()
-                        Text(HoaDonFormatting.money(item.soTien))
-                            .fontWeight(.bold)
+                    DetailCard {
+                        infoRow("Khách hàng", item.ten)
+                        infoRow("Thời gian", HoaDonFormatting.congNoTime(item.ngayGio))
+                        if let loai = item.loaiThanhToan, !loai.isEmpty { infoRow("Loại", loai) }
+                        if let mon = item.tenMonSummary, !mon.isEmpty { infoRow("Món", mon) }
+                        if let gc = item.ghiChu, !gc.isEmpty { infoRow("Ghi chú", gc) }
+                        infoRow("Phương thức", isBank ? "Chuyển khoản" : "Tiền mặt")
+                        Divider()
+                        HStack {
+                            Text("SỐ TIỀN").font(.caption.bold()).foregroundColor(.textMuted)
+                            Spacer()
+                            Text(HoaDonFormatting.money(item.soTien))
+                                .font(.title3.bold())
+                        }
                     }
-                    .font(.subheadline)
-
-                    Divider()
 
                     VStack(spacing: 10) {
                         ActionButtonView(
