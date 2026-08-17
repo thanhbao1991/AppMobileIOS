@@ -99,6 +99,22 @@ enum HoaDonFormatting {
         }
     }
 
+    private static func hexColor(_ hex: UInt32) -> Color {
+        Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    }
+
+    /// Gradient tint cho các card khác — port các `.card-red/.card-blue/.card-green/.card-day/
+    /// .card-month/.card-working/.card-done` bên Mobile web (ChiTietHoaDonThanhToanTab, ChiTieuTab,
+    /// HoaDonNoTab, CongViecNoiBoTab), cùng lý do đồng bộ hình ảnh 2 nền tảng như phanLoaiBgColor.
+    static func cardGradient(from: UInt32, to: UInt32) -> LinearGradient {
+        LinearGradient(colors: [hexColor(from), hexColor(to)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    static let cardGradientRed = cardGradient(from: 0xFEE2E2, to: 0xFECACA)
+    static let cardGradientBlue = cardGradient(from: 0xDBEAFE, to: 0xBFDBFE)
+    static let cardGradientGreen = cardGradient(from: 0xDCFCE7, to: 0xBBF7D0)
+    static let cardGradientGray = cardGradient(from: 0xF8FAFC, to: 0xE2E8F0)
+
     /// Port y hệt HoaDonSortService.GetSortOrder (Desktop) / AppMobileAndroid HoaDonTabFragment.sortPriority.
     /// Đơn Ghi nợ rớt xuống ưu tiên thấp nhất (7) BẤT KỂ phân loại — check "isNo" phải nằm TRƯỚC nhánh
     /// Ship-chưa-gán-shipper, sai thứ tự if/else ở đây từng khiến kết quả sai.

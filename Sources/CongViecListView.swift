@@ -34,6 +34,8 @@ struct CongViecListView: View {
                                     Task { await toggle(item, done: toggled) }
                                 }
                                 .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
                             }
                         }
                     }
@@ -145,6 +147,9 @@ private struct CongViecRowView: View {
                     .foregroundColor(item.daHoanThanh ? .textMuted : .primary)
                 Spacer()
             }
+            .padding(12)
+            .background(item.daHoanThanh ? HoaDonFormatting.cardGradientGray : HoaDonFormatting.cardGradientBlue)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }

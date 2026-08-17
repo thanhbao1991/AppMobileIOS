@@ -53,6 +53,8 @@ struct ChiTieuListView: View {
                             ForEach(filteredItems) { item in
                                 ChiTieuRowView(item: item)
                                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
                                     .swipeActions(edge: .trailing) {
                                         Button(role: .destructive) {
                                             Task { await delete(item) }
@@ -151,6 +153,9 @@ private struct ChiTieuRowView: View {
                     .clipShape(Capsule())
             }
         }
+        .padding(12)
+        .background(item.billThang ? HoaDonFormatting.cardGradientBlue : HoaDonFormatting.cardGradientGreen)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

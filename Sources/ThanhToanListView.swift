@@ -47,6 +47,8 @@ struct ThanhToanListView: View {
                             ForEach(filteredItems) { item in
                                 ThanhToanRowView(item: item, deleting: deletingId == item.id)
                                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
                                     .swipeActions(edge: .trailing) {
                                         Button(role: .destructive) {
                                             Task { await delete(item) }
@@ -169,5 +171,8 @@ private struct ThanhToanRowView: View {
                 }
             }
         }
+        .padding(12)
+        .background(isBank ? HoaDonFormatting.cardGradientBlue : HoaDonFormatting.cardGradientGreen)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

@@ -52,6 +52,8 @@ struct CongNoListView: View {
                                     .contentShape(Rectangle())
                                     .onTapGesture { selectedId = item.id }
                                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
                                     .swipeActions(edge: .leading) {
                                         Button {
                                             Task { await thu(item, isCash: true) }
@@ -224,5 +226,8 @@ private struct CongNoRowView: View {
                 }
             }
         }
+        .padding(12)
+        .background(HoaDonFormatting.cardGradientRed)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
