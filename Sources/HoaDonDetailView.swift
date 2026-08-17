@@ -124,7 +124,11 @@ struct HoaDonDetailView: View {
                 Divider()
 
                 if let chiTiet = d.chiTietHoaDons, !chiTiet.isEmpty {
-                    Text("Món").font(.headline)
+                    HStack {
+                        Text("Món").font(.headline)
+                        Spacer()
+                        Text("\(chiTiet.reduce(0) { $0 + $1.soLuong }) ly").font(.subheadline).foregroundColor(.textMuted)
+                    }
                     ForEach(chiTiet) { ct in
                         HStack {
                             Image(systemName: "cup.and.saucer.fill")
@@ -175,6 +179,8 @@ struct HoaDonDetailView: View {
     /// quán, mã tắt "quen mặt" với họ hơn là chữ đầy đủ; caption nhỏ bên dưới giữ lại chữ đầy đủ cho
     /// người mới. (F2/F3/F9 in/copy ảnh không áp dụng cho mobile.)
     private func actionButtons(_ d: HoaDonDetailDto) -> some View {
+        // Ghi nợ bắt buộc phải có khách hàng — khớp guard "Hoá đơn chưa có thông tin khách hàng!"
+        // trong GhiNoAsync (Desktop Actions.cs). Không có KhachHangId thì không có ai để ghi nợ.
         let chuaGhiNo = d.ngayNo?.isEmpty ?? true
         let payments = d.payments ?? []
         let singlePaymentBank = payments.count == 1 ? payments[0].phuongThucThanhToanId.lowercased() == PaymentMethod.chuyenKhoanId : nil
@@ -206,12 +212,12 @@ struct HoaDonDetailView: View {
             }
 
             if d.phanLoai == "Ship" {
-                ActionButtonView(icon: "bicycle", code: "Esc", caption: "Ship / Hoàn tất", color: .pinkColor) {
+                ActionButtonView(icon: "bicycle", code: "Esc", caption: "Đi Ship", color: .pinkColor) {
                     showShipperPicker = true
                 }
             }
 
-            if d.conLai > 0 && chuaGhiNo {
+            if d.conLai > 0 && chuaGhiNo && d.khachHangId != nil {
                 ActionButtonView(icon: "exclamationmark.circle", code: "F12", caption: "Ghi nợ", color: .dangerColor) {
                     pendingAction = .ghiNo
                 }
