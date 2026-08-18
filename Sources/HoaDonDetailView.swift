@@ -430,7 +430,8 @@ struct HoaDonDetailView: View {
     private func copyBillImage(_ d: HoaDonDetailDto) async {
         let ten = (d.tenKhachHangText?.isEmpty == false) ? d.tenKhachHangText! : "KHACH"
         let ma = BillTextBuilder.buildMaHoaDon(d.id)
-        let addInfo = BillTextBuilder.toAsciiNoDiacritics("\(ten) (\(ma))", upper: true)
+        let codes = BillTextBuilder.buildCodesWithNoKhac(ma, d.maHoaDonNoKhac)
+        let addInfo = BillTextBuilder.toAsciiNoDiacritics("\(ten) (\(codes))", upper: true)
         let amount = BillTextBuilder.amount(d)
 
         let qrData = await APIClient.shared.getBillQrImage(amount: amount, addInfo: addInfo)
@@ -459,6 +460,16 @@ enum BillTextBuilder {
 
     /// Khớp HoaDonPrinter.BuildMaHoaDon (Desktop) / buildMaHoaDonBill (Mobile JS).
     static func buildMaHoaDon(_ id: String) -> String { "HD" + id.prefix(8) }
+
+    /// Số tiền gộp nợ đơn khác (xem amount(_:)) — liệt kê thêm mã các đơn đó, giới hạn 3 mã đầu +
+    /// "+N" nếu nhiều hơn (nội dung CK VietQR có giới hạn độ dài). Khớp HoaDonPrinter.BuildAddInfo
+    /// (Desktop) / buildAddInfoWithNoKhac (Mobile JS).
+    static func buildCodesWithNoKhac(_ ma: String, _ maNoKhac: [String]?) -> String {
+        guard let maNoKhac, !maNoKhac.isEmpty else { return ma }
+        var codes = ma + "+" + maNoKhac.prefix(3).joined(separator: "+")
+        if maNoKhac.count > 3 { codes += "+\(maNoKhac.count - 3)N" }
+        return codes
+    }
 
     /// Khớp HoaDonPrinter.GetAmount (Desktop): còn nợ + còn lại nếu có nợ, không thì còn lại/thành tiền.
     static func amount(_ d: HoaDonDetailDto) -> Double {

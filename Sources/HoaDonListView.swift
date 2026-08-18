@@ -13,13 +13,13 @@ struct HoaDonListView: View {
     /// Tick định kỳ để buộc SwiftUI vẽ lại badge "chờ" trên các card — nếu không có state nào đổi,
     /// waitingMinutes chỉ tính 1 lần lúc load rồi đứng yên mãi (không tự cập nhật theo thời gian thực).
     @State private var now = Date()
-    @State private var activeFilters: Set<HoaDonQuickFilter> = []
+    @State private var activeFilter: HoaDonQuickFilter?
     private let clockTimer = Timer.publish(every: 20, on: .main, in: .common).autoconnect()
 
     private var sortedItems: [HoaDonListDto] {
         items
             .filter { anyMatchesSearch(searchText, $0.tenKhachHangText, $0.tenBan, $0.ghiChu, $0.ghiChuShipper, $0.tenMonSummary, $0.nguoiShip) }
-            .filter { item in activeFilters.isEmpty || activeFilters.contains { $0.matches(item) } }
+            .filter { item in activeFilter?.matches(item) ?? true }
             .sorted {
                 let p0 = HoaDonFormatting.sortPriority($0)
                 let p1 = HoaDonFormatting.sortPriority($1)
@@ -51,18 +51,27 @@ struct HoaDonListView: View {
                     placeholder: "Tìm khách, món, ghi chú...",
                     trailing: AnyView(
                         Menu {
+                            // Chỉ lọc 1 loại tại 1 thời điểm (không gộp OR nhiều filter như trước) —
+                            // chọn lại đúng filter đang bật để tắt, chọn filter khác để thay hẳn.
                             ForEach(HoaDonQuickFilter.allCases, id: \.self) { filter in
-                                Toggle(filter.label, isOn: Binding(
-                                    get: { activeFilters.contains(filter) },
-                                    set: { isOn in
-                                        if isOn { activeFilters.insert(filter) } else { activeFilters.remove(filter) }
+                                Button {
+                                    activeFilter = (activeFilter == filter) ? nil : filter
+                                } label: {
+                                    if activeFilter == filter {
+                                        Label(filter.label, systemImage: "checkmark")
+                                    } else {
+                                        Text(filter.label)
                                     }
-                                ))
+                                }
+                            }
+                            if activeFilter != nil {
+                                Divider()
+                                Button("Bỏ lọc", role: .destructive) { activeFilter = nil }
                             }
                         } label: {
-                            Image(systemName: activeFilters.isEmpty ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                            Image(systemName: activeFilter == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
                                 .font(.title2)
-                                .foregroundColor(activeFilters.isEmpty ? .textMuted : .brandPrimary)
+                                .foregroundColor(activeFilter == nil ? .textMuted : .brandPrimary)
                         }
                     )
                 ) { Task { await load() } }
@@ -216,11 +225,12 @@ struct ShipperAvatarView: View {
 /// Lọc nhanh trên tab Hoá đơn — chọn được nhiều đồng thời (OR), rỗng = không lọc gì. Thứ tự khai
 /// báo = thứ tự hiện trong menu (Tí nữa CK trước vì cần xử lý gấp nhất, rồi tới các mốc thu tiền).
 enum HoaDonQuickFilter: CaseIterable, Hashable {
-    case tiNuaChuyenKhoan, chuaThanhToan, ghiNo
+    case tiNuaChuyenKhoan, khanhChuaChon, chuaThanhToan, ghiNo
 
     var label: String {
         switch self {
         case .tiNuaChuyenKhoan: return "Tí nữa chuyển khoản"
+        case .khanhChuaChon: return "Khánh chưa chọn"
         case .chuaThanhToan: return "Chưa thanh toán"
         case .ghiNo: return "Đã ghi nợ"
         }
@@ -235,7 +245,18 @@ enum HoaDonQuickFilter: CaseIterable, Hashable {
         case .ghiNo: return item.conLai > 0 && daGhiNo
         case .chuaThanhToan: return item.conLai > 0 && !daGhiNo
         case .tiNuaChuyenKhoan: return item.conLai > 0 && item.ghiChuShipper == "Tí nữa chuyển khoản"
+        case .khanhChuaChon: return Self.isKhanhChuaChon(item)
         }
+    }
+
+    /// Khớp statusOf/HoaDonStatus.CHUA_CHON (ShipperDuyKhanhAndroid, HoaDonAdapter.kt) — đơn Ship
+    /// của Khánh mà GhiChuShipper chưa bắt đầu bằng 1 trong 4 tiền tố trạng thái đã biết, nghĩa là
+    /// shipper chưa chọn/báo cáo phương thức thu tiền cho đơn này.
+    private static func isKhanhChuaChon(_ item: HoaDonListDto) -> Bool {
+        guard item.phanLoai == "Ship", item.nguoiShip == "Khánh" else { return false }
+        let note = (item.ghiChuShipper ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        let knownPrefixes = ["tiền mặt", "chuyển khoản", "ghi nợ", "tí nữa"]
+        return !knownPrefixes.contains { note.hasPrefix($0) }
     }
 }
 

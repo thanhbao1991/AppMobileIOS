@@ -96,6 +96,7 @@ struct HoaDonDetailDto: Decodable {
     let daThu: Double
     let conLai: Double
     let tongNoKhachHang: Double?
+    let maHoaDonNoKhac: [String]?
     let chiTietHoaDons: [ChiTietHoaDonResponseDto]?
     let chiTietHoaDonToppings: [ChiTietHoaDonToppingResponseDto]?
     let payments: [HoaDonPaymentBriefDto]?
