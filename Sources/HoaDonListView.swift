@@ -12,11 +12,13 @@ struct HoaDonListView: View {
     /// Tick định kỳ để buộc SwiftUI vẽ lại badge "chờ" trên các card — nếu không có state nào đổi,
     /// waitingMinutes chỉ tính 1 lần lúc load rồi đứng yên mãi (không tự cập nhật theo thời gian thực).
     @State private var now = Date()
+    @State private var activeFilters: Set<HoaDonQuickFilter> = []
     private let clockTimer = Timer.publish(every: 20, on: .main, in: .common).autoconnect()
 
     private var sortedItems: [HoaDonListDto] {
         items
             .filter { anyMatchesSearch(searchText, $0.tenKhachHangText, $0.tenBan, $0.ghiChu, $0.ghiChuShipper, $0.tenMonSummary, $0.nguoiShip) }
+            .filter { item in activeFilters.isEmpty || activeFilters.contains { $0.matches(item) } }
             .sorted {
                 let p0 = HoaDonFormatting.sortPriority($0)
                 let p1 = HoaDonFormatting.sortPriority($1)
@@ -46,11 +48,21 @@ struct HoaDonListView: View {
                 DaySearchBar(
                     date: $currentDate, searchText: $searchText,
                     placeholder: "Tìm khách, món, ghi chú...",
-                    leading: AnyView(
-                        Button { showAddSheet = true } label: {
-                            Image(systemName: "plus.circle.fill").font(.title2)
+                    trailing: AnyView(
+                        Menu {
+                            ForEach(HoaDonQuickFilter.allCases, id: \.self) { filter in
+                                Toggle(filter.label, isOn: Binding(
+                                    get: { activeFilters.contains(filter) },
+                                    set: { isOn in
+                                        if isOn { activeFilters.insert(filter) } else { activeFilters.remove(filter) }
+                                    }
+                                ))
+                            }
+                        } label: {
+                            Image(systemName: activeFilters.isEmpty ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(activeFilters.isEmpty ? .textMuted : .brandPrimary)
                         }
-                        .foregroundColor(.brandPrimary)
                     )
                 ) { Task { await load() } }
 
@@ -92,7 +104,10 @@ struct HoaDonListView: View {
                         }
                     }
                     HStack {
-                        Text("Tổng tiền").font(.subheadline).foregroundColor(.textMuted)
+                        Button { showAddSheet = true } label: {
+                            Image(systemName: "plus.circle.fill").font(.title2)
+                        }
+                        .foregroundColor(.brandPrimary)
                         Spacer()
                         Text(totalText).font(.headline)
                     }
@@ -148,6 +163,29 @@ struct ShipperAvatarView: View {
     }
 }
 
+/// Lọc nhanh trên tab Hoá đơn — chọn được nhiều đồng thời (OR), rỗng = không lọc gì.
+enum HoaDonQuickFilter: CaseIterable, Hashable {
+    case ghiNo, chuaThanhToan, tiNuaChuyenKhoan
+
+    var label: String {
+        switch self {
+        case .ghiNo: return "Đơn ghi nợ"
+        case .chuaThanhToan: return "Đơn chưa thanh toán"
+        case .tiNuaChuyenKhoan: return "Tí nữa chuyển khoản"
+        }
+    }
+
+    /// conLai<=0 loại trừ trước cho .ghiNo/.chuaThanhToan — khớp logic statusText ở HoaDonRowView
+    /// (ngayNo cũ vẫn còn giá trị dù đã thu đủ, không tự xoá).
+    func matches(_ item: HoaDonListDto) -> Bool {
+        switch self {
+        case .ghiNo: return item.conLai > 0 && !(item.ngayNo?.isEmpty ?? true)
+        case .chuaThanhToan: return item.conLai > 0
+        case .tiNuaChuyenKhoan: return item.conLai > 0 && item.ghiChuShipper == "Tí nữa chuyển khoản"
+        }
+    }
+}
+
 struct IdentifiableId: Identifiable {
     let value: String
     var id: String { value }
@@ -198,6 +236,11 @@ private struct HoaDonRowView: View {
         item.phanLoai == "Mv" && item.ghiChuShipper == "Tí nữa chuyển khoản"
     }
 
+    /// Badge gọn ngay trên số tiền, riêng cho đơn Ship (đơn Mv đã có badge to bên dưới thông tin).
+    private var shipTiNuaChuyenKhoan: Bool {
+        item.phanLoai == "Ship" && item.ghiChuShipper == "Tí nữa chuyển khoản" && item.conLai > 0
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Rectangle()
@@ -246,6 +289,16 @@ private struct HoaDonRowView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
+                if shipTiNuaChuyenKhoan {
+                    HStack(spacing: 3) {
+                        Image(systemName: "bell.fill").font(.caption2)
+                        Text("Tí nữa CK").font(.caption2.bold())
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Color.warningColor)
+                    .clipShape(Capsule())
+                }
                 Text(HoaDonFormatting.money(item.thanhTien)).font(.subheadline.bold())
                 if let statusText {
                     Text(statusText)

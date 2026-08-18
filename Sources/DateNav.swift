@@ -35,6 +35,8 @@ struct DaySearchBar: View {
     var placeholder: String = "Tìm..."
     /// Nút phụ (vd "+") đặt bên trái cùng, trước nút ngày — tìm kiếm vẫn luôn ở giữa.
     var leading: AnyView? = nil
+    /// Nút phụ (vd icon lọc nhanh) đặt bên phải cùng, sau ô tìm kiếm.
+    var trailing: AnyView? = nil
     var onChange: () -> Void
     @State private var showPicker = false
 
@@ -54,6 +56,8 @@ struct DaySearchBar: View {
             .fixedSize()
 
             SearchFieldRow(text: $searchText, placeholder: placeholder)
+
+            if let trailing { trailing }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
