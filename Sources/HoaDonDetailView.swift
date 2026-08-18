@@ -227,7 +227,7 @@ struct HoaDonDetailView: View {
                 icon: copiedFeedback ? "checkmark" : "doc.on.doc", code: nil,
                 caption: copiedFeedback ? "Đã copy" : "Gửi Bill", color: .brandPrimary
             ) {
-                copyBillImage(d)
+                Task { await copyBillImage(d) }
             }
 
             if d.conLai > 0 {
@@ -272,8 +272,13 @@ struct HoaDonDetailView: View {
                     }
                 }
 
-                ActionButtonView(icon: "trash", code: "Del", caption: "Xoá đơn", color: .dangerColor) {
-                    pendingAction = .xoa
+                // Đơn đã ghi nợ tuyệt đối không cho xoá cứng — chỉ còn Hoàn tác (rollback, wipe hết
+                // thanh toán/ship/nợ về trạng thái mới) là lựa chọn an toàn duy nhất. Khớp guard
+                // NgayNo bên Desktop (DeleteAsync).
+                if chuaGhiNo {
+                    ActionButtonView(icon: "trash", code: "Del", caption: "Xoá đơn", color: .dangerColor) {
+                        pendingAction = .xoa
+                    }
                 }
             }
         }
@@ -418,10 +423,20 @@ struct HoaDonDetailView: View {
 
     /// Render chi tiết hoá đơn thành ảnh, copy vào clipboard để dán thẳng vào chat Zalo/Facebook —
     /// khớp cách "Gửi Bill Nợ" bên CongNoListView, dùng ImageRenderer để vẽ hết nội dung kể cả phần
-    /// đang cuộn ngoài viewport.
-    private func copyBillImage(_ d: HoaDonDetailDto) {
-        let content = BillDetailSnapshotView(d: d)
+    /// đang cuộn ngoài viewport. Kèm mã QR VietQR (amount + addInfo "TEN (HD########)" khớp 1:1
+    /// Desktop/HoaDonPrinter.BuildAddInfo và Mobile/HoaDonTab.cshtml buildMaHoaDonBill) lấy qua
+    /// Backend /api/HoaDon/bill-qr — proxy này dùng chung BankQrConfig với Desktop/Mobile nên đổi
+    /// tài khoản ngân hàng ở 1 chỗ là mọi client cùng ra 1 mã QR (xem BankQrConfig trong Share).
+    private func copyBillImage(_ d: HoaDonDetailDto) async {
+        let ten = (d.tenKhachHangText?.isEmpty == false) ? d.tenKhachHangText! : "KHACH"
+        let ma = BillTextBuilder.buildMaHoaDon(d.id)
+        let addInfo = BillTextBuilder.toAsciiNoDiacritics("\(ten) (\(ma))", upper: true)
+        let amount = BillTextBuilder.amount(d)
 
+        let qrData = await APIClient.shared.getBillQrImage(amount: amount, addInfo: addInfo)
+        let qrImage = qrData.flatMap { UIImage(data: $0) }
+
+        let content = BillDetailSnapshotView(d: d, qrImage: qrImage)
         let renderer = ImageRenderer(content: content)
         renderer.scale = UIScreen.main.scale
         guard let uiImage = renderer.uiImage else { return }
@@ -437,10 +452,29 @@ struct HoaDonDetailView: View {
 
 /// Nội dung bill dạng hoá đơn giấy monospace — port 1:1 HoaDonPrinter.BuildContent/BuildFooterContent
 /// (Desktop) để "Gửi Bill" trên mobile ra đúng y hệt bill in/preview bên quầy. Vài phần Desktop có mà
-/// DTO mobile không trả (điểm thưởng, số dư ví, QR/bank) được bỏ qua có chủ đích — không đoán số liệu.
-private enum BillTextBuilder {
+/// DTO mobile không trả (điểm thưởng, số dư ví) được bỏ qua có chủ đích — không đoán số liệu.
+enum BillTextBuilder {
     private static let footerWidth = 27
     private static let headerWidth = 32
+
+    /// Khớp HoaDonPrinter.BuildMaHoaDon (Desktop) / buildMaHoaDonBill (Mobile JS).
+    static func buildMaHoaDon(_ id: String) -> String { "HD" + id.prefix(8) }
+
+    /// Khớp HoaDonPrinter.GetAmount (Desktop): còn nợ + còn lại nếu có nợ, không thì còn lại/thành tiền.
+    static func amount(_ d: HoaDonDetailDto) -> Double {
+        let bill = d.conLai > 0 ? d.conLai : d.thanhTien
+        if let no = d.tongNoKhachHang, no > 0 { return no + d.conLai }
+        return bill
+    }
+
+    /// Khớp HoaDonPrinter.ToAsciiNoDiacritics (Desktop) / toAsciiNoDiacritics (Mobile JS).
+    static func toAsciiNoDiacritics(_ s: String, upper: Bool = true) -> String {
+        guard !s.isEmpty else { return "" }
+        let folded = s.folding(options: .diacriticInsensitive, locale: Locale(identifier: "vi_VN"))
+            .replacingOccurrences(of: "đ", with: "d")
+            .replacingOccurrences(of: "Đ", with: "D")
+        return upper ? folded.uppercased() : folded
+    }
 
     static func build(_ d: HoaDonDetailDto) -> String {
         var sb = ""
@@ -530,14 +564,24 @@ private enum BillTextBuilder {
 /// kể theme máy, độc lập với ScrollView (không rasterize hết nội dung ngoài viewport).
 private struct BillDetailSnapshotView: View {
     let d: HoaDonDetailDto
+    let qrImage: UIImage?
 
     var body: some View {
-        Text(BillTextBuilder.build(d))
-            .font(.system(size: 13, weight: .regular, design: .monospaced))
-            .foregroundColor(.black)
-            .fixedSize()
-            .padding(16)
-            .background(Color.white)
+        VStack(spacing: 12) {
+            Text(BillTextBuilder.build(d))
+                .font(.system(size: 13, weight: .regular, design: .monospaced))
+                .foregroundColor(.black)
+                .fixedSize()
+
+            if let qrImage {
+                Image(uiImage: qrImage)
+                    .resizable()
+                    .interpolation(.none)
+                    .frame(width: 200, height: 200)
+            }
+        }
+        .padding(16)
+        .background(Color.white)
     }
 }
 

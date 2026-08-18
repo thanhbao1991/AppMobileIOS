@@ -176,6 +176,17 @@ actor APIClient {
         return env.data
     }
 
+    /// Proxy VietQR qua Backend (bank config chỉ sống ở BankQrConfig phía server — Desktop/Mobile
+    /// dùng chung, iOS gọi qua đây nên đổi tài khoản 1 chỗ là mọi client ra cùng 1 mã QR).
+    func getBillQrImage(amount: Double, addInfo: String) async -> Data? {
+        let vnd = Int(amount.rounded())
+        let query = "amount=\(vnd)&addInfo=\(addInfo.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        let req = makeRequest("/api/HoaDon/bill-qr?\(query)")
+        let (data, http) = await send(req)
+        guard let data, http?.statusCode == 200 else { return nil }
+        return data
+    }
+
     func getHoaDonDetail(_ id: String) async -> HoaDonDetailDto? {
         let req = makeRequest("/api/HoaDon/\(id)")
         let (data, _) = await send(req)

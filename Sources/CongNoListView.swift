@@ -67,11 +67,11 @@ struct CongNoListView: View {
                                             Label("Chuyển khoản", systemImage: "creditcard")
                                         }
                                         .tint(.brandPrimary)
-                                        Button(role: .destructive) {
-                                            Task { await xoa(item) }
-                                        } label: {
-                                            Label("Xoá", systemImage: "trash")
-                                        }
+                                        // Cố ý KHÔNG có nút Xoá — mọi đơn trong tab này đều đã ghi
+                                        // nợ, xoá cứng quá nguy hiểm (mất dữ liệu nợ khách). Chỉ cho
+                                        // thu tiền ở đây; nếu cần huỷ đơn thì dùng Rollback bên
+                                        // Desktop (NoTabControl), khớp guard NgayNo bên
+                                        // HoaDonTabControl.Actions.cs.
                                     }
                             }
                         }
@@ -92,9 +92,9 @@ struct CongNoListView: View {
                         Spacer()
                         if !searchText.isEmpty {
                             Button {
-                                copyBillImage()
+                                Task { await copyBillImage() }
                             } label: {
-                                Label(copiedFeedback ? "Đã copy" : "Gửi Bill Nợ", systemImage: copiedFeedback ? "checkmark" : "doc.on.doc")
+                                Label(copiedFeedback ? "Đã copy" : "Gửi Tất Cả Bill Nợ", systemImage: copiedFeedback ? "checkmark" : "doc.on.doc")
                                     .font(.caption.bold())
                             }
                             .buttonStyle(.bordered)
@@ -138,21 +138,19 @@ struct CongNoListView: View {
         }
     }
 
-    private func xoa(_ item: HoaDonListDto) async {
-        busyId = item.id
-        let result = await APIClient.shared.delete(hoaDonId: item.id)
-        busyId = nil
-        if result.success {
-            items.removeAll { $0.id == item.id }
-        }
-    }
-
     /// Render toàn bộ danh sách đã lọc (kể cả phần cần cuộn) thành 1 ảnh, copy vào clipboard để dán
     /// thẳng vào khung chat Zalo/Facebook — ImageRenderer (iOS 16+) vẽ ra ngoài màn hình nên không bị
-    /// giới hạn bởi viewport như chụp màn hình thường.
-    private func copyBillImage() {
+    /// giới hạn bởi viewport như chụp màn hình thường. Kèm 1 mã QR duy nhất cho TỔNG nợ đang lọc
+    /// (không gắn với 1 hoá đơn cụ thể vì có thể gộp nhiều đơn) — lấy qua Backend /api/HoaDon/bill-qr,
+    /// dùng chung BankQrConfig với Desktop/Mobile (xem [[project_bank_qr_consolidation]]).
+    private func copyBillImage() async {
         let snapshot = sortedItems
-        let content = BillSnapshotView(items: snapshot, totalText: totalText, todayText: todayText)
+        let total = snapshot.reduce(0.0) { $0 + $1.conLai }
+        let addInfo = BillTextBuilder.toAsciiNoDiacritics(searchText, upper: true)
+        let qrData = await APIClient.shared.getBillQrImage(amount: total, addInfo: addInfo)
+        let qrImage = qrData.flatMap { UIImage(data: $0) }
+
+        let content = BillSnapshotView(items: snapshot, totalText: totalText, todayText: todayText, qrImage: qrImage)
             .frame(width: UIScreen.main.bounds.width)
 
         let renderer = ImageRenderer(content: content)
@@ -174,6 +172,7 @@ private struct BillSnapshotView: View {
     let items: [HoaDonListDto]
     let totalText: String
     let todayText: String
+    let qrImage: UIImage?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -196,6 +195,14 @@ private struct BillSnapshotView: View {
                 }
             }
             .padding(12)
+
+            if let qrImage {
+                Image(uiImage: qrImage)
+                    .resizable()
+                    .interpolation(.none)
+                    .frame(width: 200, height: 200)
+                    .padding(.bottom, 16)
+            }
         }
         .background(Color.white)
     }
