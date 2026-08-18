@@ -1,3 +1,4 @@
+import AudioToolbox
 import Foundation
 import SwiftUI
 
@@ -29,6 +30,15 @@ final class EntityChangeBus: ObservableObject {
 
     func post(_ entityName: String, _ action: String, _ id: String) {
         lastEvent = EntityChangedEvent(entityName: entityName, action: action, id: id)
+        notifyReceived()
+    }
+
+    /// Rung + "ting" mỗi khi app đang mở nhận signal real-time (bất kể entity nào) — cho nhân viên
+    /// biết có cập nhật mới mà không cần dán mắt vào màn hình. post() chỉ được gọi từ callback
+    /// SignalRClient (xem ContentView) nên chỉ kêu khi kết nối đang sống, tức app đang mở.
+    private func notifyReceived() {
+        AudioServicesPlaySystemSound(1007) // SMS-received1 — "ting" ngắn, quen thuộc
+        AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
     }
 }
 
