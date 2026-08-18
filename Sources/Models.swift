@@ -312,6 +312,18 @@ struct KhachHangFavoriteItemDto: Decodable, Identifiable {
     let tenBienThe: String
 }
 
+/// Khách hay gọi trước 7h (nút "Đơn 7h") — khớp HoaDonTabControl.Board.cs (Desktop):
+/// KhachGoiSomAsync + OpenKhachGoiSom (SetPhanLoai(Ship) + PreFillKhachHang kèm món cuối).
+struct KhachHangGoiSomDto: Decodable, Identifiable {
+    let khachHangId: String
+    let ten: String
+    let soLan: Int
+    let tenSanPham: String
+    let tenBienThe: String
+    let laKhachMoi: Bool
+    var id: String { khachHangId }
+}
+
 /// Khớp KhachHangInfoDto (Backend) — thông tin điểm/nợ/ví/voucher/món yêu thích khi chọn khách
 /// trong form thêm hoá đơn. Field "soDu"/"tongNo"/"donKhac" khác tên với HoaDonDto (soDuVi/
 /// tongNoKhachHang/tongDonKhacDangGiao) vì đây là 2 DTO backend riêng biệt — không đoán gộp.

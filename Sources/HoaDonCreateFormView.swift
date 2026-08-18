@@ -8,6 +8,11 @@ import SwiftUI
 /// 2 cột của Desktop.
 struct HoaDonCreateFormView: View {
     let phanLoai: String
+    /// Preset từ "Đơn 7h" (xem HoaDonListView.KhachGoiSomSheet) — mở form đã chọn sẵn khách + món
+    /// cuối họ từng gọi, khớp OpenKhachGoiSom (Desktop): SetPhanLoai(Ship) + PreFillKhachHang.
+    var presetKhachHangId: String? = nil
+    var presetTenSanPham: String? = nil
+    var presetTenBienThe: String? = nil
     let onCreated: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -102,7 +107,10 @@ struct HoaDonCreateFormView: View {
                 }
             }
         }
-        .task { await loadCatalog() }
+        .task {
+            await loadCatalog()
+            await applyPresets()
+        }
         .sheet(item: $pickerTarget) { target in
             ProductPickerSheet(
                 sanPhamList: sanPhamList,
@@ -488,6 +496,15 @@ struct HoaDonCreateFormView: View {
         sanPhamList = await sp
         toppingList = await tp
         giaRiengList = await gr
+    }
+
+    private func applyPresets() async {
+        if let presetKhachHangId, let kh = await APIClient.shared.getKhachHangById(presetKhachHangId) {
+            selectKhach(kh)
+        }
+        if let presetTenSanPham, !presetTenSanPham.isEmpty {
+            quickAddFavorite(KhachHangFavoriteItemDto(tenSanPham: presetTenSanPham, tenBienThe: presetTenBienThe ?? ""))
+        }
     }
 
     private func recalcGiamGia() {

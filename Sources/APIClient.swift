@@ -293,6 +293,20 @@ actor APIClient {
         return env.data
     }
 
+    func getKhachHangHayGoiSom() async -> [KhachHangGoiSomDto] {
+        let req = makeRequest("/api/HoaDon/khach-hay-goi-som")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[KhachHangGoiSomDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func getKhachHangById(_ id: String) async -> KhachHangDto? {
+        let req = makeRequest("/api/KhachHang/\(id)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<KhachHangDto>.self, from: data), env.isSuccess else { return nil }
+        return env.data
+    }
+
     /// Khớp CreateKhachBtn_Click (Desktop): trùng SĐT với khách có sẵn thì server trả lỗi kèm tên
     /// khách đó trong message — KHÔNG tự tìm/chọn lại giúp (khác Desktop có cache toàn bộ khách để
     /// tự dò), hiển thị lỗi để nhân viên tự tìm khách đó qua ô tìm kiếm.

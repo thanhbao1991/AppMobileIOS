@@ -9,7 +9,7 @@ struct HoaDonListView: View {
     @State private var selectedId: String?
     @State private var searchText = ""
     @State private var showAddSheet = false
-    @State private var creatingPhanLoai: IdentifiableId?
+    @State private var creatingPending: PendingCreate?
     /// Tick định kỳ để buộc SwiftUI vẽ lại badge "chờ" trên các card — nếu không có state nào đổi,
     /// waitingMinutes chỉ tính 1 lần lúc load rồi đứng yên mãi (không tự cập nhật theo thời gian thực).
     @State private var now = Date()
@@ -128,17 +128,36 @@ struct HoaDonListView: View {
             }
         }
         .sheet(isPresented: $showAddSheet) {
-            AddHoaDonSheet { code in
-                Task {
-                    // Đợi sheet "+" đóng xong hẳn rồi mới mở form thêm hoá đơn — mở đồng thời 2 sheet
-                    // trên cùng view dễ bị SwiftUI bỏ qua sheet thứ hai (race giữa 2 lần dismiss/present).
-                    try? await Task.sleep(nanoseconds: 400_000_000)
-                    creatingPhanLoai = IdentifiableId(code)
+            AddHoaDonSheet(
+                onPick: { code in
+                    Task {
+                        // Đợi sheet "+" đóng xong hẳn rồi mới mở form thêm hoá đơn — mở đồng thời 2
+                        // sheet trên cùng view dễ bị SwiftUI bỏ qua sheet thứ hai (race giữa 2 lần
+                        // dismiss/present).
+                        try? await Task.sleep(nanoseconds: 400_000_000)
+                        creatingPending = PendingCreate(phanLoai: code)
+                    }
+                },
+                onPickGoiSom: { khachHangId, tenSanPham, tenBienThe in
+                    Task {
+                        try? await Task.sleep(nanoseconds: 400_000_000)
+                        creatingPending = PendingCreate(
+                            phanLoai: "Ship",
+                            presetKhachHangId: khachHangId,
+                            presetTenSanPham: tenSanPham,
+                            presetTenBienThe: tenBienThe
+                        )
+                    }
                 }
-            }
+            )
         }
-        .sheet(item: $creatingPhanLoai) { wrapped in
-            HoaDonCreateFormView(phanLoai: wrapped.value) { newId in
+        .sheet(item: $creatingPending) { pending in
+            HoaDonCreateFormView(
+                phanLoai: pending.phanLoai,
+                presetKhachHangId: pending.presetKhachHangId,
+                presetTenSanPham: pending.presetTenSanPham,
+                presetTenBienThe: pending.presetTenBienThe
+            ) { newId in
                 Task {
                     await load()
                     try? await Task.sleep(nanoseconds: 400_000_000)
@@ -210,6 +229,15 @@ struct IdentifiableId: Identifiable {
     let value: String
     var id: String { value }
     init(_ value: String) { self.value = value }
+}
+
+/// Tham số mở HoaDonCreateFormView — "Đơn 7h" chốt sẵn phanLoai=Ship + preset khách/món.
+private struct PendingCreate: Identifiable {
+    let phanLoai: String
+    var presetKhachHangId: String? = nil
+    var presetTenSanPham: String? = nil
+    var presetTenBienThe: String? = nil
+    var id: String { phanLoai + (presetKhachHangId ?? "") }
 }
 
 private struct HoaDonRowView: View {
@@ -327,8 +355,10 @@ private struct HoaDonRowView: View {
 /// không đổi được nữa trong form (khớp yêu cầu "không cần" phần đổi phân loại/bàn giữa chừng).
 private struct AddHoaDonSheet: View {
     let onPick: (String) -> Void
+    let onPickGoiSom: (String, String, String) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var showGoiSom = false
 
     private let categories: [(code: String, icon: String)] = [
         ("Ship", "bicycle"),
@@ -336,12 +366,6 @@ private struct AddHoaDonSheet: View {
         ("Mv", "bag.fill"),
         ("Mh", "hand.raised.fill"),
         ("App", "app.badge"),
-    ]
-    /// Chưa nối API — 2 tính năng riêng phức tạp hơn nhiều so với tạo đơn trơn (xem
-    /// project_hoadon_som_debt_cutoff/GetKhachHangHayGoiSom, chưa có endpoint "bắt đơn App").
-    private let extras: [(label: String, icon: String, color: Color)] = [
-        ("Đơn 7h", "clock.fill", .brandPrimary),
-        ("Bắt đơn App", "app.badge.checkmark", .dangerColor),
     ]
     private let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
@@ -362,20 +386,34 @@ private struct AddHoaDonSheet: View {
                         .buttonBorderShape(.roundedRectangle(radius: 12))
                         .tint(HoaDonFormatting.phanLoaiColor(cat.code))
                     }
+                }
 
-                    ForEach(extras, id: \.label) { extra in
-                        VStack(spacing: 6) {
-                            Image(systemName: extra.icon).font(.title2)
-                            VStack(spacing: 1) {
-                                Text(extra.label).font(.subheadline.bold())
-                                Text("Sắp có").font(.caption2)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .opacity(0.4)
+                Button { showGoiSom = true } label: {
+                    HStack {
+                        Image(systemName: "clock.fill")
+                        Text("Đơn 7h — khách hay gọi sớm")
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption)
                     }
                 }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: 12))
+                .tint(.brandPrimary)
+
+                // "Bắt đơn App" — chưa rõ nghiệp vụ cụ thể (không có tính năng tương ứng bên Desktop
+                // để đối chiếu), để placeholder chờ xác nhận thay vì đoán rồi làm sai luồng tiền.
+                HStack(spacing: 8) {
+                    Image(systemName: "app.badge.checkmark")
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Bắt đơn App").font(.subheadline.bold())
+                        Text("Sắp có").font(.caption2)
+                    }
+                    Spacer()
+                }
+                .foregroundColor(.textMuted)
+                .padding(.vertical, 10).padding(.horizontal, 14)
+                .background(Color.textMuted.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
 
                 Spacer()
             }
@@ -387,6 +425,88 @@ private struct AddHoaDonSheet: View {
                 }
             }
         }
+        .sheet(isPresented: $showGoiSom) {
+            KhachGoiSomSheet { khachHangId, tenSanPham, tenBienThe in
+                showGoiSom = false
+                dismiss()
+                onPickGoiSom(khachHangId, tenSanPham, tenBienThe)
+            }
+        }
         .presentationDetents([.medium])
+    }
+}
+
+/// "Đơn 7h" — danh sách khách hay gọi trước 7h sáng, chọn 1 khách để mở form tạo đơn Ship đã
+/// điền sẵn khách + món cuối họ từng gọi. Khớp KhachGoiSomAsync/OpenKhachGoiSom (Desktop,
+/// HoaDonTabControl.Board.cs) — server đã gộp sẵn 70% khách quen/30% khách mới, sort theo SoLan.
+private struct KhachGoiSomSheet: View {
+    /// (khachHangId, tenSanPham, tenBienThe)
+    let onPick: (String, String, String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var items: [KhachHangGoiSomDto] = []
+    @State private var loading = true
+
+    private var regulars: [KhachHangGoiSomDto] { items.filter { !$0.laKhachMoi } }
+    private var moi: [KhachHangGoiSomDto] { items.filter { $0.laKhachMoi } }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if loading {
+                    ProgressView()
+                } else if items.isEmpty {
+                    Text("Chưa có dữ liệu khách hay gọi trước 7h.")
+                        .foregroundColor(.textMuted)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        if !regulars.isEmpty {
+                            Section {
+                                ForEach(regulars) { row($0) }
+                            }
+                        }
+                        if !moi.isEmpty {
+                            Section("Khách mới") {
+                                ForEach(moi) { row($0) }
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("Khách hay gọi trước 7h")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
+                }
+            }
+        }
+        .task {
+            items = await APIClient.shared.getKhachHangHayGoiSom()
+            loading = false
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func row(_ item: KhachHangGoiSomDto) -> some View {
+        Button {
+            onPick(item.khachHangId, item.tenSanPham, item.tenBienThe)
+        } label: {
+            HStack {
+                Text(item.ten).font(.subheadline.bold())
+                Spacer()
+                Text(monText(item)).font(.caption).foregroundColor(.textMuted).lineLimit(1)
+            }
+        }
+    }
+
+    private func monText(_ item: KhachHangGoiSomDto) -> String {
+        guard !item.tenSanPham.isEmpty else { return "" }
+        if item.tenBienThe.isEmpty || item.tenBienThe == "Mặc định" || item.tenBienThe == "Size Chuẩn" {
+            return item.tenSanPham
+        }
+        return "\(item.tenSanPham) (\(item.tenBienThe))"
     }
 }
