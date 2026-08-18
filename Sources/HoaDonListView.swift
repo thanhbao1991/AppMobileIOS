@@ -62,7 +62,7 @@ struct HoaDonListView: View {
                                     Label {
                                         Text(activeFilter == filter ? "✓ \(filter.label)" : filter.label)
                                     } icon: {
-                                        ShipperAvatarView(name: "Khánh", size: 20)
+                                        ShipperAvatarView(name: filter.avatarName, size: 20)
                                     }
                                 }
                             }
@@ -225,12 +225,15 @@ struct ShipperAvatarView: View {
 }
 
 /// Lọc nhanh trên tab Hoá đơn — chỉ chọn được 1 filter tại 1 thời điểm, nil = không lọc gì. Thứ tự
-/// khai báo = thứ tự hiện trong menu. Cả 4 filter đều port 1:1 từ ShipperDuyKhanhAndroid (statusOf/HoaDonStatus trong HoaDonAdapter.kt
-/// + check "trả nợ" riêng trong MainActivity.renderList) — chỉ áp dụng đơn Ship của Khánh, đọc tiền
-/// tố GhiChuShipper y hệt app đó. Icon avatar Khánh ở đầu mỗi filter (xem trailing Menu bên dưới)
-/// để rõ đây là 4 filter theo góc nhìn shipper Khánh, không phải filter chung của quán.
+/// khai báo = thứ tự hiện trong menu.
+/// - 4 filter đầu (avatar Khánh) port 1:1 từ ShipperDuyKhanhAndroid (statusOf/HoaDonStatus trong
+///   HoaDonAdapter.kt + check "trả nợ" riêng trong MainActivity.renderList) — chỉ áp dụng đơn Ship
+///   của Khánh, đọc tiền tố GhiChuShipper y hệt app đó.
+/// - 2 filter cuối (avatar Nhã) là filter chung của quán (không riêng shipper nào, không port từ
+///   app nào) — dùng ConLai/NgayNo trực tiếp trên HoaDon, khác hẳn logic đọc GhiChuShipper ở trên.
 enum HoaDonQuickFilter: CaseIterable, Hashable {
     case tiNuaChuyenKhoan, ghiNo, traNo, chuaChon
+    case chuaThanhToan, daGhiNo
 
     var label: String {
         switch self {
@@ -238,25 +241,46 @@ enum HoaDonQuickFilter: CaseIterable, Hashable {
         case .ghiNo: return "Ghi nợ"
         case .traNo: return "Trả nợ"
         case .chuaChon: return "Chưa chọn"
+        case .chuaThanhToan: return "Chưa thanh toán"
+        case .daGhiNo: return "Đã ghi nợ"
+        }
+    }
+
+    /// Avatar hiện trong menu — 4 filter theo shipper Khánh dùng ảnh Khánh, 2 filter chung quán
+    /// dùng ảnh Nhã (chỉ để phân biệt nhóm bằng hình, không có nghĩa 2 filter đó thuộc về Nhã).
+    var avatarName: String {
+        switch self {
+        case .tiNuaChuyenKhoan, .ghiNo, .traNo, .chuaChon: return "Khánh"
+        case .chuaThanhToan, .daGhiNo: return "Nhã"
         }
     }
 
     func matches(_ item: HoaDonListDto) -> Bool {
-        guard item.phanLoai == "Ship", item.nguoiShip == "Khánh" else { return false }
-        let note = (item.ghiChuShipper ?? "").trimmingCharacters(in: .whitespaces).lowercased()
         switch self {
-        case .tiNuaChuyenKhoan:
-            // Khớp nhánh TI_NUA trong renderList (Android): thêm 2 điều kiện conLai>0 + chưa ghi nợ
-            // ngoài prefix — đơn đã thu đủ hoặc đã chuyển ghi nợ thì không còn "chờ tí nữa CK" nữa.
-            let chuaGhiNo = item.ngayNo?.isEmpty ?? true
-            return note.hasPrefix("tí nữa") && item.conLai > 0 && chuaGhiNo
-        case .ghiNo:
-            return note.hasPrefix("ghi nợ")
-        case .traNo:
-            return note.contains("trả nợ")
-        case .chuaChon:
-            let knownPrefixes = ["tiền mặt", "chuyển khoản", "ghi nợ", "tí nữa"]
-            return !knownPrefixes.contains { note.hasPrefix($0) }
+        case .tiNuaChuyenKhoan, .ghiNo, .traNo, .chuaChon:
+            guard item.phanLoai == "Ship", item.nguoiShip == "Khánh" else { return false }
+            let note = (item.ghiChuShipper ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+            switch self {
+            case .tiNuaChuyenKhoan:
+                // Khớp nhánh TI_NUA trong renderList (Android): thêm 2 điều kiện conLai>0 + chưa
+                // ghi nợ ngoài prefix — đơn đã thu đủ/đã chuyển ghi nợ thì không còn "chờ CK" nữa.
+                let chuaGhiNo = item.ngayNo?.isEmpty ?? true
+                return note.hasPrefix("tí nữa") && item.conLai > 0 && chuaGhiNo
+            case .ghiNo:
+                return note.hasPrefix("ghi nợ")
+            case .traNo:
+                return note.contains("trả nợ")
+            default: // .chuaChon
+                let knownPrefixes = ["tiền mặt", "chuyển khoản", "ghi nợ", "tí nữa"]
+                return !knownPrefixes.contains { note.hasPrefix($0) }
+            }
+        case .chuaThanhToan, .daGhiNo:
+            // conLai<=0 loại trừ trước — khớp logic statusText ở HoaDonRowView (ngayNo cũ vẫn còn
+            // giá trị dù đã thu đủ, không tự xoá). .chuaThanhToan KHÔNG gồm đơn đã ghi nợ.
+            let daGhiNoFlag = !(item.ngayNo?.isEmpty ?? true)
+            return self == .daGhiNo
+                ? item.conLai > 0 && daGhiNoFlag
+                : item.conLai > 0 && !daGhiNoFlag
         }
     }
 }
