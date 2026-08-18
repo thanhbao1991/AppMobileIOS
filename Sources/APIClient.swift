@@ -242,8 +242,7 @@ actor APIClient {
         return await executeAction(req)
     }
 
-    func createHoaDon(phanLoai: String, tenBan: String? = nil) async -> CreateActionResult {
-        let body = HoaDonCreateRequest(phanLoai: phanLoai, tenBan: tenBan)
+    func createHoaDonFull(_ body: HoaDonFullCreateRequest) async -> CreateActionResult {
         let req = makeRequest("/api/HoaDon", method: "POST", body: jsonBody(body))
         let (data, _) = await send(req)
         guard let data,
@@ -251,6 +250,59 @@ actor APIClient {
             return CreateActionResult(success: false, message: "Không có phản hồi từ server.", id: nil)
         }
         return CreateActionResult(success: env.isSuccess, message: env.message, id: env.data?.id)
+    }
+
+    /// Danh sách sản phẩm/topping đang bán — tải 1 lần lúc mở form thêm hoá đơn rồi lọc/tìm cục bộ
+    /// (khớp cách Desktop cache AppDataCache.SanPhams, không gọi search API theo từng phím gõ).
+    func getSanPhamList() async -> [SanPhamDto] {
+        let req = makeRequest("/api/SanPham")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[SanPhamDto]>.self, from: data), env.isSuccess else { return [] }
+        return (env.data ?? []).filter { !$0.ngungBan }
+    }
+
+    func getToppingList() async -> [ToppingDto] {
+        let req = makeRequest("/api/Topping")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ToppingDto]>.self, from: data), env.isSuccess else { return [] }
+        return (env.data ?? []).filter { !$0.ngungBan }
+    }
+
+    /// Giá riêng đã lưu cho MỌI khách — endpoint không hỗ trợ lọc theo khách (khớp cách Desktop
+    /// tải hết AppDataCache.GiaBanRiengs rồi lọc cục bộ theo KhachHangId khi cần).
+    func getKhachHangGiaBanList() async -> [KhachHangGiaBanDto] {
+        let req = makeRequest("/api/KhachHangGiaBan?take=5000")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[KhachHangGiaBanDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func searchKhachHang(_ q: String) async -> [KhachHangDto] {
+        guard !q.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        let query = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let req = makeRequest("/api/KhachHang/search?q=\(query)&take=20")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[KhachHangDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func getKhachHangInfo(khachHangId: String) async -> KhachHangInfoDto? {
+        let req = makeRequest("/api/HoaDon/get-khach-hang-info/\(khachHangId)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<KhachHangInfoDto>.self, from: data), env.isSuccess else { return nil }
+        return env.data
+    }
+
+    /// Khớp CreateKhachBtn_Click (Desktop): trùng SĐT với khách có sẵn thì server trả lỗi kèm tên
+    /// khách đó trong message — KHÔNG tự tìm/chọn lại giúp (khác Desktop có cache toàn bộ khách để
+    /// tự dò), hiển thị lỗi để nhân viên tự tìm khách đó qua ô tìm kiếm.
+    func createKhachHang(_ body: KhachHangCreateRequest) async -> (success: Bool, message: String?, khach: KhachHangDto?) {
+        let req = makeRequest("/api/KhachHang", method: "POST", body: jsonBody(body))
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<KhachHangDto>.self, from: data) else {
+            return (false, "Không có phản hồi từ server.", nil)
+        }
+        return (env.isSuccess, env.message, env.data)
     }
 
     func ganShipper(hoaDonId: String, nguoiShip: String) async -> ActionResult {

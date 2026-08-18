@@ -124,6 +124,26 @@ enum HoaDonFormatting {
         phanLoaiColor(phanLoai).pastelBackground()
     }
 
+    /// Khớp PhanLoai.NeedKhachHang (Desktop, HoaDonDomain.cs) — 3 phân loại này cần SĐT/địa chỉ giao.
+    static func needKhachHang(_ phanLoai: String?) -> Bool {
+        phanLoai == "Ship" || phanLoai == "Mh" || phanLoai == "App"
+    }
+
+    /// Khớp PhanLoai.HasAutoDiscount (Desktop) — App/Mua hộ tự giảm 5%, làm tròn 1000 gần nhất
+    /// (PricingService.RoundToNearest1000), trừ khi người dùng đã tự sửa tay giảm giá.
+    static func autoGiamGia(phanLoai: String?, tongTien: Double, manual: Bool) -> Double? {
+        if manual { return nil }
+        guard phanLoai == "App" || phanLoai == "Mh" else { return 0 }
+        let raw = tongTien * 0.05
+        let remainder = raw.truncatingRemainder(dividingBy: 1000)
+        return remainder < 500 ? raw - remainder : raw + (1000 - remainder)
+    }
+
+    /// Khớp FormatDiem (Desktop, HoaDonEditWindow.KhachHang.cs) — 100 điểm raw = 1.0 hiển thị.
+    static func diemDisplay(_ rawDiem: Int) -> String {
+        String(format: "%.1f", Double(rawDiem) / 100.0)
+    }
+
     /// Port y hệt HoaDonSortService.GetSortOrder (Desktop) / AppMobileAndroid HoaDonTabFragment.sortPriority.
     /// Đơn Ghi nợ rớt xuống ưu tiên thấp nhất (7) BẤT KỂ phân loại — check "isNo" phải nằm TRƯỚC nhánh
     /// Ship-chưa-gán-shipper, sai thứ tự if/else ở đây từng khiến kết quả sai.

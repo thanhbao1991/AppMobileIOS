@@ -9,6 +9,7 @@ struct HoaDonListView: View {
     @State private var selectedId: String?
     @State private var searchText = ""
     @State private var showAddSheet = false
+    @State private var creatingPhanLoai: IdentifiableId?
     /// Tick định kỳ để buộc SwiftUI vẽ lại badge "chờ" trên các card — nếu không có state nào đổi,
     /// waitingMinutes chỉ tính 1 lần lúc load rồi đứng yên mãi (không tự cập nhật theo thời gian thực).
     @State private var now = Date()
@@ -127,11 +128,19 @@ struct HoaDonListView: View {
             }
         }
         .sheet(isPresented: $showAddSheet) {
-            AddHoaDonSheet { newId in
+            AddHoaDonSheet { code in
+                Task {
+                    // Đợi sheet "+" đóng xong hẳn rồi mới mở form thêm hoá đơn — mở đồng thời 2 sheet
+                    // trên cùng view dễ bị SwiftUI bỏ qua sheet thứ hai (race giữa 2 lần dismiss/present).
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    creatingPhanLoai = IdentifiableId(code)
+                }
+            }
+        }
+        .sheet(item: $creatingPhanLoai) { wrapped in
+            HoaDonCreateFormView(phanLoai: wrapped.value) { newId in
                 Task {
                     await load()
-                    // Đợi sheet "+" đóng xong hẳn rồi mới mở sheet chi tiết — mở đồng thời 2 sheet
-                    // trên cùng view dễ bị SwiftUI bỏ qua sheet thứ hai (race giữa 2 lần dismiss/present).
                     try? await Task.sleep(nanoseconds: 400_000_000)
                     selectedId = newId
                 }
@@ -313,17 +322,13 @@ private struct HoaDonRowView: View {
     }
 }
 
-/// Khung chọn phân loại đơn khi bấm "+" — 5 phân loại gọi API tạo hoá đơn thật (POST /api/HoaDon),
-/// tạo xong mở luôn HoaDonDetailView (parent set selectedId) để thêm món. "Tại Chỗ" bắt buộc nhập
-/// số bàn trước (RequireTableMessage phía server) nên hỏi tên bàn tại chỗ thay vì tạo ngay.
+/// Khung chọn phân loại đơn khi bấm "+" — chọn xong đóng sheet này và mở HoaDonCreateFormView
+/// (form đầy đủ: món/khách/giảm giá, xem HoaDonCreateFormView.swift). Phân loại chốt tại đây,
+/// không đổi được nữa trong form (khớp yêu cầu "không cần" phần đổi phân loại/bàn giữa chừng).
 private struct AddHoaDonSheet: View {
-    let onCreated: (String) -> Void
+    let onPick: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var creating = false
-    @State private var errorMessage: String?
-    @State private var pendingTaiCho = false
-    @State private var tenBan = ""
 
     private let categories: [(code: String, icon: String)] = [
         ("Ship", "bicycle"),
@@ -345,7 +350,7 @@ private struct AddHoaDonSheet: View {
             VStack(spacing: 16) {
                 LazyVGrid(columns: twoColumns, spacing: 12) {
                     ForEach(categories, id: \.code) { cat in
-                        Button { handleTap(cat.code) } label: {
+                        Button { dismiss(); onPick(cat.code) } label: {
                             VStack(spacing: 6) {
                                 Image(systemName: cat.icon).font(.title2)
                                 Text(HoaDonFormatting.phanLoaiLabel(cat.code)).font(.subheadline.bold())
@@ -356,7 +361,6 @@ private struct AddHoaDonSheet: View {
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.roundedRectangle(radius: 12))
                         .tint(HoaDonFormatting.phanLoaiColor(cat.code))
-                        .disabled(creating)
                     }
 
                     ForEach(extras, id: \.label) { extra in
@@ -373,31 +377,6 @@ private struct AddHoaDonSheet: View {
                     }
                 }
 
-                if pendingTaiCho {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Số bàn").font(.caption).foregroundColor(.textMuted)
-                        TextField("Vd: 12", text: $tenBan)
-                            .textFieldStyle(.roundedBorder)
-                            .keyboardType(.numbersAndPunctuation)
-                        HStack {
-                            Button("Huỷ") { pendingTaiCho = false; tenBan = "" }
-                                .buttonStyle(.bordered)
-                            Spacer()
-                            Button(creating ? "Đang tạo..." : "Tạo đơn Tại Chỗ") {
-                                Task { await create(phanLoai: "Tại Chỗ", tenBan: tenBan) }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(tenBan.trimmingCharacters(in: .whitespaces).isEmpty || creating)
-                        }
-                    }
-                    .padding(.top, 4)
-                }
-
-                if let errorMessage {
-                    Text(errorMessage).foregroundColor(.dangerColor).font(.footnote)
-                }
-                if creating { ProgressView() }
-
                 Spacer()
             }
             .padding()
@@ -405,35 +384,9 @@ private struct AddHoaDonSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Đóng") { dismiss() }
-                        .disabled(creating)
                 }
             }
         }
         .presentationDetents([.medium])
-    }
-
-    private func handleTap(_ code: String) {
-        errorMessage = nil
-        if code == "Tại Chỗ" {
-            pendingTaiCho = true
-            return
-        }
-        Task { await create(phanLoai: code, tenBan: nil) }
-    }
-
-    private func create(phanLoai: String, tenBan: String?) async {
-        creating = true
-        errorMessage = nil
-        let result = await APIClient.shared.createHoaDon(
-            phanLoai: phanLoai,
-            tenBan: tenBan?.trimmingCharacters(in: .whitespaces)
-        )
-        creating = false
-        if result.success, let id = result.id {
-            dismiss()
-            onCreated(id)
-        } else {
-            errorMessage = result.message ?? "Tạo hoá đơn thất bại."
-        }
     }
 }

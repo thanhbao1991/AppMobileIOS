@@ -272,10 +272,134 @@ struct GanShipperRequest: Encodable { let id: String; let nguoiShip: String; let
 
 struct ActionResult { let success: Bool; let message: String? }
 
+// ---- Khách hàng (tìm/tạo trong form thêm hoá đơn) ----
+
+struct KhachHangPhoneDto: Codable, Identifiable, Hashable {
+    var id: String = UUID().uuidString
+    let soDienThoai: String
+    let isDefault: Bool
+}
+
+struct KhachHangAddressDto: Codable, Identifiable, Hashable {
+    var id: String = UUID().uuidString
+    let diaChi: String
+    let isDefault: Bool
+}
+
+/// KHÔNG dùng field "dienThoai"/"diaChi" (computed property phía server) — với kết quả từ
+/// /api/KhachHang/search, backend build Phones/Addresses thủ công (KhachHangQueryService.SearchAsync)
+/// và không set IsDefault, khiến 2 getter đó trả rỗng dù phones/addresses có dữ liệu. Luôn lấy trực
+/// tiếp từ phones[0]/addresses[0] (server đã OrderByDescending IsDefault/LastModified sẵn).
+struct KhachHangDto: Codable, Identifiable {
+    let id: String
+    let ten: String
+    let soDu: Double
+    let duocNhanVoucher: Bool
+    let phones: [KhachHangPhoneDto]
+    let addresses: [KhachHangAddressDto]
+}
+
+struct KhachHangCreateRequest: Encodable {
+    let ten: String
+    let duocNhanVoucher: Bool
+    let phones: [KhachHangPhoneDto]
+    let addresses: [KhachHangAddressDto]
+}
+
+struct KhachHangFavoriteItemDto: Decodable, Identifiable {
+    var id: String { "\(tenSanPham)|\(tenBienThe)" }
+    let tenSanPham: String
+    let tenBienThe: String
+}
+
+/// Khớp KhachHangInfoDto (Backend) — thông tin điểm/nợ/ví/voucher/món yêu thích khi chọn khách
+/// trong form thêm hoá đơn. Field "soDu"/"tongNo"/"donKhac" khác tên với HoaDonDto (soDuVi/
+/// tongNoKhachHang/tongDonKhacDangGiao) vì đây là 2 DTO backend riêng biệt — không đoán gộp.
+struct KhachHangInfoDto: Decodable {
+    let khachHangId: String
+    let duocNhanVoucher: Bool
+    let daNhanVoucher: Bool
+    let diemThangNay: Int
+    let diemThangTruoc: Int
+    let soDu: Double
+    let tongNo: Double
+    let donKhac: Double
+    let monGanDay: [KhachHangFavoriteItemDto]
+    let monHayMua: [KhachHangFavoriteItemDto]
+}
+
+/// Giá riêng đã lưu theo khách (KhachHangGiaBan) — chỉ cần 2 field để build map áp giá tự động,
+/// không cần fetch riêng theo khách vì backend không có filter, tải hết 1 lần rồi lọc local.
+struct KhachHangGiaBanDto: Decodable {
+    let khachHangId: String
+    let sanPhamBienTheId: String
+    let giaBan: Double
+}
+
+// ---- Sản phẩm / Topping (chọn món trong form thêm hoá đơn) ----
+
+struct SanPhamBienTheDto: Decodable, Identifiable, Hashable {
+    let id: String
+    let sanPhamId: String
+    let tenBienThe: String
+    let giaBan: Double
+    let macDinh: Bool
+}
+
+struct SanPhamDto: Decodable, Identifiable {
+    let id: String
+    let ten: String
+    let ngungBan: Bool
+    let tenNhomSanPham: String?
+    let bienThe: [SanPhamBienTheDto]
+}
+
+struct ToppingDto: Decodable, Identifiable, Hashable {
+    let id: String
+    let ten: String
+    let gia: Double
+    let ngungBan: Bool
+}
+
+// ---- Tạo hoá đơn đầy đủ (món + khách + giảm giá) ----
+// Payload khớp HoaDonChiTietService.AddAsync (Backend): "id" của từng dòng chỉ dùng để liên kết
+// topping cùng dòng qua chiTietHoaDonToppings[].chiTietHoaDonId, KHÔNG phải Id thật sẽ lưu (server
+// tự sinh SequentialGuid riêng) — dùng UUID() cục bộ là đủ.
+
+struct ChiTietHoaDonToppingCreateDto: Encodable {
+    let chiTietHoaDonId: String
+    let toppingId: String
+    let ten: String
+    let soLuong: Int
+    let gia: Double
+}
+
+struct ChiTietHoaDonCreateDto: Encodable {
+    let id: String
+    let sanPhamBienTheId: String
+    let soLuong: Int
+    let donGia: Double
+    let tenSanPham: String
+    let tenBienThe: String
+    let toppingText: String?
+    let noteText: String?
+}
+
+struct HoaDonFullCreateRequest: Encodable {
+    let phanLoai: String
+    let tenBan: String?
+    let khachHangId: String?
+    let tenKhachHangText: String?
+    let soDienThoaiText: String?
+    let diaChiText: String?
+    let ghiChu: String?
+    let giamGia: Double
+    let chiTietHoaDons: [ChiTietHoaDonCreateDto]
+    let chiTietHoaDonToppings: [ChiTietHoaDonToppingCreateDto]
+}
+
 // ---- Tạo hoá đơn mới ----
-// Body tối giản — backend (HoaDonCrudService.CreateAsync) tự sinh Id (SequentialGuid) khi thiếu,
-// tự set Ngay/NgayGio = giờ hiện tại, ChiTietHoaDons rỗng hợp lệ (thêm món sau ở màn chi tiết).
-// TenBan bắt buộc riêng cho "Tại Chỗ" (RequireTableMessage phía server).
-struct HoaDonCreateRequest: Encodable { let phanLoai: String; let tenBan: String? }
+// Backend (HoaDonCrudService.CreateAsync) tự sinh Id (SequentialGuid) khi thiếu, tự set
+// Ngay/NgayGio = giờ hiện tại. TenBan bắt buộc riêng cho "Tại Chỗ" (RequireTableMessage phía server).
 struct IdOnlyDto: Decodable { let id: String }
 struct CreateActionResult { let success: Bool; let message: String?; let id: String? }
