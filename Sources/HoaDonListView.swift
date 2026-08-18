@@ -231,12 +231,8 @@ private struct HoaDonRowView: View {
     }
 
     /// Shipper đánh dấu "Tí nữa chuyển khoản" (GhiChuShipper == chuỗi cố định, xem
-    /// ShipperActionService.TiNuaChuyenKhoanAsync) — cần nổi bật để nhân viên chủ động xử lý.
-    private var isTiNuaChuyenKhoan: Bool {
-        item.phanLoai == "Mv" && item.ghiChuShipper == "Tí nữa chuyển khoản"
-    }
-
-    /// Badge gọn ngay trên số tiền, riêng cho đơn Ship (đơn Mv đã có badge to bên dưới thông tin).
+    /// ShipperActionService.TiNuaChuyenKhoanAsync) — chỉ set được cho đơn Ship (ShipperQueryService
+    /// chỉ trả PhanLoai='Ship' cho app shipper), Mv không bao giờ có giá trị này.
     private var shipTiNuaChuyenKhoan: Bool {
         item.phanLoai == "Ship" && item.ghiChuShipper == "Tí nữa chuyển khoản" && item.conLai > 0
     }
@@ -244,7 +240,7 @@ private struct HoaDonRowView: View {
     var body: some View {
         HStack(spacing: 10) {
             Rectangle()
-                .fill(isTiNuaChuyenKhoan ? Color.warningColor : HoaDonFormatting.phanLoaiColor(item.phanLoai))
+                .fill(HoaDonFormatting.phanLoaiColor(item.phanLoai))
                 .frame(width: 4)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -276,16 +272,6 @@ private struct HoaDonRowView: View {
                 if let mon = item.tenMonSummary, !mon.isEmpty {
                     Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
                 }
-                if isTiNuaChuyenKhoan {
-                    HStack(spacing: 4) {
-                        Image(systemName: "bell.fill").font(.caption2)
-                        Text("Tí nữa chuyển khoản").font(.caption.bold())
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(Color.warningColor)
-                    .clipShape(Capsule())
-                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
@@ -311,11 +297,7 @@ private struct HoaDonRowView: View {
             }
         }
         .padding(12)
-        .background(isTiNuaChuyenKhoan ? Color.warningColor.pastelBackground() : HoaDonFormatting.phanLoaiBgColor(item.phanLoai))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(isTiNuaChuyenKhoan ? Color.warningColor : Color.clear, lineWidth: 2)
-        )
+        .background(HoaDonFormatting.phanLoaiBgColor(item.phanLoai))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
