@@ -93,24 +93,24 @@ struct HoaDonListView: View {
                 }
 
                 Divider()
-                VStack(spacing: 2) {
-                    if !phanLoaiTotals.isEmpty {
-                        HStack(spacing: 8) {
-                            Spacer()
-                            ForEach(phanLoaiTotals, id: \.label) { item in
-                                Text("\(item.label) \(item.text)")
-                                    .font(.caption2).foregroundColor(item.color)
+                HStack(spacing: 12) {
+                    Button { showAddSheet = true } label: {
+                        Image(systemName: "plus.circle.fill").font(.system(size: 34))
+                    }
+                    .foregroundColor(.brandPrimary)
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        if !phanLoaiTotals.isEmpty {
+                            HStack(spacing: 8) {
+                                ForEach(phanLoaiTotals, id: \.label) { item in
+                                    Text("\(item.label) \(item.text)")
+                                        .font(.caption2).foregroundColor(item.color)
+                                }
                             }
                         }
-                    }
-                    HStack {
-                        Button { showAddSheet = true } label: {
-                            Image(systemName: "plus.circle.fill").font(.title2)
-                        }
-                        .foregroundColor(.brandPrimary)
-                        Spacer()
                         Text(totalText).font(.headline)
                     }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding()
             }
@@ -127,7 +127,15 @@ struct HoaDonListView: View {
             }
         }
         .sheet(isPresented: $showAddSheet) {
-            AddHoaDonSheet()
+            AddHoaDonSheet { newId in
+                Task {
+                    await load()
+                    // Đợi sheet "+" đóng xong hẳn rồi mới mở sheet chi tiết — mở đồng thời 2 sheet
+                    // trên cùng view dễ bị SwiftUI bỏ qua sheet thứ hai (race giữa 2 lần dismiss/present).
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    selectedId = newId
+                }
+            }
         }
     }
 
@@ -163,24 +171,27 @@ struct ShipperAvatarView: View {
     }
 }
 
-/// Lọc nhanh trên tab Hoá đơn — chọn được nhiều đồng thời (OR), rỗng = không lọc gì.
+/// Lọc nhanh trên tab Hoá đơn — chọn được nhiều đồng thời (OR), rỗng = không lọc gì. Thứ tự khai
+/// báo = thứ tự hiện trong menu (Tí nữa CK trước vì cần xử lý gấp nhất, rồi tới các mốc thu tiền).
 enum HoaDonQuickFilter: CaseIterable, Hashable {
-    case ghiNo, chuaThanhToan, tiNuaChuyenKhoan
+    case tiNuaChuyenKhoan, chuaThanhToan, ghiNo
 
     var label: String {
         switch self {
-        case .ghiNo: return "Đơn ghi nợ"
-        case .chuaThanhToan: return "Đơn chưa thanh toán"
         case .tiNuaChuyenKhoan: return "Tí nữa chuyển khoản"
+        case .chuaThanhToan: return "Chưa thanh toán"
+        case .ghiNo: return "Đã ghi nợ"
         }
     }
 
     /// conLai<=0 loại trừ trước cho .ghiNo/.chuaThanhToan — khớp logic statusText ở HoaDonRowView
-    /// (ngayNo cũ vẫn còn giá trị dù đã thu đủ, không tự xoá).
+    /// (ngayNo cũ vẫn còn giá trị dù đã thu đủ, không tự xoá). .chuaThanhToan KHÔNG gồm đơn đã ghi
+    /// nợ — ghi nợ là một trạng thái xử lý riêng, không phải "chưa thanh toán" còn treo.
     func matches(_ item: HoaDonListDto) -> Bool {
+        let daGhiNo = !(item.ngayNo?.isEmpty ?? true)
         switch self {
-        case .ghiNo: return item.conLai > 0 && !(item.ngayNo?.isEmpty ?? true)
-        case .chuaThanhToan: return item.conLai > 0
+        case .ghiNo: return item.conLai > 0 && daGhiNo
+        case .chuaThanhToan: return item.conLai > 0 && !daGhiNo
         case .tiNuaChuyenKhoan: return item.conLai > 0 && item.ghiChuShipper == "Tí nữa chuyển khoản"
         }
     }
@@ -302,10 +313,17 @@ private struct HoaDonRowView: View {
     }
 }
 
-/// Khung chọn phân loại đơn khi bấm "+" — CHỈ giao diện, chưa nối API tạo hoá đơn thật (theo yêu
-/// cầu "làm khung trước", các Button đều rỗng action).
+/// Khung chọn phân loại đơn khi bấm "+" — 5 phân loại gọi API tạo hoá đơn thật (POST /api/HoaDon),
+/// tạo xong mở luôn HoaDonDetailView (parent set selectedId) để thêm món. "Tại Chỗ" bắt buộc nhập
+/// số bàn trước (RequireTableMessage phía server) nên hỏi tên bàn tại chỗ thay vì tạo ngay.
 private struct AddHoaDonSheet: View {
+    let onCreated: (String) -> Void
+
     @Environment(\.dismiss) private var dismiss
+    @State private var creating = false
+    @State private var errorMessage: String?
+    @State private var pendingTaiCho = false
+    @State private var tenBan = ""
 
     private let categories: [(code: String, icon: String)] = [
         ("Ship", "bicycle"),
@@ -314,8 +332,8 @@ private struct AddHoaDonSheet: View {
         ("Mh", "hand.raised.fill"),
         ("App", "app.badge"),
     ]
-    /// Gộp chung style + lưới với 5 phân loại đơn phía trên (trước tách riêng bằng Divider, giờ
-    /// nhập chung 1 lưới cho đồng nhất).
+    /// Chưa nối API — 2 tính năng riêng phức tạp hơn nhiều so với tạo đơn trơn (xem
+    /// project_hoadon_som_debt_cutoff/GetKhachHangHayGoiSom, chưa có endpoint "bắt đơn App").
     private let extras: [(label: String, icon: String, color: Color)] = [
         ("Đơn 7h", "clock.fill", .brandPrimary),
         ("Bắt đơn App", "app.badge.checkmark", .dangerColor),
@@ -327,7 +345,7 @@ private struct AddHoaDonSheet: View {
             VStack(spacing: 16) {
                 LazyVGrid(columns: twoColumns, spacing: 12) {
                     ForEach(categories, id: \.code) { cat in
-                        Button {} label: {
+                        Button { handleTap(cat.code) } label: {
                             VStack(spacing: 6) {
                                 Image(systemName: cat.icon).font(.title2)
                                 Text(HoaDonFormatting.phanLoaiLabel(cat.code)).font(.subheadline.bold())
@@ -338,22 +356,47 @@ private struct AddHoaDonSheet: View {
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.roundedRectangle(radius: 12))
                         .tint(HoaDonFormatting.phanLoaiColor(cat.code))
+                        .disabled(creating)
                     }
 
                     ForEach(extras, id: \.label) { extra in
-                        Button {} label: {
-                            VStack(spacing: 6) {
-                                Image(systemName: extra.icon).font(.title2)
+                        VStack(spacing: 6) {
+                            Image(systemName: extra.icon).font(.title2)
+                            VStack(spacing: 1) {
                                 Text(extra.label).font(.subheadline.bold())
+                                Text("Sắp có").font(.caption2)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
                         }
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.roundedRectangle(radius: 12))
-                        .tint(extra.color)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .opacity(0.4)
                     }
                 }
+
+                if pendingTaiCho {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Số bàn").font(.caption).foregroundColor(.textMuted)
+                        TextField("Vd: 12", text: $tenBan)
+                            .textFieldStyle(.roundedBorder)
+                            .keyboardType(.numbersAndPunctuation)
+                        HStack {
+                            Button("Huỷ") { pendingTaiCho = false; tenBan = "" }
+                                .buttonStyle(.bordered)
+                            Spacer()
+                            Button(creating ? "Đang tạo..." : "Tạo đơn Tại Chỗ") {
+                                Task { await create(phanLoai: "Tại Chỗ", tenBan: tenBan) }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(tenBan.trimmingCharacters(in: .whitespaces).isEmpty || creating)
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+
+                if let errorMessage {
+                    Text(errorMessage).foregroundColor(.dangerColor).font(.footnote)
+                }
+                if creating { ProgressView() }
 
                 Spacer()
             }
@@ -362,9 +405,35 @@ private struct AddHoaDonSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Đóng") { dismiss() }
+                        .disabled(creating)
                 }
             }
         }
         .presentationDetents([.medium])
+    }
+
+    private func handleTap(_ code: String) {
+        errorMessage = nil
+        if code == "Tại Chỗ" {
+            pendingTaiCho = true
+            return
+        }
+        Task { await create(phanLoai: code, tenBan: nil) }
+    }
+
+    private func create(phanLoai: String, tenBan: String?) async {
+        creating = true
+        errorMessage = nil
+        let result = await APIClient.shared.createHoaDon(
+            phanLoai: phanLoai,
+            tenBan: tenBan?.trimmingCharacters(in: .whitespaces)
+        )
+        creating = false
+        if result.success, let id = result.id {
+            dismiss()
+            onCreated(id)
+        } else {
+            errorMessage = result.message ?? "Tạo hoá đơn thất bại."
+        }
     }
 }

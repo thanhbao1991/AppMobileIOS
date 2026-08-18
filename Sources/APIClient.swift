@@ -242,6 +242,17 @@ actor APIClient {
         return await executeAction(req)
     }
 
+    func createHoaDon(phanLoai: String, tenBan: String? = nil) async -> CreateActionResult {
+        let body = HoaDonCreateRequest(phanLoai: phanLoai, tenBan: tenBan)
+        let req = makeRequest("/api/HoaDon", method: "POST", body: jsonBody(body))
+        let (data, _) = await send(req)
+        guard let data,
+              let env = try? JSONDecoder().decode(ApiEnvelope<IdOnlyDto>.self, from: data) else {
+            return CreateActionResult(success: false, message: "Không có phản hồi từ server.", id: nil)
+        }
+        return CreateActionResult(success: env.isSuccess, message: env.message, id: env.data?.id)
+    }
+
     func ganShipper(hoaDonId: String, nguoiShip: String) async -> ActionResult {
         let now = isoNow()
         let body = GanShipperRequest(id: hoaDonId, nguoiShip: nguoiShip, ngayShip: now, ngayIn: now)

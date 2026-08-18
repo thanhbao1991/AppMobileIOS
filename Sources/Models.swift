@@ -271,3 +271,11 @@ struct IdOnlyRequest: Encodable { let id: String }
 struct GanShipperRequest: Encodable { let id: String; let nguoiShip: String; let ngayShip: String; let ngayIn: String }
 
 struct ActionResult { let success: Bool; let message: String? }
+
+// ---- Tạo hoá đơn mới ----
+// Body tối giản — backend (HoaDonCrudService.CreateAsync) tự sinh Id (SequentialGuid) khi thiếu,
+// tự set Ngay/NgayGio = giờ hiện tại, ChiTietHoaDons rỗng hợp lệ (thêm món sau ở màn chi tiết).
+// TenBan bắt buộc riêng cho "Tại Chỗ" (RequireTableMessage phía server).
+struct HoaDonCreateRequest: Encodable { let phanLoai: String; let tenBan: String? }
+struct IdOnlyDto: Decodable { let id: String }
+struct CreateActionResult { let success: Bool; let message: String?; let id: String? }
