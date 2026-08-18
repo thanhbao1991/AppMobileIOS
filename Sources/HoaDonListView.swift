@@ -148,6 +148,17 @@ struct HoaDonListView: View {
                             presetTenBienThe: tenBienThe
                         )
                     }
+                },
+                onPickAppOrder: { items, ghiChu, warnings in
+                    Task {
+                        try? await Task.sleep(nanoseconds: 400_000_000)
+                        creatingPending = PendingCreate(
+                            phanLoai: "App",
+                            presetItems: items,
+                            presetGhiChu: ghiChu,
+                            presetWarnings: warnings
+                        )
+                    }
                 }
             )
         }
@@ -156,7 +167,10 @@ struct HoaDonListView: View {
                 phanLoai: pending.phanLoai,
                 presetKhachHangId: pending.presetKhachHangId,
                 presetTenSanPham: pending.presetTenSanPham,
-                presetTenBienThe: pending.presetTenBienThe
+                presetTenBienThe: pending.presetTenBienThe,
+                presetItems: pending.presetItems,
+                presetGhiChu: pending.presetGhiChu,
+                presetWarnings: pending.presetWarnings
             ) { newId in
                 Task {
                     await load()
@@ -237,7 +251,10 @@ private struct PendingCreate: Identifiable {
     var presetKhachHangId: String? = nil
     var presetTenSanPham: String? = nil
     var presetTenBienThe: String? = nil
-    var id: String { phanLoai + (presetKhachHangId ?? "") }
+    var presetItems: [DraftChiTiet] = []
+    var presetGhiChu: String? = nil
+    var presetWarnings: [String] = []
+    var id: String { phanLoai + (presetKhachHangId ?? "") + String(presetItems.count) }
 }
 
 private struct HoaDonRowView: View {
@@ -356,9 +373,12 @@ private struct HoaDonRowView: View {
 private struct AddHoaDonSheet: View {
     let onPick: (String) -> Void
     let onPickGoiSom: (String, String, String) -> Void
+    /// (items, ghiChu, warnings) — đơn đã map sẵn món từ store, xem AppOrderPickerSheet.
+    let onPickAppOrder: ([DraftChiTiet], String, [String]) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var showGoiSom = false
+    @State private var showAppOrder = false
 
     private let categories: [(code: String, icon: String)] = [
         ("Ship", "bicycle"),
@@ -400,20 +420,17 @@ private struct AddHoaDonSheet: View {
                 .buttonBorderShape(.roundedRectangle(radius: 12))
                 .tint(.brandPrimary)
 
-                // "Bắt đơn App" — chưa rõ nghiệp vụ cụ thể (không có tính năng tương ứng bên Desktop
-                // để đối chiếu), để placeholder chờ xác nhận thay vì đoán rồi làm sai luồng tiền.
-                HStack(spacing: 8) {
-                    Image(systemName: "app.badge.checkmark")
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Bắt đơn App").font(.subheadline.bold())
-                        Text("Sắp có").font(.caption2)
+                Button { showAppOrder = true } label: {
+                    HStack {
+                        Image(systemName: "app.badge.checkmark")
+                        Text("Bắt đơn App — lấy đơn từ store")
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption)
                     }
-                    Spacer()
                 }
-                .foregroundColor(.textMuted)
-                .padding(.vertical, 10).padding(.horizontal, 14)
-                .background(Color.textMuted.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: 12))
+                .tint(.dangerColor)
 
                 Spacer()
             }
@@ -432,7 +449,107 @@ private struct AddHoaDonSheet: View {
                 onPickGoiSom(khachHangId, tenSanPham, tenBienThe)
             }
         }
+        .sheet(isPresented: $showAppOrder) {
+            AppOrderPickerSheet { items, ghiChu, warnings in
+                showAppOrder = false
+                dismiss()
+                onPickAppOrder(items, ghiChu, warnings)
+            }
+        }
         .presentationDetents([.medium])
+    }
+}
+
+/// "Bắt đơn App" — danh sách đơn đang chờ từ store (shippershipping), chọn 1 đơn để tải chi tiết
+/// (món đã map sẵn SanPhamBienTheId thật) rồi mở form tạo đơn App đã điền sẵn. Khớp GetDonAsync
+/// (Desktop, HoaDonTabControl.Board.cs).
+private struct AppOrderPickerSheet: View {
+    /// (items, ghiChu, warnings)
+    let onPick: ([DraftChiTiet], String, [String]) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var orders: [AppOrderSummaryDto] = []
+    @State private var loading = true
+    @State private var loadError: String?
+    @State private var fetchingId: String?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if loading {
+                    ProgressView()
+                } else if let loadError {
+                    Text(loadError).foregroundColor(.dangerColor)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if orders.isEmpty {
+                    Text("Không tìm thấy đơn nào.").foregroundColor(.textMuted)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(orders) { order in
+                        Button { Task { await pick(order) } } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(order.customerName.isEmpty ? order.code : order.customerName)
+                                        .font(.subheadline.bold())
+                                    Spacer()
+                                    Text(HoaDonFormatting.money(order.total))
+                                        .font(.subheadline.bold()).foregroundColor(.brandPrimary)
+                                }
+                                if !order.address.isEmpty {
+                                    Text(order.address).font(.caption).foregroundColor(.textMuted).lineLimit(1)
+                                }
+                                HStack {
+                                    Text(order.displayTime).font(.caption2).foregroundColor(.textMuted)
+                                    Spacer()
+                                    if fetchingId == order.id { ProgressView().scaleEffect(0.7) }
+                                }
+                            }
+                        }
+                        .disabled(fetchingId != nil)
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("Bắt đơn App")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
+                }
+            }
+        }
+        .task {
+            let result = await APIClient.shared.getAppOrderList()
+            orders = result.orders
+            loadError = result.message
+            loading = false
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func pick(_ order: AppOrderSummaryDto) async {
+        fetchingId = order.id
+        let result = await APIClient.shared.getAppOrderDetail(order.id)
+        fetchingId = nil
+        guard let detail = result.detail else {
+            loadError = result.message ?? "Không lấy được chi tiết đơn."
+            return
+        }
+        onPick(buildDraftItems(from: detail), detail.ghiChu ?? "", result.warnings)
+    }
+
+    /// Guid rỗng = server không khớp được topping theo tên (MapBienThe/ToppingDtos phía server) —
+    /// bỏ qua, không gửi lên vì backend AddAsync sẽ insert ToppingId rỗng gây lỗi FK.
+    private func buildDraftItems(from detail: AppOrderDetailDto) -> [DraftChiTiet] {
+        (detail.chiTietHoaDons ?? []).map { ct in
+            let toppings = (ct.toppingDtos ?? [])
+                .filter { $0.soLuong > 0 && $0.id != "00000000-0000-0000-0000-000000000000" }
+                .map { DraftTopping(toppingId: $0.id, ten: $0.ten, gia: $0.gia, soLuong: $0.soLuong) }
+            return DraftChiTiet(
+                sanPhamBienTheId: ct.sanPhamBienTheId, tenSanPham: ct.tenSanPham, tenBienThe: ct.tenBienThe,
+                soLuong: ct.soLuong, donGia: ct.donGia, toppings: toppings
+            )
+        }
     }
 }
 

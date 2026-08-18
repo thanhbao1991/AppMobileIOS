@@ -7,6 +7,7 @@ struct ApiEnvelope<T: Decodable>: Decodable {
     let isSuccess: Bool
     let message: String?
     let data: T?
+    let warnings: [String]?
 }
 
 // ---- Auth ----
@@ -322,6 +323,42 @@ struct KhachHangGoiSomDto: Decodable, Identifiable {
     let tenBienThe: String
     let laKhachMoi: Bool
     var id: String { khachHangId }
+}
+
+// ---- Bắt đơn App (store shippershipping) ----
+// Khớp GetDonAsync (Desktop, HoaDonTabControl.Board.cs): /api/AppOrder/list → chọn 1 đơn →
+// /api/AppOrder/detail/{id} trả sẵn HoaDonDto với ChiTietHoaDons đã map SanPhamBienTheId thật
+// (AppOrderService.ParseHoaDon/MapBienThe phía server) — client chỉ cần add thẳng, không tự map lại.
+
+struct AppOrderSummaryDto: Decodable, Identifiable {
+    let id: String
+    let code: String
+    let customerName: String
+    let address: String
+    let note: String
+    let total: Double
+    let displayTime: String
+}
+
+struct AppOrderChiTietToppingDto: Decodable {
+    let id: String
+    let ten: String
+    let gia: Double
+    let soLuong: Int
+}
+
+struct AppOrderChiTietDto: Decodable {
+    let sanPhamBienTheId: String
+    let tenSanPham: String
+    let tenBienThe: String
+    let donGia: Double
+    let soLuong: Int
+    let toppingDtos: [AppOrderChiTietToppingDto]?
+}
+
+struct AppOrderDetailDto: Decodable {
+    let ghiChu: String?
+    let chiTietHoaDons: [AppOrderChiTietDto]?
 }
 
 /// Khớp KhachHangInfoDto (Backend) — thông tin điểm/nợ/ví/voucher/món yêu thích khi chọn khách

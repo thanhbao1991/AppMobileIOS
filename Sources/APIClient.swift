@@ -300,6 +300,30 @@ actor APIClient {
         return env.data ?? []
     }
 
+    /// "Bắt đơn App" — khớp GetDonAsync (Desktop). List() trả Result<object> (không phải
+    /// Result<List<...>>) nhưng runtime type vẫn là mảng đơn khi thành công nên decode với
+    /// ApiEnvelope<[AppOrderSummaryDto]> vẫn khớp; lúc lỗi (chưa cấu hình Shipping) data=null.
+    func getAppOrderList() async -> (orders: [AppOrderSummaryDto], message: String?) {
+        let req = makeRequest("/api/AppOrder/list")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[AppOrderSummaryDto]>.self, from: data) else {
+            return ([], "Không có phản hồi từ server.")
+        }
+        guard env.isSuccess else { return ([], env.message) }
+        return (env.data ?? [], nil)
+    }
+
+    func getAppOrderDetail(_ id: String) async -> (detail: AppOrderDetailDto?, message: String?, warnings: [String]) {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let req = makeRequest("/api/AppOrder/detail/\(encodedId)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<AppOrderDetailDto>.self, from: data) else {
+            return (nil, "Không có phản hồi từ server.", [])
+        }
+        guard env.isSuccess else { return (nil, env.message, []) }
+        return (env.data, nil, env.warnings ?? [])
+    }
+
     func getKhachHangById(_ id: String) async -> KhachHangDto? {
         let req = makeRequest("/api/KhachHang/\(id)")
         let (data, _) = await send(req)

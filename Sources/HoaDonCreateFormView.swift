@@ -13,6 +13,11 @@ struct HoaDonCreateFormView: View {
     var presetKhachHangId: String? = nil
     var presetTenSanPham: String? = nil
     var presetTenBienThe: String? = nil
+    /// Preset từ "Bắt đơn App" (xem HoaDonListView.AppOrderPickerSheet) — món đã map sẵn
+    /// SanPhamBienTheId thật từ server (AppOrderService.ParseHoaDon), khớp GetDonAsync (Desktop).
+    var presetItems: [DraftChiTiet] = []
+    var presetGhiChu: String? = nil
+    var presetWarnings: [String] = []
     let onCreated: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -37,6 +42,7 @@ struct HoaDonCreateFormView: View {
     @State private var khachSearchTask: Task<Void, Never>?
     @State private var khachInfo: KhachHangInfoDto?
     @State private var giaRiengBanner: String?
+    @State private var presetWarningBanner: String?
     @State private var showNewKhachForm = false
     @State private var newKhachTen = ""
     @State private var newKhachSdt = ""
@@ -83,6 +89,14 @@ struct HoaDonCreateFormView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(10)
                             .background(Color.brandPrimary.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    if let presetWarningBanner {
+                        Text("Lưu ý khi bắt đơn:\n\(presetWarningBanner)")
+                            .font(.footnote).foregroundColor(.warningColor)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                            .background(Color.warningColor.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
 
@@ -504,6 +518,16 @@ struct HoaDonCreateFormView: View {
         }
         if let presetTenSanPham, !presetTenSanPham.isEmpty {
             quickAddFavorite(KhachHangFavoriteItemDto(tenSanPham: presetTenSanPham, tenBienThe: presetTenBienThe ?? ""))
+        }
+        if !presetItems.isEmpty {
+            items = presetItems
+            recalcGiamGia()
+        }
+        if let presetGhiChu, !presetGhiChu.isEmpty {
+            ghiChuDon = presetGhiChu
+        }
+        if !presetWarnings.isEmpty {
+            presetWarningBanner = presetWarnings.joined(separator: "\n")
         }
     }
 
