@@ -560,7 +560,7 @@ private struct AppOrderPickerSheet: View {
                                     Text(order.customerName.isEmpty ? order.code : order.customerName)
                                         .font(.subheadline.bold())
                                     if order.isImported {
-                                        Text("Đã vào hệ thống")
+                                        Text("Đã bắt đơn")
                                             .font(.caption2.bold())
                                             .foregroundColor(.white)
                                             .padding(.horizontal, 6).padding(.vertical, 2)
