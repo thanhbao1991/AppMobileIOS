@@ -2,8 +2,9 @@ import SwiftUI
 import UIKit
 
 /// Danh sách hoá đơn còn ghi nợ, gọi GET /api/dashboard/cong-no-list (không có tham số ngày —
-/// khác Hoá đơn/Thanh toán/Chi tiêu). Bấm vào mở lại HoaDonDetailView để xem chi tiết; vuốt phải
-/// (leading) có 3 nút thu nhanh Tiền mặt/Chuyển khoản/Xoá không cần mở sheet.
+/// khác Hoá đơn/Thanh toán/Chi tiêu). Bấm vào phần trên của card mở lại HoaDonDetailView để xem
+/// chi tiết; 2 nút Tiền mặt/Chuyển khoản hiện thẳng dưới card để thu nhanh không cần mở sheet
+/// (đổi từ swipeActions cũ — không rõ ràng, dễ bỏ sót). Cố ý không có nút Xoá (xem lý do ở dưới).
 struct CongNoListView: View {
     @State private var items: [HoaDonListDto] = []
     @State private var loading = false
@@ -48,31 +49,19 @@ struct CongNoListView: View {
                                 .listRowSeparator(.hidden)
                         } else {
                             ForEach(sortedItems) { item in
-                                CongNoRowView(item: item, busy: busyId == item.id)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { selectedId = item.id }
-                                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-                                    .listRowBackground(Color.clear)
-                                    .listRowSeparator(.hidden)
-                                    .swipeActions(edge: .leading) {
-                                        Button {
-                                            Task { await thu(item, isCash: true) }
-                                        } label: {
-                                            Label("Tiền mặt", systemImage: "banknote")
-                                        }
-                                        .tint(.successColor)
-                                        Button {
-                                            Task { await thu(item, isCash: false) }
-                                        } label: {
-                                            Label("Chuyển khoản", systemImage: "creditcard")
-                                        }
-                                        .tint(.brandPrimary)
-                                        // Cố ý KHÔNG có nút Xoá — mọi đơn trong tab này đều đã ghi
-                                        // nợ, xoá cứng quá nguy hiểm (mất dữ liệu nợ khách). Chỉ cho
-                                        // thu tiền ở đây; nếu cần huỷ đơn thì dùng Rollback bên
-                                        // Desktop (NoTabControl), khớp guard NgayNo bên
-                                        // HoaDonTabControl.Actions.cs.
-                                    }
+                                CongNoRowView(
+                                    item: item,
+                                    busy: busyId == item.id,
+                                    onSelect: { selectedId = item.id },
+                                    onThu: { isCash in Task { await thu(item, isCash: isCash) } }
+                                )
+                                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                // Cố ý KHÔNG có nút Xoá — mọi đơn trong tab này đều đã ghi nợ, xoá
+                                // cứng quá nguy hiểm (mất dữ liệu nợ khách). Chỉ cho thu tiền ở đây;
+                                // nếu cần huỷ đơn thì dùng Rollback bên Desktop (NoTabControl), khớp
+                                // guard NgayNo bên HoaDonTabControl.Actions.cs.
                             }
                         }
                     }
@@ -142,11 +131,22 @@ struct CongNoListView: View {
     /// thẳng vào khung chat Zalo/Facebook — ImageRenderer (iOS 16+) vẽ ra ngoài màn hình nên không bị
     /// giới hạn bởi viewport như chụp màn hình thường. Kèm 1 mã QR duy nhất cho TỔNG nợ đang lọc
     /// (không gắn với 1 hoá đơn cụ thể vì có thể gộp nhiều đơn) — lấy qua Backend /api/HoaDon/bill-qr,
-    /// dùng chung BankQrConfig với Desktop/Mobile (xem [[project_bank_qr_consolidation]]).
+    /// dùng chung BankQrConfig với Desktop/Mobile (xem [[project_bank_qr_consolidation]]). addInfo
+    /// chỉ ghi mã hoá đơn đầu và cuối trong danh sách đang hiển thị (mới nhất DEN cũ nhất, khớp
+    /// thứ tự sortedItems), không liệt kê hết — tránh vượt giới hạn ký tự nội dung CK ngân hàng,
+    /// khớp cách HoaDonDetailView rút gọn (xem BillTextBuilder.buildCodesWithNoKhac). Nối bằng chữ
+    /// "DEN" chứ không ký tự đặc biệt như "...." vì nhiều app ngân hàng lọc bỏ dấu chấm lặp.
     private func copyBillImage() async {
         let snapshot = sortedItems
         let total = snapshot.reduce(0.0) { $0 + $1.conLai }
-        let addInfo = BillTextBuilder.toAsciiNoDiacritics(searchText, upper: true)
+        let codes = snapshot.map { BillTextBuilder.buildMaHoaDon($0.id) }
+        let codesText: String
+        if let first = codes.first, let last = codes.last {
+            codesText = first == last ? first : "\(first) DEN \(last)"
+        } else {
+            codesText = ""
+        }
+        let addInfo = BillTextBuilder.toAsciiNoDiacritics("\(searchText) \(codesText)", upper: true)
         let qrData = await APIClient.shared.getBillQrImage(amount: total, addInfo: addInfo)
         let qrImage = qrData.flatMap { UIImage(data: $0) }
 
@@ -211,26 +211,53 @@ private struct BillSnapshotView: View {
 private struct CongNoRowView: View {
     let item: HoaDonListDto
     let busy: Bool
+    /// Nil trong BillSnapshotView (ảnh render tĩnh để gửi bill — không cần tương tác).
+    var onSelect: (() -> Void)? = nil
+    var onThu: ((Bool) -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
-            Rectangle().fill(Color.dangerColor).frame(width: 4)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Rectangle().fill(Color.dangerColor).frame(width: 4)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
-                    .font(.subheadline.bold())
-                if let mon = item.tenMonSummary, !mon.isEmpty {
-                    Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
+                        .font(.subheadline.bold())
+                    if let mon = item.tenMonSummary, !mon.isEmpty {
+                        Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
+                    }
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(HoaDonFormatting.congNoTime(item.ngayNo))
+                        .font(.footnote).foregroundColor(.textMuted)
+                    if busy {
+                        ProgressView()
+                    } else {
+                        Text(HoaDonFormatting.money(item.conLai)).font(.subheadline.bold()).foregroundColor(.dangerColor)
+                    }
                 }
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(HoaDonFormatting.congNoTime(item.ngayNo))
-                    .font(.footnote).foregroundColor(.textMuted)
-                if busy {
-                    ProgressView()
-                } else {
-                    Text(HoaDonFormatting.money(item.conLai)).font(.subheadline.bold()).foregroundColor(.dangerColor)
+            .contentShape(Rectangle())
+            .onTapGesture { onSelect?() }
+
+            if let onThu, !busy {
+                HStack(spacing: 8) {
+                    Button {
+                        onThu(true)
+                    } label: {
+                        Label("Tiền mặt", systemImage: "banknote").font(.caption.bold())
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.successColor)
+
+                    Button {
+                        onThu(false)
+                    } label: {
+                        Label("Chuyển khoản", systemImage: "creditcard").font(.caption.bold())
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.brandPrimary)
                 }
             }
         }

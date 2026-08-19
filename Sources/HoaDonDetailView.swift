@@ -423,15 +423,16 @@ struct HoaDonDetailView: View {
 
     /// Render chi tiết hoá đơn thành ảnh, copy vào clipboard để dán thẳng vào chat Zalo/Facebook —
     /// khớp cách "Gửi Bill Nợ" bên CongNoListView, dùng ImageRenderer để vẽ hết nội dung kể cả phần
-    /// đang cuộn ngoài viewport. Kèm mã QR VietQR (amount + addInfo "TEN (HD########)" khớp 1:1
-    /// Desktop/HoaDonPrinter.BuildAddInfo và Mobile/HoaDonTab.cshtml buildMaHoaDonBill) lấy qua
-    /// Backend /api/HoaDon/bill-qr — proxy này dùng chung BankQrConfig với Desktop/Mobile nên đổi
-    /// tài khoản ngân hàng ở 1 chỗ là mọi client cùng ra 1 mã QR (xem BankQrConfig trong Share).
+    /// đang cuộn ngoài viewport. Kèm mã QR VietQR (amount + addInfo "TEN HD########" khớp 1:1
+    /// Desktop/HoaDonPrinter.BuildAddInfo) lấy qua Backend /api/HoaDon/bill-qr — proxy này dùng
+    /// chung BankQrConfig với Desktop/Mobile nên đổi tài khoản ngân hàng ở 1 chỗ là mọi client
+    /// cùng ra 1 mã QR (xem BankQrConfig trong Share). Không dùng dấu ngoặc "()" quanh mã — 1 số
+    /// app ngân hàng lọc/thay ký tự đặc biệt trong nội dung CK, chỉ cách nhau bằng khoảng trắng.
     private func copyBillImage(_ d: HoaDonDetailDto) async {
         let ten = (d.tenKhachHangText?.isEmpty == false) ? d.tenKhachHangText! : "KHACH"
         let ma = BillTextBuilder.buildMaHoaDon(d.id)
         let codes = BillTextBuilder.buildCodesWithNoKhac(ma, d.maHoaDonNoKhac)
-        let addInfo = BillTextBuilder.toAsciiNoDiacritics("\(ten) (\(codes))", upper: true)
+        let addInfo = BillTextBuilder.toAsciiNoDiacritics("\(ten) \(codes)", upper: true)
         let amount = BillTextBuilder.amount(d)
 
         let qrData = await APIClient.shared.getBillQrImage(amount: amount, addInfo: addInfo)
@@ -461,14 +462,15 @@ enum BillTextBuilder {
     /// Khớp HoaDonPrinter.BuildMaHoaDon (Desktop) / buildMaHoaDonBill (Mobile JS).
     static func buildMaHoaDon(_ id: String) -> String { "HD" + id.prefix(8) }
 
-    /// Số tiền gộp nợ đơn khác (xem amount(_:)) — liệt kê thêm mã các đơn đó, giới hạn 3 mã đầu +
-    /// "+N" nếu nhiều hơn (nội dung CK VietQR có giới hạn độ dài). Khớp HoaDonPrinter.BuildAddInfo
-    /// (Desktop) / buildAddInfoWithNoKhac (Mobile JS).
+    /// Số tiền gộp nợ đơn khác (xem amount(_:)) — thay vì liệt kê hết (dễ vượt giới hạn ký tự nội
+    /// dung CK của ngân hàng, ~140-210 ký tự), chỉ ghi mã đơn hiện tại (đầu) và mã đơn nợ cuối cùng
+    /// (cuối), nối bằng " DEN " (chữ, không ký tự đặc biệt như "...." — nhiều app ngân hàng lọc bỏ
+    /// dấu chấm lặp trong nội dung CK). Khớp HoaDonPrinter.BuildAddInfo (Desktop). Việc ghi nhận
+    /// thanh toán KHÔNG phụ thuộc chuỗi này — xem ThuChuyenKhoanTuNganHangAsync chỉ cần mã đầu
+    /// tiên + tra nợ cũ từ DB.
     static func buildCodesWithNoKhac(_ ma: String, _ maNoKhac: [String]?) -> String {
-        guard let maNoKhac, !maNoKhac.isEmpty else { return ma }
-        var codes = ma + "+" + maNoKhac.prefix(3).joined(separator: "+")
-        if maNoKhac.count > 3 { codes += "+\(maNoKhac.count - 3)N" }
-        return codes
+        guard let maNoKhac, let last = maNoKhac.last else { return ma }
+        return "\(ma) DEN \(last)"
     }
 
     /// Khớp HoaDonPrinter.GetAmount (Desktop): còn nợ + còn lại nếu có nợ, không thì còn lại/thành tiền.
