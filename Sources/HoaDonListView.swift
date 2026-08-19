@@ -66,11 +66,9 @@ struct HoaDonListView: View {
                                     // Avatar Khánh ở đầu — cả 4 filter này chỉ soi đơn Ship của Khánh
                                     // (port từ ShipperDuyKhanhAndroid), icon giúp rõ nghĩa ngay trong menu.
                                     Label {
-                                        // Số đếm tách kiểu riêng (secondary, monospaced) khỏi tên filter để dễ
-                                        // liếc số lượng mà không lẫn vào chữ nhãn.
-                                        (Text(activeFilter == filter ? "✓ " : "")
-                                            + Text("(\(count)) ").foregroundColor(.secondary).monospacedDigit()
-                                            + Text(filter.label))
+                                        // Menu native iOS (UIMenu) không cho custom màu/font trên text item —
+                                        // mọi style đều bị hệ thống bỏ qua, nên giữ plain text.
+                                        Text(activeFilter == filter ? "✓ (\(count)) \(filter.label)" : "(\(count)) \(filter.label)")
                                     } icon: {
                                         ShipperAvatarView(name: filter.avatarName, size: 20)
                                     }
@@ -84,6 +82,20 @@ struct HoaDonListView: View {
                             Image(systemName: activeFilter == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
                                 .font(.title2)
                                 .foregroundColor(activeFilter == nil ? .textMuted : .brandPrimary)
+                                // Badge tròn góc trên-phải, giống badge thông báo — chỉ hiện khi đang lọc,
+                                // vì Menu native không cho style số đếm trong text item (xem trong menu).
+                                .overlay(alignment: .topTrailing) {
+                                    if activeFilter != nil {
+                                        Text("\(sortedItems.count)")
+                                            .font(.caption2.bold())
+                                            .foregroundColor(.white)
+                                            .padding(4)
+                                            .frame(minWidth: 18, minHeight: 18)
+                                            .background(Color.brandPrimary)
+                                            .clipShape(Circle())
+                                            .offset(x: 8, y: -8)
+                                    }
+                                }
                         }
                     )
                 ) { Task { await load() } }
