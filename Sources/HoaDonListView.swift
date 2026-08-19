@@ -16,9 +16,14 @@ struct HoaDonListView: View {
     @State private var activeFilter: HoaDonQuickFilter?
     private let clockTimer = Timer.publish(every: 20, on: .main, in: .common).autoconnect()
 
+    /// Danh sách đã áp search nhưng CHƯA áp activeFilter — dùng để đếm số dòng theo từng filter
+    /// trong menu (đếm trên tập đang xem, không phải đếm trên tập đã bị 1 filter khác thu hẹp).
+    private var searchFilteredItems: [HoaDonListDto] {
+        items.filter { anyMatchesSearch(searchText, $0.tenKhachHangText, $0.tenBan, $0.ghiChu, $0.ghiChuShipper, $0.tenMonSummary, $0.nguoiShip) }
+    }
+
     private var sortedItems: [HoaDonListDto] {
-        items
-            .filter { anyMatchesSearch(searchText, $0.tenKhachHangText, $0.tenBan, $0.ghiChu, $0.ghiChuShipper, $0.tenMonSummary, $0.nguoiShip) }
+        searchFilteredItems
             .filter { item in activeFilter?.matches(item) ?? true }
             .sorted {
                 let p0 = HoaDonFormatting.sortPriority($0)
@@ -54,13 +59,18 @@ struct HoaDonListView: View {
                             // Chỉ lọc 1 loại tại 1 thời điểm (không gộp OR nhiều filter như trước) —
                             // chọn lại đúng filter đang bật để tắt, chọn filter khác để thay hẳn.
                             ForEach(HoaDonQuickFilter.allCases, id: \.self) { filter in
+                                let count = searchFilteredItems.filter { filter.matches($0) }.count
                                 Button {
                                     activeFilter = (activeFilter == filter) ? nil : filter
                                 } label: {
                                     // Avatar Khánh ở đầu — cả 4 filter này chỉ soi đơn Ship của Khánh
                                     // (port từ ShipperDuyKhanhAndroid), icon giúp rõ nghĩa ngay trong menu.
                                     Label {
-                                        Text(activeFilter == filter ? "✓ \(filter.label)" : filter.label)
+                                        // Số đếm tách kiểu riêng (secondary, monospaced) khỏi tên filter để dễ
+                                        // liếc số lượng mà không lẫn vào chữ nhãn.
+                                        (Text(activeFilter == filter ? "✓ " : "")
+                                            + Text("(\(count)) ").foregroundColor(.secondary).monospacedDigit()
+                                            + Text(filter.label))
                                     } icon: {
                                         ShipperAvatarView(name: filter.avatarName, size: 20)
                                     }
