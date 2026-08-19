@@ -580,7 +580,6 @@ private struct AppOrderPickerSheet: View {
                                     if fetchingId == order.id { ProgressView().scaleEffect(0.7) }
                                 }
                             }
-                            .opacity(order.isImported ? 0.55 : 1.0)
                         }
                         .disabled(fetchingId != nil)
                     }
