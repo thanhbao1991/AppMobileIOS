@@ -423,16 +423,21 @@ struct HoaDonDetailView: View {
 
     /// Render chi tiết hoá đơn thành ảnh, copy vào clipboard để dán thẳng vào chat Zalo/Facebook —
     /// khớp cách "Gửi Bill Nợ" bên CongNoListView, dùng ImageRenderer để vẽ hết nội dung kể cả phần
-    /// đang cuộn ngoài viewport. Kèm mã QR VietQR (amount + addInfo "TEN HD########" khớp 1:1
-    /// Desktop/HoaDonPrinter.BuildAddInfo) lấy qua Backend /api/HoaDon/bill-qr — proxy này dùng
-    /// chung BankQrConfig với Desktop/Mobile nên đổi tài khoản ngân hàng ở 1 chỗ là mọi client
-    /// cùng ra 1 mã QR (xem BankQrConfig trong Share). Không dùng dấu ngoặc "()" quanh mã — 1 số
-    /// app ngân hàng lọc/thay ký tự đặc biệt trong nội dung CK, chỉ cách nhau bằng khoảng trắng.
+    /// đang cuộn ngoài viewport. Kèm mã QR VietQR lấy qua Backend /api/HoaDon/bill-qr — proxy này
+    /// dùng chung BankQrConfig với Desktop nên đổi tài khoản ngân hàng ở 1 chỗ là mọi client cùng
+    /// ra 1 mã QR. addInfo đọc thẳng `d.billAddInfo` (Backend tính sẵn, khớp 1:1
+    /// BankQrConfig.BuildAddInfo/HoaDonPrinter Desktop) — fallback tự build tại client chỉ dùng
+    /// khi Backend chưa publish bản có field này (billAddInfo nil, ví dụ đang test build mới).
     private func copyBillImage(_ d: HoaDonDetailDto) async {
-        let ten = (d.tenKhachHangText?.isEmpty == false) ? d.tenKhachHangText! : "KHACH"
-        let ma = BillTextBuilder.buildMaHoaDon(d.id)
-        let codes = BillTextBuilder.buildCodesWithNoKhac(ma, d.maHoaDonNoKhac)
-        let addInfo = BillTextBuilder.toAsciiNoDiacritics("\(ten) \(codes)", upper: true)
+        let addInfo: String
+        if let billAddInfo = d.billAddInfo, !billAddInfo.isEmpty {
+            addInfo = billAddInfo
+        } else {
+            let ten = (d.tenKhachHangText?.isEmpty == false) ? d.tenKhachHangText! : "KHACH"
+            let ma = BillTextBuilder.buildMaHoaDon(d.id)
+            let codes = BillTextBuilder.buildCodesWithNoKhac(ma, d.maHoaDonNoKhac)
+            addInfo = BillTextBuilder.toAsciiNoDiacritics("\(ten) \(codes)", upper: true)
+        }
         let amount = BillTextBuilder.amount(d)
 
         let qrData = await APIClient.shared.getBillQrImage(amount: amount, addInfo: addInfo)

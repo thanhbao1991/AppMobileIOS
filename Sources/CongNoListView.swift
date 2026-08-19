@@ -135,11 +135,13 @@ struct CongNoListView: View {
     /// chỉ ghi mã hoá đơn đầu và cuối trong danh sách đang hiển thị (mới nhất DEN cũ nhất, khớp
     /// thứ tự sortedItems), không liệt kê hết — tránh vượt giới hạn ký tự nội dung CK ngân hàng,
     /// khớp cách HoaDonDetailView rút gọn (xem BillTextBuilder.buildCodesWithNoKhac). Nối bằng chữ
-    /// "DEN" chứ không ký tự đặc biệt như "...." vì nhiều app ngân hàng lọc bỏ dấu chấm lặp.
+    /// "DEN" chứ không ký tự đặc biệt như "...." vì nhiều app ngân hàng lọc bỏ dấu chấm lặp. Đọc
+    /// `item.maHoaDon` (Backend tính sẵn) thay vì tự cắt chuỗi id — fallback buildMaHoaDon chỉ
+    /// dùng khi Backend chưa publish bản có field này.
     private func copyBillImage() async {
         let snapshot = sortedItems
         let total = snapshot.reduce(0.0) { $0 + $1.conLai }
-        let codes = snapshot.map { BillTextBuilder.buildMaHoaDon($0.id) }
+        let codes = snapshot.map { $0.maHoaDon?.isEmpty == false ? $0.maHoaDon! : BillTextBuilder.buildMaHoaDon($0.id) }
         let codesText: String
         if let first = codes.first, let last = codes.last {
             codesText = first == last ? first : "\(first) DEN \(last)"

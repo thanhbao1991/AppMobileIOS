@@ -53,6 +53,9 @@ struct HoaDonListDto: Decodable, Identifiable {
     let thanhTien: Double
     let conLai: Double
     let tenMonSummary: String?
+    /// "HD" + 8 ký tự đầu Id, tính sẵn bên Backend — dùng ghép nội dung QR khi gộp nhiều đơn
+    /// (xem CongNoListView.copyBillImage), khỏi tự cắt chuỗi id ở client.
+    let maHoaDon: String?
 }
 
 struct ChiTietHoaDonToppingResponseDto: Decodable, Identifiable {
@@ -97,6 +100,9 @@ struct HoaDonDetailDto: Decodable {
     let conLai: Double
     let tongNoKhachHang: Double?
     let maHoaDonNoKhac: [String]?
+    /// Nội dung chuyển khoản QR tính sẵn ("TEN HD1234 DEN HD9999") — Backend build (khớp
+    /// BankQrConfig.BuildAddInfo / HoaDonPrinter Desktop), không tự ghép lại ở client nữa.
+    let billAddInfo: String?
     let chiTietHoaDons: [ChiTietHoaDonResponseDto]?
     let chiTietHoaDonToppings: [ChiTietHoaDonToppingResponseDto]?
     let payments: [HoaDonPaymentBriefDto]?
