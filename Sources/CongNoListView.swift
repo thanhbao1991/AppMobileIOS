@@ -2,16 +2,14 @@ import SwiftUI
 import UIKit
 
 /// Danh sách hoá đơn còn ghi nợ, gọi GET /api/dashboard/cong-no-list (không có tham số ngày —
-/// khác Hoá đơn/Thanh toán/Chi tiêu). Bấm vào phần trên của card mở lại HoaDonDetailView để xem
-/// chi tiết; 2 nút Tiền mặt/Chuyển khoản hiện thẳng dưới card để thu nhanh không cần mở sheet
-/// (đổi từ swipeActions cũ — không rõ ràng, dễ bỏ sót). Cố ý không có nút Xoá (xem lý do ở dưới).
+/// khác Hoá đơn/Thanh toán/Chi tiêu). Bấm vào card mở HoaDonDetailView để xem chi tiết + thu tiền
+/// (đã bỏ 2 nút Tiền mặt/Chuyển khoản thu nhanh trên card — quay lại luồng mở sheet).
 struct CongNoListView: View {
     @State private var items: [HoaDonListDto] = []
     @State private var loading = false
     @State private var hasLoaded = false
     @State private var selectedId: String?
     @State private var searchText = ""
-    @State private var busyId: String?
     @State private var copiedFeedback = false
 
     private var sortedItems: [HoaDonListDto] {
@@ -51,9 +49,7 @@ struct CongNoListView: View {
                             ForEach(sortedItems) { item in
                                 CongNoRowView(
                                     item: item,
-                                    busy: busyId == item.id,
-                                    onSelect: { selectedId = item.id },
-                                    onThu: { isCash in Task { await thu(item, isCash: isCash) } }
+                                    onSelect: { selectedId = item.id }
                                 )
                                 .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                                 .listRowBackground(Color.clear)
@@ -115,18 +111,6 @@ struct CongNoListView: View {
         hasLoaded = true
     }
 
-    private func thu(_ item: HoaDonListDto, isCash: Bool) async {
-        busyId = item.id
-        let result = await APIClient.shared.thuTien(
-            hoaDonId: item.id, isCash: isCash, soTien: item.conLai,
-            ten: item.tenKhachHangText ?? "Khách lẻ", khachHangId: item.khachHangId
-        )
-        busyId = nil
-        if result.success {
-            await load()
-        }
-    }
-
     /// Render toàn bộ danh sách đã lọc (kể cả phần cần cuộn) thành 1 ảnh, copy vào clipboard để dán
     /// thẳng vào khung chat Zalo/Facebook — ImageRenderer (iOS 16+) vẽ ra ngoài màn hình nên không bị
     /// giới hạn bởi viewport như chụp màn hình thường. Kèm 1 mã QR duy nhất cho TỔNG nợ đang lọc
@@ -179,7 +163,7 @@ private struct BillSnapshotView: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(items) { item in
-                CongNoRowView(item: item, busy: false)
+                CongNoRowView(item: item)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                 Divider()
@@ -212,59 +196,31 @@ private struct BillSnapshotView: View {
 
 private struct CongNoRowView: View {
     let item: HoaDonListDto
-    let busy: Bool
     /// Nil trong BillSnapshotView (ảnh render tĩnh để gửi bill — không cần tương tác).
     var onSelect: (() -> Void)? = nil
-    var onThu: ((Bool) -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Rectangle().fill(Color.dangerColor).frame(width: 4)
+        HStack(spacing: 10) {
+            Rectangle().fill(Color.dangerColor).frame(width: 4)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
-                        .font(.subheadline.bold())
-                    if let mon = item.tenMonSummary, !mon.isEmpty {
-                        Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
-                    }
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(HoaDonFormatting.congNoTime(item.ngayNo))
-                        .font(.footnote).foregroundColor(.textMuted)
-                    if busy {
-                        ProgressView()
-                    } else {
-                        Text(HoaDonFormatting.money(item.conLai)).font(.subheadline.bold()).foregroundColor(.dangerColor)
-                    }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
+                    .font(.subheadline.bold())
+                if let mon = item.tenMonSummary, !mon.isEmpty {
+                    Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
                 }
             }
-            .contentShape(Rectangle())
-            .onTapGesture { onSelect?() }
-
-            if let onThu, !busy {
-                HStack(spacing: 8) {
-                    Button {
-                        onThu(true)
-                    } label: {
-                        Label("Tiền mặt", systemImage: "banknote").font(.caption.bold())
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.successColor)
-
-                    Button {
-                        onThu(false)
-                    } label: {
-                        Label("Chuyển khoản", systemImage: "creditcard").font(.caption.bold())
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.brandPrimary)
-                }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(HoaDonFormatting.congNoTime(item.ngayNo))
+                    .font(.footnote).foregroundColor(.textMuted)
+                Text(HoaDonFormatting.money(item.conLai)).font(.subheadline.bold()).foregroundColor(.dangerColor)
             }
         }
         .padding(12)
         .background(Color.dangerColor.pastelBackground())
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect?() }
     }
 }

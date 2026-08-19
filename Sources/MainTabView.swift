@@ -1,54 +1,93 @@
 import SwiftUI
 
-/// 6 tab trên thanh menu: Thống kê + 4 tab dùng hàng ngày (Hoá đơn/Thanh toán/Công nợ/Chi tiêu)
-/// + 1 tab "Menu" gom Công việc/Tài khoản dạng menu — giữ đúng pattern Android dùng khi vượt quá
-/// 5 mục (bottom sheet "Khác"), dù iOS TabView tự tạo "More" tự động cũng được, gom tay vẫn rõ
-/// ràng và dễ kiểm soát hơn để nhiều tab dồn hết vào 1 mục "More" xa lạ với UX iOS quen thuộc.
+/// 6 mục: Thống kê + 4 tab dùng hàng ngày (Hoá đơn/Thanh toán/Công nợ/Chi tiêu) + 1 tab "Menu"
+/// gom Công việc/Tài khoản. Dùng thanh tab TỰ VẼ (không phải SwiftUI `TabView`) vì `TabView` trên
+/// iPhone kế thừa hành vi `UITabBarController`: quá 5 mục sẽ tự gộp mục thứ 5 trở đi vào 1 tab
+/// "More" do hệ thống sinh ra (chỉ hiện 4 icon + "More"), không cách nào tắt được từ SwiftUI. Với
+/// 6 mục cần hiện ĐỦ cùng lúc, phải tự vẽ thanh tab để né giới hạn cứng đó.
 /// Không có tab "Tạo hoá đơn" (bỏ qua theo yêu cầu — làm sau cùng CreatePlus).
-/// `selection` mặc định = 0 (tag của Hoá đơn) dù Thống kê xếp trước về vị trí hiển thị — mở app
-/// luôn vào tab Hoá đơn theo yêu cầu, thứ tự tag không nhất thiết khớp thứ tự hiển thị.
+enum MainTab: CaseIterable {
+    case thongKe, hoaDon, thanhToan, congNo, chiTieu, menu
+
+    var label: String {
+        switch self {
+        case .thongKe: "Thống kê"
+        case .hoaDon: "Hoá đơn"
+        case .thanhToan: "Thanh toán"
+        case .congNo: "Công nợ"
+        case .chiTieu: "Chi tiêu"
+        case .menu: "Menu"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .thongKe: "chart.pie"
+        case .hoaDon: "doc.text"
+        case .thanhToan: "creditcard"
+        case .congNo: "exclamationmark.circle"
+        case .chiTieu: "banknote"
+        case .menu: "ellipsis.circle"
+        }
+    }
+}
+
 struct MainTabView: View {
     @Binding var isLoggedIn: Bool
     @ObservedObject private var activeTab = ActiveTab.shared
-    @State private var selection = 0
+    /// Mặc định Hoá đơn dù Thống kê xếp trước về vị trí hiển thị — mở app luôn vào tab Hoá đơn
+    /// theo yêu cầu, thứ tự khai báo trong MainTab không nhất thiết khớp mục mặc định.
+    @State private var selection: MainTab = .hoaDon
 
     var body: some View {
-        TabView(selection: $selection) {
-            NavigationStack {
-                ThongKeView()
+        VStack(spacing: 0) {
+            Group {
+                switch selection {
+                case .thongKe: NavigationStack { ThongKeView() }
+                case .hoaDon: HoaDonListView()
+                case .thanhToan: ThanhToanListView()
+                case .congNo: CongNoListView()
+                case .chiTieu: ChiTieuListView()
+                case .menu: MoreMenuView(isLoggedIn: $isLoggedIn)
+                }
             }
-                .tabItem { Label("Thống kê", systemImage: "chart.pie") }
-                .tag(5)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            HoaDonListView()
-                .tabItem { Label("Hoá đơn", systemImage: "doc.text") }
-                .tag(0)
-
-            ThanhToanListView()
-                .tabItem { Label("Thanh toán", systemImage: "creditcard") }
-                .tag(1)
-
-            CongNoListView()
-                .tabItem { Label("Công nợ", systemImage: "exclamationmark.circle") }
-                .tag(2)
-
-            ChiTieuListView()
-                .tabItem { Label("Chi tiêu", systemImage: "banknote") }
-                .tag(3)
-
-            MoreMenuView(isLoggedIn: $isLoggedIn)
-                .tabItem { Label("Menu", systemImage: "ellipsis.circle") }
-                .tag(4)
+            Divider()
+            tabBar
         }
         .onChange(of: selection) { newValue in
             switch newValue {
-            case 0: activeTab.tab = .hoaDon
-            case 1: activeTab.tab = .thanhToan
-            case 2: activeTab.tab = .congNo
-            case 3: activeTab.tab = .chiTieu
+            case .hoaDon: activeTab.tab = .hoaDon
+            case .thanhToan: activeTab.tab = .thanhToan
+            case .congNo: activeTab.tab = .congNo
+            case .chiTieu: activeTab.tab = .chiTieu
             default: activeTab.tab = .other
             }
         }
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(MainTab.allCases, id: \.self) { tab in
+                Button {
+                    selection = tab
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 20))
+                        Text(tab.label)
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(selection == tab ? .brandPrimary : .textMuted)
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+        .background(.bar)
     }
 }
 

@@ -28,6 +28,8 @@ struct ThongKeView: View {
 
     var body: some View {
             VStack(spacing: 0) {
+                dateBar
+
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
                 } else {
@@ -38,7 +40,7 @@ struct ThongKeView: View {
                                     AmountRow(label: item.ten, value: item.doanhThu)
                                 }
                             } header: {
-                                TotalHeader(title: "Doanh thu", value: doanhThu.tongDoanhThu)
+                                TotalHeader(icon: "chart.line.uptrend.xyaxis", title: "Doanh thu", value: doanhThu.tongDoanhThu)
                             }
                         }
 
@@ -52,7 +54,7 @@ struct ThongKeView: View {
                                     AmountRow(label: "Kiểm tiền (Nhã - Chi tiêu ngày)", value: kiemTien, color: .dangerColor)
                                 }
                             } header: {
-                                TotalHeader(title: "Thanh toán trong ngày", value: thanhToan.tongTienMat + thanhToan.tongChuyenKhoan)
+                                TotalHeader(icon: "creditcard", title: "Thanh toán trong ngày", value: thanhToan.tongTienMat + thanhToan.tongChuyenKhoan)
                             }
                         }
 
@@ -66,7 +68,7 @@ struct ThongKeView: View {
                                     }
                                 }
                             } header: {
-                                TotalHeader(title: "Chi tiêu ngày", value: chiTieu.chiTieuNgay)
+                                TotalHeader(icon: "banknote", title: "Chi tiêu ngày", value: chiTieu.chiTieuNgay, color: .warningColor)
                             }
                             if !chiTieu.danhSachChiTieuThang.isEmpty {
                                 Section {
@@ -74,7 +76,7 @@ struct ThongKeView: View {
                                         AmountRow(label: item.ten, value: item.soTien)
                                     }
                                 } header: {
-                                    TotalHeader(title: "Chi tiêu bill tháng", value: chiTieu.chiTieuThang)
+                                    TotalHeader(icon: "banknote", title: "Chi tiêu bill tháng", value: chiTieu.chiTieuThang, color: .warningColor)
                                 }
                             }
                         }
@@ -89,7 +91,7 @@ struct ThongKeView: View {
                                     }
                                 }
                             } header: {
-                                TotalHeader(title: "Công nợ mới trong ngày", value: congNo.tongCongNoNgay, color: .dangerColor)
+                                TotalHeader(icon: "exclamationmark.circle", title: "Công nợ mới trong ngày", value: congNo.tongCongNoNgay, color: .dangerColor)
                             }
                         }
 
@@ -106,7 +108,7 @@ struct ThongKeView: View {
                                     }
                                 }
                             } header: {
-                                TotalHeader(title: "Trả nợ trong ngày", value: traNo.tongTraNoTaiQuan + traNo.tongTraNoShipper, color: .successColor)
+                                TotalHeader(icon: "checkmark.circle", title: "Trả nợ trong ngày", value: traNo.tongTraNoTaiQuan + traNo.tongTraNoShipper, color: .successColor)
                             }
                         }
 
@@ -120,7 +122,7 @@ struct ThongKeView: View {
                                     }
                                 }
                             } header: {
-                                TotalHeader(title: "Đơn chưa thanh toán", value: chuaThanhToan.tongChuaThanhToan, color: .warningColor)
+                                TotalHeader(icon: "clock", title: "Đơn chưa thanh toán", value: chuaThanhToan.tongChuaThanhToan, color: .warningColor)
                             }
                         }
 
@@ -130,7 +132,7 @@ struct ThongKeView: View {
                                     AmountRow(label: item.tenKhachHang, value: item.tongConLai)
                                 }
                             } header: {
-                                TotalHeader(title: "Tổng công nợ luỹ kế (mọi thời điểm)", value: tongNo.tongConLai, color: .dangerColor)
+                                TotalHeader(icon: "chart.bar", title: "Tổng công nợ luỹ kế (mọi thời điểm)", value: tongNo.tongConLai, color: .dangerColor)
                             }
                         }
                     }
@@ -138,20 +140,7 @@ struct ThongKeView: View {
                     .refreshable { await load() }
                 }
             }
-            .navigationTitle("Thống kê")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showPicker = true } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "calendar")
-                            Text(DateNavFormat.dayTitle.string(from: currentDate))
-                        }
-                        .font(.subheadline.bold())
-                        .foregroundColor(.brandPrimary)
-                    }
-                }
-            }
+            .navigationBarHidden(true)
             .sheet(isPresented: $showPicker) {
                 NavigationStack {
                     DatePicker("Chọn ngày", selection: $currentDate, displayedComponents: .date)
@@ -172,6 +161,27 @@ struct ThongKeView: View {
                 .presentationDetents([.medium])
             }
             .task { await load() }
+    }
+
+    /// Nút chọn ngày canh TRÁI (không toolbar phía trên nữa vì đã bỏ navigationTitle) — khớp vị
+    /// trí calendar bên trái, trước ô tìm kiếm, như DaySearchBar dùng ở Hoá đơn/Thanh toán/Chi
+    /// tiêu (trang này không có ô tìm kiếm nên chỉ còn lại nút ngày, vẫn giữ canh trái cho đồng bộ).
+    private var dateBar: some View {
+        HStack(spacing: 8) {
+            Button { showPicker = true } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                    Text(DateNavFormat.dayTitle.string(from: currentDate))
+                }
+                .font(.subheadline.bold())
+                .foregroundColor(.brandPrimary)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
     }
 
     private func load() async {
@@ -195,17 +205,28 @@ struct ThongKeView: View {
     }
 }
 
+/// Header mỗi section: icon trong badge tròn màu nhạt + tên mục + tổng tiền nổi bật — thay bản cũ
+/// (chỉ chữ thường + số nhỏ) để dễ quét mắt qua 7 mục và phân biệt mục nào đang "báo động" (đỏ/vàng).
 private struct TotalHeader: View {
+    let icon: String
     let title: String
     let value: Double
     var color: Color = .brandPrimary
 
     var body: some View {
-        HStack {
-            Text(title).textCase(nil)
+        HStack(spacing: 10) {
+            ZStack {
+                Circle().fill(color.opacity(0.15)).frame(width: 26, height: 26)
+                Image(systemName: icon).font(.system(size: 12, weight: .semibold)).foregroundColor(color)
+            }
+            Text(title).textCase(nil).font(.subheadline.weight(.semibold)).foregroundColor(.primary)
             Spacer()
-            Text(HoaDonFormatting.money(value)).font(.footnote.bold()).foregroundColor(color)
+            Text(HoaDonFormatting.money(value))
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(color)
+                .monospacedDigit()
         }
+        .padding(.vertical, 4)
     }
 }
 
@@ -218,15 +239,17 @@ private struct AmountRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(.subheadline)
+                Text(label).font(.subheadline.weight(.medium))
                 if let sub {
                     Text(sub).font(.caption).foregroundColor(.textMuted)
                 }
             }
             Spacer()
             Text(HoaDonFormatting.money(value))
-                .font(.subheadline)
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(color)
+                .monospacedDigit()
         }
+        .padding(.vertical, 2)
     }
 }
