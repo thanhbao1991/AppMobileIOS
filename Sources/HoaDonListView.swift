@@ -63,14 +63,14 @@ struct HoaDonListView: View {
                                 Button {
                                     activeFilter = (activeFilter == filter) ? nil : filter
                                 } label: {
-                                    // Avatar Khánh ở đầu — cả 4 filter này chỉ soi đơn Ship của Khánh
-                                    // (port từ ShipperDuyKhanhAndroid), icon giúp rõ nghĩa ngay trong menu.
+                                    // Số lượng + tên filter ở đầu, avatar Khánh/Nhã ở cuối — đảo vị trí
+                                    // so với trước (avatar từng nằm đầu).
                                     Label {
+                                        ShipperAvatarView(name: filter.avatarName, size: 20)
+                                    } icon: {
                                         // Menu native iOS (UIMenu) không cho custom màu/font trên text item —
                                         // mọi style đều bị hệ thống bỏ qua, nên giữ plain text.
-                                        Text(activeFilter == filter ? "✓ (\(count)) \(filter.label)" : "(\(count)) \(filter.label)")
-                                    } icon: {
-                                        ShipperAvatarView(name: filter.avatarName, size: 20)
+                                        Text(activeFilter == filter ? "✓ \(count) \(filter.label)" : "\(count) \(filter.label)")
                                     }
                                 }
                             }
@@ -559,6 +559,14 @@ private struct AppOrderPickerSheet: View {
                                 HStack {
                                     Text(order.customerName.isEmpty ? order.code : order.customerName)
                                         .font(.subheadline.bold())
+                                    if order.isImported {
+                                        Text("Đã vào hệ thống")
+                                            .font(.caption2.bold())
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6).padding(.vertical, 2)
+                                            .background(Color.successColor)
+                                            .clipShape(Capsule())
+                                    }
                                     Spacer()
                                     Text(HoaDonFormatting.money(order.total))
                                         .font(.subheadline.bold()).foregroundColor(.brandPrimary)
@@ -572,6 +580,7 @@ private struct AppOrderPickerSheet: View {
                                     if fetchingId == order.id { ProgressView().scaleEffect(0.7) }
                                 }
                             }
+                            .opacity(order.isImported ? 0.55 : 1.0)
                         }
                         .disabled(fetchingId != nil)
                     }

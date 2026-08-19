@@ -345,6 +345,8 @@ struct AppOrderSummaryDto: Decodable, Identifiable {
     let note: String
     let total: Double
     let displayTime: String
+    /// Đã có HoaDon nào (MaHoaDon = code, PhanLoai App) trong hệ thống chưa — đơn đã "bắt" rồi.
+    let isImported: Bool
 }
 
 struct AppOrderChiTietToppingDto: Decodable {
