@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 6 mục: Thống kê + 4 tab dùng hàng ngày (Hoá đơn/Thanh toán/Công nợ/Chi tiêu) + 1 tab "Menu"
 /// gom Công việc/Tài khoản. Dùng thanh tab TỰ VẼ (không phải SwiftUI `TabView`) vì `TabView` trên
@@ -43,7 +44,7 @@ struct MainTabView: View {
         VStack(spacing: 0) {
             Group {
                 switch selection {
-                case .thongKe: NavigationStack { ThongKeView() }
+                case .thongKe: ThongKeView()
                 case .hoaDon: HoaDonListView()
                 case .thanhToan: ThanhToanListView()
                 case .congNo: CongNoListView()
@@ -93,6 +94,9 @@ struct MainTabView: View {
 
 private struct MoreMenuView: View {
     @Binding var isLoggedIn: Bool
+    @State private var isSyncingContacts = false
+    @State private var syncResultMessage: String?
+    @State private var showAccessDeniedAlert = false
 
     var body: some View {
         NavigationStack {
@@ -103,6 +107,23 @@ private struct MoreMenuView: View {
                     } label: {
                         Label("Công việc", systemImage: "checklist")
                     }
+                }
+
+                Section {
+                    Button {
+                        Task { await syncContacts() }
+                    } label: {
+                        HStack {
+                            Label("Đồng bộ danh bạ", systemImage: "person.text.rectangle")
+                            Spacer()
+                            if isSyncingContacts {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isSyncingContacts)
+                } footer: {
+                    Text("Đưa tên khách hàng vào Danh bạ iPhone theo số điện thoại, để hiện tên khi khách gọi đến.")
                 }
 
                 Section {
@@ -118,6 +139,36 @@ private struct MoreMenuView: View {
                 }
             }
             .navigationBarHidden(true)
+            .alert("Đồng bộ danh bạ", isPresented: Binding(get: { syncResultMessage != nil }, set: { if !$0 { syncResultMessage = nil } })) {
+                Button("OK") { syncResultMessage = nil }
+            } message: {
+                Text(syncResultMessage ?? "")
+            }
+            .alert("Chưa cấp quyền Danh bạ", isPresented: $showAccessDeniedAlert) {
+                Button("Mở Cài đặt") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("Huỷ", role: .cancel) {}
+            } message: {
+                Text("Vào Cài đặt > ĐENN > Danh bạ để bật quyền truy cập trước khi đồng bộ.")
+            }
+        }
+    }
+
+    private func syncContacts() async {
+        isSyncingContacts = true
+        defer { isSyncingContacts = false }
+
+        let khachHangs = await APIClient.shared.getAllKhachHang()
+        do {
+            let result = try await ContactSyncService.sync(khachHangs: khachHangs)
+            syncResultMessage = result.summary
+        } catch ContactSyncService.SyncError.accessDenied {
+            showAccessDeniedAlert = true
+        } catch {
+            syncResultMessage = "Đồng bộ thất bại: \(error.localizedDescription)"
         }
     }
 }

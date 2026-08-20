@@ -277,6 +277,15 @@ actor APIClient {
         return env.data ?? []
     }
 
+    /// Toàn bộ khách hàng (không lọc) — dùng cho tính năng đồng bộ Danh bạ, take cao để chắc chắn
+    /// lấy hết (GetAllAsync bên backend không có cap cứng, chỉ giới hạn khi truyền take).
+    func getAllKhachHang() async -> [KhachHangDto] {
+        let req = makeRequest("/api/KhachHang?take=100000")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[KhachHangDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
     func searchKhachHang(_ q: String) async -> [KhachHangDto] {
         guard !q.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
         let query = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
