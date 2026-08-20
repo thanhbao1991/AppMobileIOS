@@ -63,15 +63,15 @@ struct HoaDonListView: View {
                                 Button {
                                     activeFilter = (activeFilter == filter) ? nil : filter
                                 } label: {
-                                    // Số lượng + tên filter ở đầu, avatar Khánh/Nhã ở cuối — Label
-                                    // trong Menu native iOS hiện title trước icon (ngược thứ tự bình
-                                    // thường icon-trước-title), nên phải đặt text vào title, avatar vào icon.
+                                    // Avatar Khánh/Nhã ở đầu, số lượng + tên filter ở cuối — Label trong
+                                    // Menu native iOS render title-trước-icon (đã verify thực tế trên máy
+                                    // qua screenshot: closure "title" hiện bên trái, closure "icon" bên phải).
                                     Label {
+                                        ShipperAvatarView(name: filter.avatarName, size: 20)
+                                    } icon: {
                                         // Menu native iOS (UIMenu) không cho custom màu/font trên text item —
                                         // mọi style đều bị hệ thống bỏ qua, nên giữ plain text.
                                         Text(activeFilter == filter ? "✓ \(count) \(filter.label)" : "\(count) \(filter.label)")
-                                    } icon: {
-                                        ShipperAvatarView(name: filter.avatarName, size: 20)
                                     }
                                 }
                             }
