@@ -347,6 +347,8 @@ struct AppOrderSummaryDto: Decodable, Identifiable {
     let displayTime: String
     /// Đã có HoaDon nào (MaHoaDon = code, PhanLoai App) trong hệ thống chưa — đơn đã "bắt" rồi.
     let isImported: Bool
+    /// Tên shipper (driver store) đã nhận đơn — nil nếu đơn chưa có ai nhận.
+    let shipperName: String?
 }
 
 struct AppOrderChiTietToppingDto: Decodable {

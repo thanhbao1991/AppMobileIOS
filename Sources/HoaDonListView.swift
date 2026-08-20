@@ -577,6 +577,9 @@ private struct AppOrderPickerSheet: View {
                                 HStack {
                                     Text(order.displayTime).font(.caption2).foregroundColor(.textMuted)
                                     Spacer()
+                                    if let shipperName = order.shipperName, !shipperName.isEmpty {
+                                        Text(shipperName).font(.caption.bold()).foregroundColor(.brandPrimary)
+                                    }
                                     if fetchingId == order.id { ProgressView().scaleEffect(0.7) }
                                 }
                             }
