@@ -58,17 +58,26 @@ struct HoaDonListView: View {
                         Menu {
                             // Chỉ lọc 1 loại tại 1 thời điểm (không gộp OR nhiều filter như trước) —
                             // chọn lại đúng filter đang bật để tắt, chọn filter khác để thay hẳn.
+                            // Chia 3 cụm theo `group`, chèn Divider giữa mỗi cụm — 4 filter Khánh /
+                            // 2 filter Nhã / 5 filter theo PhanLoai (icon hệ thống thay avatar).
                             ForEach(HoaDonQuickFilter.allCases, id: \.self) { filter in
                                 let count = searchFilteredItems.filter { filter.matches($0) }.count
+                                if filter.isFirstInGroup {
+                                    Divider()
+                                }
                                 Button {
                                     activeFilter = (activeFilter == filter) ? nil : filter
                                 } label: {
                                     // UIMenu KHÔNG chấp nhận view lồng ghép (overlay/ZStack) trong Label —
                                     // đã thử badge overlay trên avatar, hệ thống render sai hẳn (mất chữ tên
-                                    // filter, chỉ còn số). Quay lại 2 view phẳng đơn giản: avatar (title) +
+                                    // filter, chỉ còn số). Quay lại 2 view phẳng đơn giản: avatar/icon (title) +
                                     // text số+tên gộp (icon) — bản duy nhất render đúng đã verify qua screenshot.
                                     Label {
-                                        ShipperAvatarView(name: filter.avatarName, size: 20)
+                                        if let avatarName = filter.avatarName {
+                                            ShipperAvatarView(name: avatarName, size: 20)
+                                        } else if let systemIcon = filter.systemIcon {
+                                            Image(systemName: systemIcon)
+                                        }
                                     } icon: {
                                         // Menu native iOS (UIMenu) không cho custom màu/font trên text item —
                                         // mọi style đều bị hệ thống bỏ qua, nên giữ plain text.
@@ -249,15 +258,35 @@ struct ShipperAvatarView: View {
 }
 
 /// Lọc nhanh trên tab Hoá đơn — chỉ chọn được 1 filter tại 1 thời điểm, nil = không lọc gì. Thứ tự
-/// khai báo = thứ tự hiện trong menu.
+/// khai báo = thứ tự hiện trong menu, chia 3 nhóm cách nhau bằng Divider (xem `group`).
 /// - 4 filter đầu (avatar Khánh) port 1:1 từ ShipperDuyKhanhAndroid (statusOf/HoaDonStatus trong
 ///   HoaDonAdapter.kt + check "trả nợ" riêng trong MainActivity.renderList) — chỉ áp dụng đơn Ship
 ///   của Khánh, đọc tiền tố GhiChuShipper y hệt app đó.
-/// - 2 filter cuối (avatar Nhã) là filter chung của quán (không riêng shipper nào, không port từ
+/// - 2 filter kế (avatar Nhã) là filter chung của quán (không riêng shipper nào, không port từ
 ///   app nào) — dùng ConLai/NgayNo trực tiếp trên HoaDon, khác hẳn logic đọc GhiChuShipper ở trên.
+/// - 5 filter cuối lọc theo PhanLoai (icon hệ thống, không phải avatar) — khớp bộ icon dùng ở
+///   AddHoaDonSheet.categories, để nhân viên lọc nhanh theo loại đơn không cần mở phần thống kê.
 enum HoaDonQuickFilter: CaseIterable, Hashable {
     case tiNuaChuyenKhoan, ghiNo, traNo, chuaChon
     case chuaThanhToan, daGhiNo
+    case taiCho, ship, muaVe, muaHo, app
+
+    /// Nhóm để chèn Divider giữa các cụm filter trong menu — đổi giá trị này thì đổi luôn vị trí
+    /// đường phân cách, không cần sửa view.
+    var group: Int {
+        switch self {
+        case .tiNuaChuyenKhoan, .ghiNo, .traNo, .chuaChon: return 0
+        case .chuaThanhToan, .daGhiNo: return 1
+        case .taiCho, .ship, .muaVe, .muaHo, .app: return 2
+        }
+    }
+
+    /// True cho case đầu tiên của mỗi cụm (group > 0) — dùng để chèn Divider trước case đó trong menu.
+    var isFirstInGroup: Bool {
+        guard group > 0 else { return false }
+        let index = Self.allCases.firstIndex(of: self)!
+        return Self.allCases[Self.allCases.index(before: index)].group != group
+    }
 
     var label: String {
         switch self {
@@ -267,15 +296,45 @@ enum HoaDonQuickFilter: CaseIterable, Hashable {
         case .chuaChon: return "Chưa chọn"
         case .chuaThanhToan: return "Chưa thanh toán"
         case .daGhiNo: return "Đã ghi nợ"
+        case .taiCho: return "Tại chỗ"
+        case .ship: return "Ship"
+        case .muaVe: return "Mua về"
+        case .muaHo: return "Mua hộ"
+        case .app: return "App"
         }
     }
 
     /// Avatar hiện trong menu — 4 filter theo shipper Khánh dùng ảnh Khánh, 2 filter chung quán
     /// dùng ảnh Nhã (chỉ để phân biệt nhóm bằng hình, không có nghĩa 2 filter đó thuộc về Nhã).
-    var avatarName: String {
+    /// nil cho nhóm PhanLoai (dùng `systemIcon` thay avatar).
+    var avatarName: String? {
         switch self {
         case .tiNuaChuyenKhoan, .ghiNo, .traNo, .chuaChon: return "Khánh"
         case .chuaThanhToan, .daGhiNo: return "Nhã"
+        case .taiCho, .ship, .muaVe, .muaHo, .app: return nil
+        }
+    }
+
+    /// Icon hệ thống cho nhóm PhanLoai — khớp bộ icon AddHoaDonSheet.categories để nhất quán trong app.
+    var systemIcon: String? {
+        switch self {
+        case .taiCho: return "cup.and.saucer.fill"
+        case .ship: return "bicycle"
+        case .muaVe: return "bag.fill"
+        case .muaHo: return "hand.raised.fill"
+        case .app: return "app.badge"
+        default: return nil
+        }
+    }
+
+    private var phanLoaiCode: String? {
+        switch self {
+        case .taiCho: return "Tại Chỗ"
+        case .ship: return "Ship"
+        case .muaVe: return "Mv"
+        case .muaHo: return "Mh"
+        case .app: return "App"
+        default: return nil
         }
     }
 
@@ -305,6 +364,8 @@ enum HoaDonQuickFilter: CaseIterable, Hashable {
             return self == .daGhiNo
                 ? item.conLai > 0 && daGhiNoFlag
                 : item.conLai > 0 && !daGhiNoFlag
+        case .taiCho, .ship, .muaVe, .muaHo, .app:
+            return item.phanLoai == phanLoaiCode
         }
     }
 }
