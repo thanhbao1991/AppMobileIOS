@@ -5,7 +5,7 @@ import SwiftUI
 /// không còn liên kết từ navbar web, khả năng lỗi thời). Gọi 7 endpoint /api/ThongKe song song
 /// theo 1 ngày cụ thể (Desktop cũng chỉ lọc theo NGÀY, không có khoảng ngày/tháng riêng — "tháng"
 /// trong 2 field ChiTieuThang/DanhSachChiTieuThang là do BillThang=true, không phải filter khác).
-/// Không có biểu đồ bên Desktop — giữ nguyên dạng danh sách tên + số tiền.
+/// Hiển thị dạng lưới card (chạm vào mới xem chi tiết danh sách) — thay bản cũ liệt kê hết 1 lần.
 struct ThongKeView: View {
     @State private var currentDate = Date()
     @State private var chiTieu: ThongKeChiTieuDto?
@@ -17,7 +17,7 @@ struct ThongKeView: View {
     @State private var tongNo: TongNoDto?
     @State private var loading = false
     @State private var hasLoaded = false
-    @State private var showPicker = false
+    @State private var selectedCard: ThongKeCard?
 
     /// Tiền mặt tại quán trừ chi tiêu ngày — số tiền mặt lẽ ra còn trong ngăn kéo. Port y hệt cách
     /// Desktop tự cộng dồn 2 API (không phải field riêng từ server).
@@ -26,162 +26,54 @@ struct ThongKeView: View {
         return tm - chi
     }
 
+    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+
     var body: some View {
+        NavigationStack {
             VStack(spacing: 0) {
-                dateBar
+                DayDateBar(date: $currentDate) { Task { await load() } }
 
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
                 } else {
-                    List {
-                        if let doanhThu {
-                            Section {
-                                ForEach(doanhThu.danhSach) { item in
-                                    AmountRow(label: item.ten, value: item.doanhThu)
-                                }
-                            } header: {
-                                TotalHeader(icon: "chart.line.uptrend.xyaxis", title: "Doanh thu", value: doanhThu.tongDoanhThu)
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 12) {
+                            if let doanhThu {
+                                StatCard(icon: "chart.line.uptrend.xyaxis", title: "Doanh thu", value: doanhThu.tongDoanhThu, color: .brandPrimary) { selectedCard = .doanhThu }
+                            }
+                            if let thanhToan {
+                                StatCard(icon: "creditcard", title: "Thanh toán trong ngày", value: thanhToan.tongTienMat + thanhToan.tongChuyenKhoan, color: .brandPrimary) { selectedCard = .thanhToan }
+                            }
+                            if let chiTieu {
+                                StatCard(icon: "banknote", title: "Chi tiêu", value: chiTieu.chiTieuNgay + chiTieu.chiTieuThang, color: .warningColor) { selectedCard = .chiTieu }
+                            }
+                            if let congNo {
+                                StatCard(icon: "exclamationmark.circle", title: "Công nợ mới", value: congNo.tongCongNoNgay, color: .dangerColor) { selectedCard = .congNo }
+                            }
+                            if let traNo {
+                                StatCard(icon: "checkmark.circle", title: "Trả nợ trong ngày", value: traNo.tongTraNoTaiQuan + traNo.tongTraNoShipper, color: .successColor) { selectedCard = .traNo }
+                            }
+                            if let chuaThanhToan {
+                                StatCard(icon: "clock", title: "Đơn chưa thanh toán", value: chuaThanhToan.tongChuaThanhToan, color: .warningColor) { selectedCard = .chuaThanhToan }
+                            }
+                            if let tongNo {
+                                StatCard(icon: "chart.bar", title: "Tổng công nợ luỹ kế", value: tongNo.tongConLai, color: .dangerColor) { selectedCard = .tongNo }
                             }
                         }
-
-                        if let thanhToan {
-                            Section {
-                                ForEach(thanhToan.danhSachTienMat) { item in
-                                    AmountRow(label: item.ten, value: item.soTien)
-                                }
-                                AmountRow(label: "Tổng chuyển khoản", value: thanhToan.tongChuyenKhoan)
-                                if let kiemTien {
-                                    AmountRow(label: "Kiểm tiền (Nhã - Chi tiêu ngày)", value: kiemTien, color: .dangerColor)
-                                }
-                            } header: {
-                                TotalHeader(icon: "creditcard", title: "Thanh toán trong ngày", value: thanhToan.tongTienMat + thanhToan.tongChuyenKhoan)
-                            }
-                        }
-
-                        if let chiTieu {
-                            Section {
-                                if chiTieu.danhSachChiTieuNgay.isEmpty {
-                                    Text("Không có chi tiêu ngày").foregroundColor(.textMuted).font(.footnote)
-                                } else {
-                                    ForEach(chiTieu.danhSachChiTieuNgay) { item in
-                                        AmountRow(label: item.ten, value: item.soTien)
-                                    }
-                                }
-                            } header: {
-                                TotalHeader(icon: "banknote", title: "Chi tiêu ngày", value: chiTieu.chiTieuNgay, color: .warningColor)
-                            }
-                            if !chiTieu.danhSachChiTieuThang.isEmpty {
-                                Section {
-                                    ForEach(chiTieu.danhSachChiTieuThang) { item in
-                                        AmountRow(label: item.ten, value: item.soTien)
-                                    }
-                                } header: {
-                                    TotalHeader(icon: "banknote", title: "Chi tiêu bill tháng", value: chiTieu.chiTieuThang, color: .warningColor)
-                                }
-                            }
-                        }
-
-                        if let congNo {
-                            Section {
-                                if congNo.danhSachCongNoNgay.isEmpty {
-                                    Text("Không có công nợ mới").foregroundColor(.textMuted).font(.footnote)
-                                } else {
-                                    ForEach(congNo.danhSachCongNoNgay) { item in
-                                        AmountRow(label: item.tenKhachHang, sub: HoaDonFormatting.time(item.ngayGio), value: item.soTienNo)
-                                    }
-                                }
-                            } header: {
-                                TotalHeader(icon: "exclamationmark.circle", title: "Công nợ mới trong ngày", value: congNo.tongCongNoNgay, color: .dangerColor)
-                            }
-                        }
-
-                        if let traNo {
-                            Section {
-                                if traNo.traNoTaiQuan.isEmpty && traNo.traNoShipper.isEmpty {
-                                    Text("Không có khách trả nợ").foregroundColor(.textMuted).font(.footnote)
-                                } else {
-                                    ForEach(traNo.traNoTaiQuan) { item in
-                                        AmountRow(label: item.tenKhachHang, sub: "Tại quán", value: item.soTien)
-                                    }
-                                    ForEach(traNo.traNoShipper) { item in
-                                        AmountRow(label: item.tenKhachHang, sub: "Qua shipper", value: item.soTien)
-                                    }
-                                }
-                            } header: {
-                                TotalHeader(icon: "checkmark.circle", title: "Trả nợ trong ngày", value: traNo.tongTraNoTaiQuan + traNo.tongTraNoShipper, color: .successColor)
-                            }
-                        }
-
-                        if let chuaThanhToan {
-                            Section {
-                                if chuaThanhToan.danhSach.isEmpty {
-                                    Text("Không có đơn treo").foregroundColor(.textMuted).font(.footnote)
-                                } else {
-                                    ForEach(chuaThanhToan.danhSach) { item in
-                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
-                                    }
-                                }
-                            } header: {
-                                TotalHeader(icon: "clock", title: "Đơn chưa thanh toán", value: chuaThanhToan.tongChuaThanhToan, color: .warningColor)
-                            }
-                        }
-
-                        if let tongNo {
-                            Section {
-                                ForEach(tongNo.danhSach) { item in
-                                    AmountRow(label: item.tenKhachHang, value: item.tongConLai)
-                                }
-                            } header: {
-                                TotalHeader(icon: "chart.bar", title: "Tổng công nợ luỹ kế (mọi thời điểm)", value: tongNo.tongConLai, color: .dangerColor)
-                            }
-                        }
+                        .padding(12)
                     }
-                    .listStyle(.insetGrouped)
                     .refreshable { await load() }
                 }
             }
-            .navigationBarHidden(true)
-            .sheet(isPresented: $showPicker) {
-                NavigationStack {
-                    DatePicker("Chọn ngày", selection: $currentDate, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                        .labelsHidden()
-                        .padding()
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Xong") {
-                                    showPicker = false
-                                    Task { await load() }
-                                }
-                            }
-                        }
-                    Spacer()
-                }
-                .presentationDetents([.medium])
-            }
-            .task { await load() }
-    }
-
-    /// Nút chọn ngày canh TRÁI (không toolbar phía trên nữa vì đã bỏ navigationTitle) — khớp vị
-    /// trí calendar bên trái, trước ô tìm kiếm, như DaySearchBar dùng ở Hoá đơn/Thanh toán/Chi
-    /// tiêu (trang này không có ô tìm kiếm nên chỉ còn lại nút ngày, vẫn giữ canh trái cho đồng bộ).
-    private var dateBar: some View {
-        HStack(spacing: 8) {
-            Button { showPicker = true } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "calendar")
-                    Text(DateNavFormat.dayTitle.string(from: currentDate))
-                }
-                .font(.subheadline.bold())
-                .foregroundColor(.brandPrimary)
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .sheet(item: $selectedCard) { card in
+            ThongKeDetailSheet(
+                card: card, chiTieu: chiTieu, congNo: congNo, thanhToan: thanhToan,
+                doanhThu: doanhThu, traNo: traNo, chuaThanhToan: chuaThanhToan, tongNo: tongNo,
+                kiemTien: kiemTien
+            )
+        }
+        .task { await load() }
     }
 
     private func load() async {
@@ -205,8 +97,194 @@ struct ThongKeView: View {
     }
 }
 
-/// Header mỗi section: icon trong badge tròn màu nhạt + tên mục + tổng tiền nổi bật — thay bản cũ
-/// (chỉ chữ thường + số nhỏ) để dễ quét mắt qua 7 mục và phân biệt mục nào đang "báo động" (đỏ/vàng).
+private enum ThongKeCard: String, Identifiable {
+    case doanhThu, thanhToan, chiTieu, congNo, traNo, chuaThanhToan, tongNo
+    var id: String { rawValue }
+}
+
+/// Card tổng quan mỗi mục — cùng phong cách bo góc 14 + nền màu nhạt như HoaDonRowView/nút "+" của
+/// tab Hoá đơn, chạm vào mới mở sheet xem chi tiết (thay vì liệt kê hết ngay trên màn hình chính).
+private struct StatCard: View {
+    let icon: String
+    let title: String
+    let value: Double
+    var color: Color = .brandPrimary
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack {
+                    Circle().fill(color.opacity(0.15)).frame(width: 32, height: 32)
+                    Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundColor(color)
+                }
+                Text(title)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Text(HoaDonFormatting.money(value))
+                    .font(.subheadline.bold())
+                    .foregroundColor(color)
+                    .monospacedDigit()
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 110, alignment: .topLeading)
+            .background(color.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ThongKeDetailSheet: View {
+    let card: ThongKeCard
+    let chiTieu: ThongKeChiTieuDto?
+    let congNo: ThongKeCongNoDto?
+    let thanhToan: ThongKeThanhToanDto?
+    let doanhThu: ThongKeDoanhThuNgayDto?
+    let traNo: ThongKeTraNoNgayDto?
+    let chuaThanhToan: ThongKeDonChuaThanhToanDto?
+    let tongNo: TongNoDto?
+    let kiemTien: Double?
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var title: String {
+        switch card {
+        case .doanhThu: return "Doanh thu"
+        case .thanhToan: return "Thanh toán trong ngày"
+        case .chiTieu: return "Chi tiêu"
+        case .congNo: return "Công nợ mới trong ngày"
+        case .traNo: return "Trả nợ trong ngày"
+        case .chuaThanhToan: return "Đơn chưa thanh toán"
+        case .tongNo: return "Tổng công nợ luỹ kế (mọi thời điểm)"
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                switch card {
+                case .doanhThu:
+                    if let doanhThu {
+                        Section {
+                            ForEach(doanhThu.danhSach) { item in
+                                AmountRow(label: item.ten, value: item.doanhThu)
+                            }
+                        } header: {
+                            TotalHeader(icon: "chart.line.uptrend.xyaxis", title: "Tổng doanh thu", value: doanhThu.tongDoanhThu)
+                        }
+                    }
+                case .thanhToan:
+                    if let thanhToan {
+                        Section {
+                            ForEach(thanhToan.danhSachTienMat) { item in
+                                AmountRow(label: item.ten, value: item.soTien)
+                            }
+                            AmountRow(label: "Tổng chuyển khoản", value: thanhToan.tongChuyenKhoan)
+                            if let kiemTien {
+                                AmountRow(label: "Kiểm tiền (Nhã - Chi tiêu ngày)", value: kiemTien, color: .dangerColor)
+                            }
+                        } header: {
+                            TotalHeader(icon: "creditcard", title: "Tổng thanh toán", value: thanhToan.tongTienMat + thanhToan.tongChuyenKhoan)
+                        }
+                    }
+                case .chiTieu:
+                    if let chiTieu {
+                        Section {
+                            if chiTieu.danhSachChiTieuNgay.isEmpty {
+                                Text("Không có chi tiêu ngày").foregroundColor(.textMuted).font(.footnote)
+                            } else {
+                                ForEach(chiTieu.danhSachChiTieuNgay) { item in
+                                    AmountRow(label: item.ten, value: item.soTien)
+                                }
+                            }
+                        } header: {
+                            TotalHeader(icon: "banknote", title: "Chi tiêu ngày", value: chiTieu.chiTieuNgay, color: .warningColor)
+                        }
+                        if !chiTieu.danhSachChiTieuThang.isEmpty {
+                            Section {
+                                ForEach(chiTieu.danhSachChiTieuThang) { item in
+                                    AmountRow(label: item.ten, value: item.soTien)
+                                }
+                            } header: {
+                                TotalHeader(icon: "banknote", title: "Chi tiêu bill tháng", value: chiTieu.chiTieuThang, color: .warningColor)
+                            }
+                        }
+                    }
+                case .congNo:
+                    if let congNo {
+                        Section {
+                            if congNo.danhSachCongNoNgay.isEmpty {
+                                Text("Không có công nợ mới").foregroundColor(.textMuted).font(.footnote)
+                            } else {
+                                ForEach(congNo.danhSachCongNoNgay) { item in
+                                    AmountRow(label: item.tenKhachHang, sub: HoaDonFormatting.time(item.ngayGio), value: item.soTienNo)
+                                }
+                            }
+                        } header: {
+                            TotalHeader(icon: "exclamationmark.circle", title: "Tổng công nợ mới", value: congNo.tongCongNoNgay, color: .dangerColor)
+                        }
+                    }
+                case .traNo:
+                    if let traNo {
+                        Section {
+                            if traNo.traNoTaiQuan.isEmpty && traNo.traNoShipper.isEmpty {
+                                Text("Không có khách trả nợ").foregroundColor(.textMuted).font(.footnote)
+                            } else {
+                                ForEach(traNo.traNoTaiQuan) { item in
+                                    AmountRow(label: item.tenKhachHang, sub: "Tại quán", value: item.soTien)
+                                }
+                                ForEach(traNo.traNoShipper) { item in
+                                    AmountRow(label: item.tenKhachHang, sub: "Qua shipper", value: item.soTien)
+                                }
+                            }
+                        } header: {
+                            TotalHeader(icon: "checkmark.circle", title: "Tổng trả nợ", value: traNo.tongTraNoTaiQuan + traNo.tongTraNoShipper, color: .successColor)
+                        }
+                    }
+                case .chuaThanhToan:
+                    if let chuaThanhToan {
+                        Section {
+                            if chuaThanhToan.danhSach.isEmpty {
+                                Text("Không có đơn treo").foregroundColor(.textMuted).font(.footnote)
+                            } else {
+                                ForEach(chuaThanhToan.danhSach) { item in
+                                    AmountRow(label: item.tenKhachHang, value: item.soTien)
+                                }
+                            }
+                        } header: {
+                            TotalHeader(icon: "clock", title: "Tổng chưa thanh toán", value: chuaThanhToan.tongChuaThanhToan, color: .warningColor)
+                        }
+                    }
+                case .tongNo:
+                    if let tongNo {
+                        Section {
+                            ForEach(tongNo.danhSach) { item in
+                                AmountRow(label: item.tenKhachHang, value: item.tongConLai)
+                            }
+                        } header: {
+                            TotalHeader(icon: "chart.bar", title: "Tổng công nợ luỹ kế", value: tongNo.tongConLai, color: .dangerColor)
+                        }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Xong") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+}
+
+/// Header mỗi section: icon trong badge tròn màu nhạt + tên mục + tổng tiền nổi bật.
 private struct TotalHeader: View {
     let icon: String
     let title: String
