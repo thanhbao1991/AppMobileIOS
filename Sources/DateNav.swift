@@ -68,13 +68,11 @@ struct DaySearchBar: View {
                     .labelsHidden()
                     .padding()
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Xong") {
-                                showPicker = false
-                                onChange()
-                            }
-                        }
+                    // Chọn ngày (tap vào 1 ô) là đóng luôn, không cần bấm "Xong" nữa — chỉ đổi
+                    // tháng/năm hiển thị trong lịch không kích hoạt vì chưa đổi giá trị `date`.
+                    .onChange(of: date) { _, _ in
+                        showPicker = false
+                        onChange()
                     }
                 Spacer()
             }
@@ -113,13 +111,9 @@ struct DayDateBar: View {
                     .labelsHidden()
                     .padding()
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Xong") {
-                                showPicker = false
-                                onChange()
-                            }
-                        }
+                    .onChange(of: date) { _, _ in
+                        showPicker = false
+                        onChange()
                     }
                 Spacer()
             }
