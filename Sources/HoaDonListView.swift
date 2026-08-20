@@ -63,15 +63,25 @@ struct HoaDonListView: View {
                                 Button {
                                     activeFilter = (activeFilter == filter) ? nil : filter
                                 } label: {
-                                    // Avatar Khánh/Nhã ở đầu, số lượng + tên filter ở cuối — Label trong
-                                    // Menu native iOS render title-trước-icon (đã verify thực tế trên máy
-                                    // qua screenshot: closure "title" hiện bên trái, closure "icon" bên phải).
+                                    // Avatar (kèm badge số góc trên-phải) ở đầu, tên filter ở cuối — UIMenu
+                                    // không cho cột số riêng bên phải dòng, nên gộp số vào badge trên avatar
+                                    // thay vì đặt cạnh chữ. Label render title-trước-icon (verify qua screenshot).
                                     Label {
                                         ShipperAvatarView(name: filter.avatarName, size: 20)
+                                            .overlay(alignment: .topTrailing) {
+                                                Text("\(count)")
+                                                    .font(.caption2.bold())
+                                                    .foregroundColor(.white)
+                                                    .padding(3)
+                                                    .frame(minWidth: 15, minHeight: 15)
+                                                    .background(Color.brandPrimary)
+                                                    .clipShape(Circle())
+                                                    .offset(x: 5, y: -5)
+                                            }
                                     } icon: {
                                         // Menu native iOS (UIMenu) không cho custom màu/font trên text item —
                                         // mọi style đều bị hệ thống bỏ qua, nên giữ plain text.
-                                        Text(activeFilter == filter ? "✓ \(count) \(filter.label)" : "\(count) \(filter.label)")
+                                        Text(activeFilter == filter ? "✓ \(filter.label)" : filter.label)
                                     }
                                 }
                             }
