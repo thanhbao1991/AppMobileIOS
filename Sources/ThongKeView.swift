@@ -5,6 +5,8 @@ import SwiftUI
 /// không còn liên kết từ navbar web, khả năng lỗi thời). Gọi 7 endpoint /api/ThongKe song song
 /// theo 1 ngày cụ thể (Desktop cũng chỉ lọc theo NGÀY, không có khoảng ngày/tháng riêng — "tháng"
 /// trong 2 field ChiTieuThang/DanhSachChiTieuThang là do BillThang=true, không phải filter khác).
+/// Thứ tự card, tên card, tên mục con và màu đều khớp Y HỆT thứ tự WrapPanel + màu AddRow() bên
+/// ThongKeTabControl.xaml(.cs) (Desktop) — không tự sáng tác lại.
 /// Hiển thị dạng danh sách card — chạm vào 1 card để mở rộng NGAY TẠI CHỖ xem chi tiết (accordion),
 /// không dùng sheet — nhiều card có thể mở cùng lúc để dễ so sánh.
 struct ThongKeView: View {
@@ -37,8 +39,25 @@ struct ThongKeView: View {
                 } else {
                     ScrollView {
                         VStack(spacing: 10) {
+                            // Thứ tự Y HỆT WrapPanel Desktop: Thanh toán, Doanh thu, Công nợ,
+                            // Khách trả nợ, Chi tiêu, Chưa thanh toán, Tổng nợ.
+                            if let thanhToan {
+                                StatCard(icon: "creditcard", title: "Thanh toán", value: thanhToan.tongTienMat + thanhToan.tongChuyenKhoan, color: .thongKeBlue, isExpanded: expandedCards.contains(.thanhToan)) {
+                                    toggle(.thanhToan)
+                                } content: {
+                                    ForEach(thanhToan.danhSachTienMat) { item in
+                                        AmountRow(label: item.ten, value: item.soTien)
+                                    }
+                                    if thanhToan.tongChuyenKhoan > 0 {
+                                        AmountRow(label: "Chuyển khoản", value: thanhToan.tongChuyenKhoan)
+                                    }
+                                    if let kiemTien {
+                                        AmountRow(label: "Kiểm tiền", value: kiemTien, color: .thongKeBlue)
+                                    }
+                                }
+                            }
                             if let doanhThu {
-                                StatCard(icon: "chart.line.uptrend.xyaxis", title: "Doanh thu", value: doanhThu.tongDoanhThu, color: .brandPrimary, isExpanded: expandedCards.contains(.doanhThu)) {
+                                StatCard(icon: "chart.line.uptrend.xyaxis", title: "Doanh thu", value: doanhThu.tongDoanhThu, color: .thongKeGreen, isExpanded: expandedCards.contains(.doanhThu)) {
                                     toggle(.doanhThu)
                                 } content: {
                                     ForEach(doanhThu.danhSach) { item in
@@ -46,79 +65,54 @@ struct ThongKeView: View {
                                     }
                                 }
                             }
-                            if let thanhToan {
-                                StatCard(icon: "creditcard", title: "Thanh toán trong ngày", value: thanhToan.tongTienMat + thanhToan.tongChuyenKhoan, color: .brandPrimary, isExpanded: expandedCards.contains(.thanhToan)) {
-                                    toggle(.thanhToan)
-                                } content: {
-                                    ForEach(thanhToan.danhSachTienMat) { item in
-                                        AmountRow(label: item.ten, value: item.soTien)
-                                    }
-                                    AmountRow(label: "Tổng chuyển khoản", value: thanhToan.tongChuyenKhoan)
-                                    if let kiemTien {
-                                        AmountRow(label: "Kiểm tiền (Nhã - Chi tiêu ngày)", value: kiemTien, color: .dangerColor)
-                                    }
-                                }
-                            }
-                            if let chiTieu {
-                                StatCard(icon: "banknote", title: "Chi tiêu", value: chiTieu.chiTieuNgay + chiTieu.chiTieuThang, color: .warningColor, isExpanded: expandedCards.contains(.chiTieu)) {
-                                    toggle(.chiTieu)
-                                } content: {
-                                    if chiTieu.danhSachChiTieuNgay.isEmpty && chiTieu.danhSachChiTieuThang.isEmpty {
-                                        Text("Không có chi tiêu").foregroundColor(.textMuted).font(.footnote)
-                                    } else {
-                                        ForEach(chiTieu.danhSachChiTieuNgay) { item in
-                                            AmountRow(label: item.ten, value: item.soTien)
-                                        }
-                                        ForEach(chiTieu.danhSachChiTieuThang) { item in
-                                            AmountRow(label: item.ten, sub: "Bill tháng", value: item.soTien)
-                                        }
-                                    }
-                                }
-                            }
                             if let congNo {
-                                StatCard(icon: "exclamationmark.circle", title: "Công nợ mới", value: congNo.tongCongNoNgay, color: .dangerColor, isExpanded: expandedCards.contains(.congNo)) {
+                                StatCard(icon: "exclamationmark.circle", title: "Công nợ", value: congNo.tongCongNoNgay, color: .thongKeBrown, isExpanded: expandedCards.contains(.congNo)) {
                                     toggle(.congNo)
                                 } content: {
-                                    if congNo.danhSachCongNoNgay.isEmpty {
-                                        Text("Không có công nợ mới").foregroundColor(.textMuted).font(.footnote)
-                                    } else {
-                                        ForEach(congNo.danhSachCongNoNgay) { item in
-                                            AmountRow(label: item.tenKhachHang, sub: HoaDonFormatting.time(item.ngayGio), value: item.soTienNo)
-                                        }
+                                    ForEach(congNo.danhSachCongNoNgay) { item in
+                                        AmountRow(label: item.tenKhachHang, sub: HoaDonFormatting.time(item.ngayGio), value: item.soTienNo)
                                     }
                                 }
                             }
                             if let traNo {
-                                StatCard(icon: "checkmark.circle", title: "Trả nợ trong ngày", value: traNo.tongTraNoTaiQuan + traNo.tongTraNoShipper, color: .successColor, isExpanded: expandedCards.contains(.traNo)) {
+                                StatCard(icon: "checkmark.circle", title: "Khách trả nợ", value: traNo.tongTraNoTaiQuan + traNo.tongTraNoShipper, color: .thongKePurple, isExpanded: expandedCards.contains(.traNo)) {
                                     toggle(.traNo)
                                 } content: {
-                                    if traNo.traNoTaiQuan.isEmpty && traNo.traNoShipper.isEmpty {
-                                        Text("Không có khách trả nợ").foregroundColor(.textMuted).font(.footnote)
-                                    } else {
-                                        ForEach(traNo.traNoTaiQuan) { item in
-                                            AmountRow(label: item.tenKhachHang, sub: "Tại quán", value: item.soTien)
-                                        }
-                                        ForEach(traNo.traNoShipper) { item in
-                                            AmountRow(label: item.tenKhachHang, sub: "Qua shipper", value: item.soTien)
-                                        }
+                                    SubTotalRow(label: "Trả nợ tại quán", value: traNo.tongTraNoTaiQuan, color: .thongKePurple)
+                                    ForEach(traNo.traNoTaiQuan) { item in
+                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
+                                    }
+                                    SubTotalRow(label: "Trả nợ shipper", value: traNo.tongTraNoShipper, color: .thongKePurple)
+                                    ForEach(traNo.traNoShipper) { item in
+                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
+                                    }
+                                }
+                            }
+                            if let chiTieu {
+                                StatCard(icon: "banknote", title: "Chi tiêu", value: chiTieu.chiTieuNgay + chiTieu.chiTieuThang, color: .thongKeRed, isExpanded: expandedCards.contains(.chiTieu)) {
+                                    toggle(.chiTieu)
+                                } content: {
+                                    SubTotalRow(label: "Chi tiêu ngày", value: chiTieu.chiTieuNgay, color: .thongKeRed)
+                                    ForEach(chiTieu.danhSachChiTieuNgay) { item in
+                                        AmountRow(label: item.ten, value: item.soTien)
+                                    }
+                                    SubTotalRow(label: "Chi tiêu tháng", value: chiTieu.chiTieuThang, color: .thongKeRed)
+                                    ForEach(chiTieu.danhSachChiTieuThang) { item in
+                                        AmountRow(label: item.ten, value: item.soTien)
                                     }
                                 }
                             }
                             if let chuaThanhToan {
-                                StatCard(icon: "clock", title: "Đơn chưa thanh toán", value: chuaThanhToan.tongChuaThanhToan, color: .warningColor, isExpanded: expandedCards.contains(.chuaThanhToan)) {
+                                StatCard(icon: "clock", title: "Chưa thanh toán", value: chuaThanhToan.tongChuaThanhToan, color: .thongKeTeal, isExpanded: expandedCards.contains(.chuaThanhToan)) {
                                     toggle(.chuaThanhToan)
                                 } content: {
-                                    if chuaThanhToan.danhSach.isEmpty {
-                                        Text("Không có đơn treo").foregroundColor(.textMuted).font(.footnote)
-                                    } else {
-                                        ForEach(chuaThanhToan.danhSach) { item in
-                                            AmountRow(label: item.tenKhachHang, value: item.soTien)
-                                        }
+                                    ForEach(chuaThanhToan.danhSach) { item in
+                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
                                     }
                                 }
                             }
                             if let tongNo {
-                                StatCard(icon: "chart.bar", title: "Tổng công nợ luỹ kế", value: tongNo.tongConLai, color: .dangerColor, isExpanded: expandedCards.contains(.tongNo)) {
+                                StatCard(icon: "chart.bar", title: "Tổng nợ", value: tongNo.tongConLai, color: .thongKeOrange, isExpanded: expandedCards.contains(.tongNo)) {
                                     toggle(.tongNo)
                                 } content: {
                                     ForEach(tongNo.danhSach) { item in
@@ -168,7 +162,20 @@ struct ThongKeView: View {
 }
 
 private enum ThongKeCard: Hashable {
-    case doanhThu, thanhToan, chiTieu, congNo, traNo, chuaThanhToan, tongNo
+    case thanhToan, doanhThu, congNo, traNo, chiTieu, chuaThanhToan, tongNo
+}
+
+/// Màu mỗi card lấy Y HỆT hex dùng trong AddRow() của ThongKeTabControl.xaml.cs (Desktop) — không
+/// dùng warningColor (vàng) cho card nào, tránh Chi tiêu/Chưa thanh toán trùng màu "cảnh báo" gây
+/// hiểu nhầm mức độ nghiêm trọng như nhau.
+private extension Color {
+    static let thongKeBlue = Color(red: 0x0B / 255, green: 0x61 / 255, blue: 0xD6 / 255)
+    static let thongKeGreen = Color(red: 0x0F / 255, green: 0x51 / 255, blue: 0x32 / 255)
+    static let thongKeBrown = Color(red: 0x97 / 255, green: 0x4A / 255, blue: 0x05 / 255)
+    static let thongKePurple = Color(red: 0x6D / 255, green: 0x28 / 255, blue: 0xD9 / 255)
+    static let thongKeRed = Color(red: 0xDC / 255, green: 0x26 / 255, blue: 0x26 / 255)
+    static let thongKeTeal = Color(red: 0x03 / 255, green: 0x69 / 255, blue: 0xA1 / 255)
+    static let thongKeOrange = Color(red: 0xF9 / 255, green: 0x73 / 255, blue: 0x16 / 255)
 }
 
 /// Card tổng quan mỗi mục — cùng phong cách bo góc 14 + nền màu nhạt như HoaDonRowView/nút "+" của
@@ -222,6 +229,27 @@ private struct StatCard<Content: View>: View {
         }
         .background(color.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+/// Hàng tổng phụ (vd "Chi tiêu ngày"/"Chi tiêu tháng", "Trả nợ tại quán"/"Trả nợ shipper") — khớp
+/// các dòng bold "CHI TIÊU NGÀY"/"TRẢ NỢ TẠI QUÁN"... trong AddRow() Desktop, đứng trước danh sách
+/// item con của nhóm đó.
+private struct SubTotalRow: View {
+    let label: String
+    let value: Double
+    var color: Color = .primary
+
+    var body: some View {
+        HStack {
+            Text(label).font(.footnote.weight(.bold)).foregroundColor(.secondary)
+            Spacer()
+            Text(HoaDonFormatting.money(value))
+                .font(.footnote.weight(.bold))
+                .foregroundColor(color)
+                .monospacedDigit()
+        }
+        .padding(.top, 4)
     }
 }
 
