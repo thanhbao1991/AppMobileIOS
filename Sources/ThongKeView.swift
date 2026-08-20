@@ -70,7 +70,7 @@ struct ThongKeView: View {
                                     toggle(.congNo)
                                 } content: {
                                     ForEach(congNo.danhSachCongNoNgay) { item in
-                                        AmountRow(label: item.tenKhachHang, sub: HoaDonFormatting.time(item.ngayGio), value: item.soTienNo)
+                                        AmountRow(label: item.tenKhachHang, value: item.soTienNo)
                                     }
                                 }
                             }
