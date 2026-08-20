@@ -326,7 +326,7 @@ struct HoaDonCreateFormView: View {
     private var newKhachForm: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Tên khách", text: $newKhachTen).textFieldStyle(.roundedBorder)
-            TextField("Số điện thoại", text: $newKhachSdt).textFieldStyle(.roundedBorder).keyboardType(.phonePad)
+            TextField("Số điện thoại (không bắt buộc)", text: $newKhachSdt).textFieldStyle(.roundedBorder).keyboardType(.phonePad)
             TextField("Địa chỉ", text: $newKhachDiaChi).textFieldStyle(.roundedBorder)
             Toggle("Được tích điểm/voucher", isOn: $newKhachVoucher).font(.caption)
             if let newKhachError {
@@ -609,14 +609,15 @@ struct HoaDonCreateFormView: View {
         let sdtVal = newKhachSdt.trimmingCharacters(in: .whitespaces)
         let diaChiVal = newKhachDiaChi.trimmingCharacters(in: .whitespaces)
         guard !ten.isEmpty else { newKhachError = "Vui lòng nhập tên khách."; return }
-        guard !sdtVal.isEmpty else { newKhachError = "Vui lòng nhập số điện thoại."; return }
         guard !diaChiVal.isEmpty else { newKhachError = "Vui lòng nhập địa chỉ."; return }
 
         newKhachSaving = true
         newKhachError = nil
+        // Khách không cho SĐT thì để trống hẳn (server chấp nhận Phones rỗng) — không ép nhập
+        // đại số giả để qua validate. Nếu CÓ nhập, server sẽ tự chặn nếu sai định dạng.
         let body = KhachHangCreateRequest(
             ten: ten, duocNhanVoucher: newKhachVoucher,
-            phones: [KhachHangPhoneDto(soDienThoai: sdtVal, isDefault: true)],
+            phones: sdtVal.isEmpty ? [] : [KhachHangPhoneDto(soDienThoai: sdtVal, isDefault: true)],
             addresses: [KhachHangAddressDto(diaChi: diaChiVal, isDefault: true)]
         )
         let result = await APIClient.shared.createKhachHang(body)
