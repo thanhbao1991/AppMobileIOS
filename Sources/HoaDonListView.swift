@@ -63,25 +63,16 @@ struct HoaDonListView: View {
                                 Button {
                                     activeFilter = (activeFilter == filter) ? nil : filter
                                 } label: {
-                                    // Avatar (kèm badge số góc trên-phải) ở đầu, tên filter ở cuối — UIMenu
-                                    // không cho cột số riêng bên phải dòng, nên gộp số vào badge trên avatar
-                                    // thay vì đặt cạnh chữ. Label render title-trước-icon (verify qua screenshot).
+                                    // UIMenu KHÔNG chấp nhận view lồng ghép (overlay/ZStack) trong Label —
+                                    // đã thử badge overlay trên avatar, hệ thống render sai hẳn (mất chữ tên
+                                    // filter, chỉ còn số). Quay lại 2 view phẳng đơn giản: avatar (title) +
+                                    // text số+tên gộp (icon) — bản duy nhất render đúng đã verify qua screenshot.
                                     Label {
                                         ShipperAvatarView(name: filter.avatarName, size: 20)
-                                            .overlay(alignment: .topTrailing) {
-                                                Text("\(count)")
-                                                    .font(.caption2.bold())
-                                                    .foregroundColor(.white)
-                                                    .padding(3)
-                                                    .frame(minWidth: 15, minHeight: 15)
-                                                    .background(Color.brandPrimary)
-                                                    .clipShape(Circle())
-                                                    .offset(x: 5, y: -5)
-                                            }
                                     } icon: {
                                         // Menu native iOS (UIMenu) không cho custom màu/font trên text item —
                                         // mọi style đều bị hệ thống bỏ qua, nên giữ plain text.
-                                        Text(activeFilter == filter ? "✓ \(filter.label)" : filter.label)
+                                        Text(activeFilter == filter ? "✓ \(count) \(filter.label)" : "\(count) \(filter.label)")
                                     }
                                 }
                             }
