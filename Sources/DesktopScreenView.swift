@@ -10,9 +10,11 @@ struct DesktopScreenView: View {
     let label: String
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var currentDesktopId: String = ""
     @State private var image: UIImage?
     @State private var disconnected = false
+    @State private var isReconnecting = false
     @State private var pollTask: Task<Void, Never>?
 
     @State private var scale: CGFloat = 1
@@ -50,6 +52,19 @@ struct DesktopScreenView: View {
                 }
                 Spacer()
             }
+
+            // App bị hạ xuống nền một lúc rồi mở lại trong lúc vẫn ở màn hình này — poll/kết nối
+            // SignalR đã treo/rớt trong lúc đó, ảnh cũ vẫn còn hiện nên cần báo rõ đang nối lại,
+            // tránh người dùng tưởng app bị đơ.
+            if isReconnecting {
+                VStack(spacing: 8) {
+                    ProgressView().tint(.white)
+                    Text("Đang kết nối lại...")
+                        .foregroundStyle(.white)
+                }
+                .padding(20)
+                .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+            }
         }
         .statusBarHidden(true)
         .navigationBarHidden(true)
@@ -60,6 +75,9 @@ struct DesktopScreenView: View {
         .onDisappear {
             pollTask?.cancel()
             Task { await SignalRClient.shared.setScreenshotHandler(nil) }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active { isReconnecting = true }
         }
     }
 
@@ -93,6 +111,7 @@ struct DesktopScreenView: View {
                     _ = try await SignalRClient.shared.invoke("RequestDesktopScreenshot", args: [currentDesktopId])
                     consecutiveFailures = 0
                     disconnected = false
+                    isReconnecting = false
                 } catch {
                     // connectionId có thể đổi giữa lúc chọn máy (DesktopPickerView) và lúc poll —
                     // reconnect mạng/IIS làm Desktop tự đăng ký lại với id mới. Thử tự tìm lại theo
@@ -114,6 +133,7 @@ struct DesktopScreenView: View {
                 if let uiImage = UIImage(data: data) {
                     image = uiImage
                     disconnected = false
+                    isReconnecting = false
                 }
             }
         }
