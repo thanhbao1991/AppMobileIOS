@@ -6,7 +6,8 @@ import UIKit
 /// không phải video thật — đủ để canh máy đang chạy gì. Giữ nguyên chiều dọc (không tự xoay ngang);
 /// 2 ngón để zoom, 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát. Mặc định phóng to
 /// theo chiều cao chiếm hết khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên trái/phải
-/// bị crop, kéo 1 ngón để xem phần bị crop.
+/// bị crop, kéo 1 ngón để xem phần bị crop. Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên
+/// Desktop (SendClick → ClickRequested, Desktop tự raise routed event, không qua OS input).
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -30,14 +31,23 @@ struct DesktopScreenView: View {
 
             if let image {
                 GeometryReader { geo in
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .scaleEffect(scale)
-                        .offset(offset)
-                        .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size))
-                            .simultaneously(with: zoomGesture))
+                    ZStack {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .scaleEffect(scale)
+                            .offset(offset)
+
+                        // Gesture gắn vào lớp overlay KHÔNG bị scaleEffect/offset — location/translation
+                        // đọc được luôn là toạ độ màn hình thật (viewport), tự quy đổi ngược sang toạ độ
+                        // ảnh gốc bằng scale/offset đang biết, không phụ thuộc SwiftUI tự làm việc đó.
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size))
+                                .simultaneously(with: zoomGesture))
+                            .simultaneousGesture(tapGesture(image: image, frame: geo.size))
+                    }
                 }
                 .clipped()
             } else if disconnected {
@@ -122,6 +132,53 @@ struct DesktopScreenView: View {
         guard imageAspect > frameAspect else { return 0 }
         let renderedWidth = frame.height * imageAspect
         return max(0, (renderedWidth * scale - frame.width) / 2)
+    }
+
+    // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop.
+    private func tapGesture(image: UIImage, frame: CGSize) -> some Gesture {
+        SpatialTapGesture()
+            .onEnded { value in
+                guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
+                let targetId = currentDesktopId
+                Task { _ = try? await SignalRClient.shared.invoke(
+                    "SendClick", args: [targetId, Double(point.x), Double(point.y)]) }
+            }
+    }
+
+    /// Quy đổi 1 điểm chạm trên viewport (chưa bị scaleEffect/offset) về đúng toạ độ pixel trong
+    /// ảnh cửa sổ Desktop gốc — tự đảo ngược scale/offset (đang biết) rồi đảo ngược phần aspectFill
+    /// phình ra ngoài khung xem.
+    private func imagePoint(from location: CGPoint, frame: CGSize, image: UIImage) -> CGPoint? {
+        guard image.size.width > 0, image.size.height > 0, frame.width > 0, frame.height > 0 else { return nil }
+
+        let center = CGPoint(x: frame.width / 2, y: frame.height / 2)
+        let localX = (location.x - offset.width - center.x) / scale + center.x
+        let localY = (location.y - offset.height - center.y) / scale + center.y
+        guard localX >= 0, localX <= frame.width, localY >= 0, localY <= frame.height else { return nil }
+
+        let imageAspect = image.size.width / image.size.height
+        let frameAspect = frame.width / frame.height
+
+        let renderedWidth: CGFloat
+        let renderedHeight: CGFloat
+        let contentX: CGFloat
+        let contentY: CGFloat
+        if imageAspect > frameAspect {
+            renderedHeight = frame.height
+            renderedWidth = frame.height * imageAspect
+            contentX = localX + (renderedWidth - frame.width) / 2
+            contentY = localY
+        } else {
+            renderedWidth = frame.width
+            renderedHeight = frame.width / imageAspect
+            contentX = localX
+            contentY = localY + (renderedHeight - frame.height) / 2
+        }
+
+        let imageX = contentX * (image.size.width / renderedWidth)
+        let imageY = contentY * (image.size.height / renderedHeight)
+        guard imageX >= 0, imageX <= image.size.width, imageY >= 0, imageY <= image.size.height else { return nil }
+        return CGPoint(x: imageX, y: imageY)
     }
 
     private func startPolling() {

@@ -21,8 +21,9 @@ Thanh tab chỉ có **5 mục** — 4 tab dùng hàng ngày + 1 tab "Thêm" gom 
   - **Tài khoản** — tên đăng nhập + đăng xuất.
   - **Xem màn hình Desktop** — chọn 1 máy đang mở `TraSuaApp.Desktop` (poll qua hub `/hub/entity`),
     xem ảnh chụp cửa sổ chính cập nhật mỗi ~0.1s, giữ nguyên chiều dọc, 2 ngón zoom + 1 ngón kéo
-    khung hình, nút X góc trên để thoát. Không phải VNC/video thật — chỉ đủ để canh máy đang chạy
-    gì, không điều khiển được.
+    khung hình, nút X góc trên để thoát. Không phải VNC/video thật, nhưng CÓ điều khiển: chạm vào
+    ảnh = click chuột trái tại đúng vị trí đó trên Desktop (`SendClick`/`ClickRequested`, Desktop tự
+    raise routed event ngay trên visual tree, không qua Win32 SendInput).
 
 Còn thiếu (cố tình bỏ qua, làm sau): **Tạo hoá đơn** (CreatePlus) và tab **Đenn Signal**
 (SignalR real-time + TTS, đã có plan duyệt sẵn từ trước — xem memory
