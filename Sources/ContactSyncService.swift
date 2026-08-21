@@ -12,6 +12,10 @@ import Foundation
 /// dạng link "trasuaapp://khachhang/{id}" bấm được thẳng từ app Danh bạ/Recents — DeepLinkRouter mở
 /// app vào form tạo đơn Ship, prefill đúng khách đó (xem DeepLinkRouter.swift).
 ///
+/// Khách có nhiều SĐT (vd nhà + di động) thì ghi HẾT vào phoneNumbers của contact, không chỉ số
+/// mặc định — giữ contact khớp đúng với DB. Match contact đã tồn tại thử lần lượt từng số cho tới
+/// khi tìm thấy (đa số trường hợp chỉ tốn 1 lần vì số mặc định đứng đầu — xem KhachHangMapper).
+///
 /// Khách không có SĐT (hoặc SĐT không hợp lệ) vẫn được sync — contact tạo ra chỉ có
 /// givenName + urlAddresses, không có phoneNumbers. Match contact đã tồn tại theo SĐT thì được
 /// (predicateForContacts nhanh), nhưng khách không SĐT thì không có gì để predicate theo, nên
@@ -109,22 +113,41 @@ enum ContactSyncService {
                 result.skipped += 1
                 continue
             }
-            let phone = kh.phones.first.flatMap { effectivePhone($0.soDienThoai) }
-            if let phone {
-                guard !claimedPhones.contains(phone) else {
+            // Giữ nguyên thứ tự server trả (mặc định trước — xem KhachHangMapper.ToDto), loại trùng
+            // giữ đúng thứ tự xuất hiện đầu tiên.
+            var effectivePhones: [String] = []
+            for p in kh.phones {
+                guard let phone = effectivePhone(p.soDienThoai), !effectivePhones.contains(phone) else { continue }
+                effectivePhones.append(phone)
+            }
+            if !effectivePhones.isEmpty {
+                // Bất kỳ số nào trong 2 số đã bị khách khác (hoạt động gần đây hơn) nhận trước thì
+                // bỏ qua nguyên khách này — coi như xung đột SĐT, an toàn hơn là chỉ đồng bộ 1 nửa.
+                guard effectivePhones.allSatisfy({ !claimedPhones.contains($0) }) else {
                     result.skipped += 1
                     continue
                 }
-                claimedPhones.insert(phone)
+                claimedPhones.formUnion(effectivePhones)
             }
 
             do {
                 let existing: CNContact?
-                if let phone {
-                    let predicate = CNContact.predicateForContacts(matching: CNPhoneNumber(stringValue: phone))
-                    existing = try store.unifiedContacts(matching: predicate, keysToFetch: keysToFetch).first
+                if !effectivePhones.isEmpty {
+                    var found: CNContact?
+                    for phone in effectivePhones {
+                        let predicate = CNContact.predicateForContacts(matching: CNPhoneNumber(stringValue: phone))
+                        if let match = try store.unifiedContacts(matching: predicate, keysToFetch: keysToFetch).first {
+                            found = match
+                            break
+                        }
+                    }
+                    existing = found
                 } else {
                     existing = resolveIdIndex()[kh.id]
+                }
+
+                let desiredPhoneNumbers = effectivePhones.map {
+                    CNLabeledValue(label: CNLabelPhoneNumberMobile, value: CNPhoneNumber(stringValue: $0))
                 }
 
                 if let existing {
@@ -135,11 +158,14 @@ enum ContactSyncService {
                     // do nhân viên/hệ thống khác từng ghi vào đó.
                     let familyNameChanged = !existing.familyName.isEmpty
                     let urlsChanged = !urlAddressesEqual(existing.urlAddresses, desiredUrls)
-                    if nameChanged || familyNameChanged || urlsChanged {
+                    let phonesChanged = !effectivePhones.isEmpty
+                        && Set(existing.phoneNumbers.map(\.value.stringValue)) != Set(effectivePhones)
+                    if nameChanged || familyNameChanged || urlsChanged || phonesChanged {
                         let mutable = existing.mutableCopy() as! CNMutableContact
                         if nameChanged { mutable.givenName = ten }
                         if familyNameChanged { mutable.familyName = "" }
                         if urlsChanged { mutable.urlAddresses = desiredUrls }
+                        if phonesChanged { mutable.phoneNumbers = desiredPhoneNumbers }
                         // Mỗi contact 1 CNSaveRequest riêng, execute ngay — nếu gộp chung 1 request
                         // cho hàng nghìn contact rồi execute 1 lần ở cuối, CHỈ 1 contact lỗi (vd contact
                         // từ nguồn CardDAV/Exchange không cho sửa familyName) là store.execute() ném lỗi
@@ -158,11 +184,7 @@ enum ContactSyncService {
                 } else {
                     let newContact = CNMutableContact()
                     newContact.givenName = ten
-                    if let phone {
-                        newContact.phoneNumbers = [
-                            CNLabeledValue(label: CNLabelPhoneNumberMobile, value: CNPhoneNumber(stringValue: phone))
-                        ]
-                    }
+                    newContact.phoneNumbers = desiredPhoneNumbers
                     newContact.urlAddresses = mergedUrlAddresses(existing: [], kh: kh)
                     let req = CNSaveRequest()
                     req.add(newContact, toContainerWithIdentifier: nil)
