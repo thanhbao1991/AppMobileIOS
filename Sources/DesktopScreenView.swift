@@ -88,11 +88,11 @@ struct DesktopScreenView: View {
     }
 
     // Mặc định (scale = 1) đã lấp đầy chiều cao khung xem (aspectFill) — không cho zoom vào thêm
-    // (tối đa = đúng khung xem), chỉ cho zoom ra (thu nhỏ, tối thiểu 0.5) để xem lại phần bị crop.
+    // (tối đa = đúng khung xem), chỉ cho zoom ra (thu nhỏ, tối thiểu 0.1) để xem lại phần bị crop.
     private var zoomGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                scale = min(1, max(0.5, lastScale * value))
+                scale = min(1, max(0.1, lastScale * value))
             }
             .onEnded { _ in
                 lastScale = scale
