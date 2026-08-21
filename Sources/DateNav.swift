@@ -81,8 +81,8 @@ struct DaySearchBar: View {
     }
 }
 
-/// Chỉ chọn ngày, không search — dùng cho trang không có ô tìm kiếm (vd ThongKeView). Canh giữa
-/// (không Spacer 1 bên) vì trang này không có phần tử nào khác cùng hàng cần cân bằng.
+/// Chỉ chọn ngày, không search — dùng cho trang không có ô tìm kiếm (vd ThongKeView). Canh trái
+/// giống hệt nút ngày trong DaySearchBar (tab Hoá đơn) để vị trí khớp nhau giữa các tab.
 struct DayDateBar: View {
     @Binding var date: Date
     var onChange: () -> Void
@@ -90,7 +90,6 @@ struct DayDateBar: View {
 
     var body: some View {
         HStack {
-            Spacer()
             Button { showPicker = true } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")
@@ -100,6 +99,8 @@ struct DayDateBar: View {
                 .foregroundColor(.brandPrimary)
             }
             .buttonStyle(.plain)
+            .fixedSize()
+
             Spacer()
         }
         .padding(.horizontal)

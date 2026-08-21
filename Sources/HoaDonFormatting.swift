@@ -78,14 +78,17 @@ enum HoaDonFormatting {
         return "--:-- --/--"
     }
 
-    /// Số phút trôi qua từ ngayGio tới hiện tại — dùng cho badge "chờ" trên card list (chỉ áp dụng
-    /// đơn Ship chưa gán shipper / Mua về chưa thanh toán, xem HoaDonRowView.waitingMinutes).
+    /// Số phút trôi qua từ ngayGio tới hiện tại — dùng cho badge "chờ" trên card list, xem
+    /// HoaDonRowView.waitingMinutes (đóng băng tại thời điểm ghi nợ/thanh toán/đi ship nếu đã xảy ra).
     static func minutesSince(_ iso: String?, now: Date = Date()) -> Int? {
+        guard let date = parseIso(iso) else { return nil }
+        return max(0, Int(now.timeIntervalSince(date) / 60))
+    }
+
+    static func parseIso(_ iso: String?) -> Date? {
         guard let iso, !iso.isEmpty else { return nil }
         for f in isoInFormats {
-            if let date = f.date(from: iso) {
-                return max(0, Int(now.timeIntervalSince(date) / 60))
-            }
+            if let date = f.date(from: iso) { return date }
         }
         return nil
     }

@@ -407,16 +407,17 @@ private struct HoaDonRowView: View {
         return .dangerColor
     }
 
-    /// Chỉ hiện "chờ" cho 2 trường hợp cần nhân viên xử lý sớm: Ship chưa gán shipper, hoặc Mua về
-    /// chưa thanh toán — đơn khác đã có shipper/đã thu thì hiển thị thêm không có ý nghĩa gì.
-    private var showWaiting: Bool {
-        (item.phanLoai == "Ship" && (item.nguoiShip?.isEmpty ?? true))
-            || (item.phanLoai == "Mv" && item.conLai > 0)
+    /// Đóng băng thời gian chờ tại thời điểm sự kiện xảy ra SỚM NHẤT trong 3 mốc ghi nợ/thanh
+    /// toán/đi ship (nếu đã xảy ra) — sau mốc đó khách không còn "chờ" nữa nên số phút phải đứng
+    /// yên, không tiếp tục chạy theo `now`. Đơn chưa có mốc nào thì vẫn chạy live theo `now`.
+    private var waitingEndDate: Date {
+        let candidates = [item.ngayNo, item.ngayThanhToan, item.ngayShip]
+            .compactMap { HoaDonFormatting.parseIso($0) }
+        return candidates.min() ?? now
     }
 
     private var waitingMinutes: Int? {
-        guard showWaiting else { return nil }
-        return HoaDonFormatting.minutesSince(item.ngayGio, now: now)
+        HoaDonFormatting.minutesSince(item.ngayGio, now: waitingEndDate)
     }
 
     private var waitingColor: Color {
@@ -454,7 +455,10 @@ private struct HoaDonRowView: View {
                             Image(systemName: "clock.fill").font(.caption2)
                             Text(HoaDonFormatting.waitingText(waitingMinutes)).font(.caption2.bold())
                         }
-                        .foregroundColor(waitingColor)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(waitingColor)
+                        .clipShape(Capsule())
                     }
                 }
                 Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))

@@ -29,21 +29,25 @@ enum ContactSyncService {
         }
     }
 
+    /// SĐT di động VN thật: đúng 10 số, số đầu = 0, số thứ 2 khác 0 (mọi đầu số 03/05/07/08/09
+    /// đều có số thứ 2 khác 0 — quy tắc này tự động loại số giữ chỗ "0000000xxx" mà không cần
+    /// liệt kê riêng), các số còn lại tự do 0-9.
+    private static func isValidVNPhone(_ s: String) -> Bool {
+        guard s.count == 10, s.allSatisfy(\.isNumber) else { return false }
+        let chars = Array(s)
+        return chars[0] == "0" && chars[1] != "0"
+    }
+
     /// Chuẩn hoá SĐT để chỉ sync số hợp lệ, bỏ hậu tố chữ (vd "0944806299A" -> "0944806299") —
     /// hậu tố chữ là quy ước cũ đánh dấu 2 khách dùng chung 1 số thật (nhà/cơ quan chung đường
-    /// dây), không phải số sai. Trả nil nếu không phải số điện thoại hợp lệ (số giữ chỗ
-    /// "0000000xxx", quá ngắn/dài, không phải toàn chữ số...) — những trường hợp này bị loại
-    /// hẳn khỏi sync để không tạo contact rác.
+    /// dây), không phải số sai. Trả nil nếu không phải số điện thoại hợp lệ — bị loại hẳn khỏi
+    /// sync để không tạo contact rác.
     private static func effectivePhone(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)
-        if trimmed.count == 10, trimmed.allSatisfy(\.isNumber), trimmed.hasPrefix("0"), !trimmed.hasPrefix("000000") {
-            return trimmed
-        }
-        if trimmed.count == 11, trimmed.hasPrefix("0"), trimmed.last?.isLetter == true {
+        if isValidVNPhone(trimmed) { return trimmed }
+        if trimmed.count == 11, trimmed.last?.isLetter == true {
             let digits = String(trimmed.dropLast())
-            if digits.allSatisfy(\.isNumber), !digits.hasPrefix("000000") {
-                return digits
-            }
+            if isValidVNPhone(digits) { return digits }
         }
         return nil
     }
