@@ -1,8 +1,8 @@
 import Contacts
 import Foundation
 
-/// Đồng bộ tên KhachHang vào Danh bạ iPhone theo SĐT, để Caller ID hiện tên khách khi gọi đến —
-/// trigger thủ công từ Menu (không chạy nền), theo yêu cầu user. Chỉ so khớp/ghi field
+/// Đồng bộ tên KhachHang vào Danh bạ iPhone, để Caller ID hiện tên khách khi gọi đến — trigger
+/// thủ công từ Menu (không chạy nền), theo yêu cầu user. Chỉ so khớp/ghi field
 /// givenName + phoneNumbers + 2 urlAddress riêng (IdKhachHang, FacebookThreadId), không đụng
 /// family name hay field khác nếu contact đã tồn tại, để không ghi đè dữ liệu cá nhân nhân viên
 /// tự thêm vào danh bạ máy.
@@ -11,6 +11,12 @@ import Foundation
 /// của Contacts cần entitlement riêng do Apple duyệt, urlAddresses thì không. Entry KhachHangId lưu
 /// dạng link "trasuaapp://khachhang/{id}" bấm được thẳng từ app Danh bạ/Recents — DeepLinkRouter mở
 /// app vào form tạo đơn Ship, prefill đúng khách đó (xem DeepLinkRouter.swift).
+///
+/// Khách không có SĐT (hoặc SĐT không hợp lệ) vẫn được sync — contact tạo ra chỉ có
+/// givenName + urlAddresses, không có phoneNumbers. Match contact đã tồn tại theo SĐT thì được
+/// (predicateForContacts nhanh), nhưng khách không SĐT thì không có gì để predicate theo, nên
+/// phải match theo chính khachHangId đã nhúng sẵn trong urlAddresses — enumerate hết danh bạ máy
+/// 1 lần (chỉ khi thật sự có khách không SĐT cần xử lý) để dựng dictionary id->contact.
 enum ContactSyncService {
     static let khachHangIdLabel = "Tạo đơn ĐENN"
     static let threadIdLabel = "TraSuaApp FacebookThreadId"
@@ -79,23 +85,49 @@ enum ContactSyncService {
         // — không cần field ngày tháng riêng, tận dụng thứ tự sẵn có từ server.
         var claimedPhones = Set<String>()
 
+        // Chỉ dựng khi gặp khách đầu tiên không có SĐT hợp lệ — enumerate hết danh bạ máy 1 lần,
+        // tốn kém hơn predicate theo SĐT nên tránh làm nếu mọi khách đều có SĐT.
+        var idIndex: [String: CNContact]?
+        func resolveIdIndex() -> [String: CNContact] {
+            if let idIndex { return idIndex }
+            var map: [String: CNContact] = [:]
+            let fetchRequest = CNContactFetchRequest(keysToFetch: keysToFetch)
+            try? store.enumerateContacts(with: fetchRequest) { contact, _ in
+                for url in contact.urlAddresses where url.label == khachHangIdLabel {
+                    if let id = (url.value as String).components(separatedBy: "/").last {
+                        map[id] = contact
+                    }
+                }
+            }
+            idIndex = map
+            return map
+        }
+
         for kh in khachHangs {
             let ten = kh.ten.trimmingCharacters(in: .whitespaces)
-            guard let phone = kh.phones.first.flatMap({ effectivePhone($0.soDienThoai) }), !ten.isEmpty else {
+            guard !ten.isEmpty else {
                 result.skipped += 1
                 continue
             }
-            guard !claimedPhones.contains(phone) else {
-                result.skipped += 1
-                continue
+            let phone = kh.phones.first.flatMap { effectivePhone($0.soDienThoai) }
+            if let phone {
+                guard !claimedPhones.contains(phone) else {
+                    result.skipped += 1
+                    continue
+                }
+                claimedPhones.insert(phone)
             }
-            claimedPhones.insert(phone)
 
             do {
-                let predicate = CNContact.predicateForContacts(matching: CNPhoneNumber(stringValue: phone))
-                let matches = try store.unifiedContacts(matching: predicate, keysToFetch: keysToFetch)
+                let existing: CNContact?
+                if let phone {
+                    let predicate = CNContact.predicateForContacts(matching: CNPhoneNumber(stringValue: phone))
+                    existing = try store.unifiedContacts(matching: predicate, keysToFetch: keysToFetch).first
+                } else {
+                    existing = resolveIdIndex()[kh.id]
+                }
 
-                if let existing = matches.first {
+                if let existing {
                     let desiredUrls = mergedUrlAddresses(existing: existing.urlAddresses, kh: kh)
                     let nameChanged = existing.givenName != ten
                     // Tên khách trong DB luôn để hết vào givenName (không có family name riêng) —
@@ -126,9 +158,11 @@ enum ContactSyncService {
                 } else {
                     let newContact = CNMutableContact()
                     newContact.givenName = ten
-                    newContact.phoneNumbers = [
-                        CNLabeledValue(label: CNLabelPhoneNumberMobile, value: CNPhoneNumber(stringValue: phone))
-                    ]
+                    if let phone {
+                        newContact.phoneNumbers = [
+                            CNLabeledValue(label: CNLabelPhoneNumberMobile, value: CNPhoneNumber(stringValue: phone))
+                        ]
+                    }
                     newContact.urlAddresses = mergedUrlAddresses(existing: [], kh: kh)
                     let req = CNSaveRequest()
                     req.add(newContact, toContainerWithIdentifier: nil)
