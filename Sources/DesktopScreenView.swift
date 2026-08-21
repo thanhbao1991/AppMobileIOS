@@ -3,8 +3,8 @@ import UIKit
 
 /// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`. Poll
 /// ảnh chụp qua hub mỗi ~0.1s (RequestDesktopScreenshot → Desktop tự chụp → ScreenshotReceived),
-/// không phải video thật — đủ để canh máy đang chạy gì. Vào màn hình tự xoay ngang + full màn
-/// hình, chạm vào ảnh để thoát và quay lại dọc — xem `OrientationLock.swift`.
+/// không phải video thật — đủ để canh máy đang chạy gì. Giữ nguyên chiều dọc (không tự xoay ngang);
+/// 2 ngón để zoom, 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -15,6 +15,11 @@ struct DesktopScreenView: View {
     @State private var disconnected = false
     @State private var pollTask: Task<Void, Never>?
 
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -23,27 +28,61 @@ struct DesktopScreenView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .onTapGesture { dismiss() }
+                    .scaleEffect(scale)
+                    .offset(offset)
+                    .gesture(panGesture.simultaneously(with: zoomGesture))
             } else if disconnected {
                 Text("\(label) đã ngắt kết nối")
                     .foregroundStyle(.white)
-                    .onTapGesture { dismiss() }
             } else {
                 ProgressView().tint(.white)
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(.white, .black.opacity(0.5))
+                    }
+                    .padding()
+                }
+                Spacer()
             }
         }
         .statusBarHidden(true)
         .navigationBarHidden(true)
         .onAppear {
             currentDesktopId = desktopId
-            OrientationLock.lockLandscape()
             startPolling()
         }
         .onDisappear {
             pollTask?.cancel()
-            OrientationLock.lockPortrait()
             Task { await SignalRClient.shared.setScreenshotHandler(nil) }
         }
+    }
+
+    private var zoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                scale = max(1, lastScale * value)
+            }
+            .onEnded { _ in
+                lastScale = scale
+            }
+    }
+
+    private var panGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                offset = CGSize(
+                    width: lastOffset.width + value.translation.width,
+                    height: lastOffset.height + value.translation.height)
+            }
+            .onEnded { _ in
+                lastOffset = offset
+            }
     }
 
     private func startPolling() {

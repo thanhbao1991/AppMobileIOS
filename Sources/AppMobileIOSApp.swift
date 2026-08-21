@@ -2,8 +2,6 @@ import SwiftUI
 
 @main
 struct AppMobileIOSApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
     var body: some Scene {
         WindowGroup {
             ContentView()

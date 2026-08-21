@@ -20,8 +20,9 @@ Thanh tab chỉ có **5 mục** — 4 tab dùng hàng ngày + 1 tab "Thêm" gom 
     nợ luỹ kế, port từ `TraSuaApp.Desktop/Controls/ThongKeTabControl` (7 endpoint `/api/ThongKe/*`).
   - **Tài khoản** — tên đăng nhập + đăng xuất.
   - **Xem màn hình Desktop** — chọn 1 máy đang mở `TraSuaApp.Desktop` (poll qua hub `/hub/entity`),
-    xem ảnh chụp cửa sổ chính cập nhật mỗi ~1.5s, tự xoay ngang + full màn hình, chạm vào ảnh để
-    thoát. Không phải VNC/video thật — chỉ đủ để canh máy đang chạy gì, không điều khiển được.
+    xem ảnh chụp cửa sổ chính cập nhật mỗi ~0.1s, giữ nguyên chiều dọc, 2 ngón zoom + 1 ngón kéo
+    khung hình, nút X góc trên để thoát. Không phải VNC/video thật — chỉ đủ để canh máy đang chạy
+    gì, không điều khiển được.
 
 Còn thiếu (cố tình bỏ qua, làm sau): **Tạo hoá đơn** (CreatePlus) và tab **Đenn Signal**
 (SignalR real-time + TTS, đã có plan duyệt sẵn từ trước — xem memory
@@ -72,9 +73,8 @@ Program: ký được 1 năm.
   bên Desktop.
 - `SignalRClient.swift` — ngoài "EntityChanged" còn có `invoke()` (invocation kèm invocationId, đợi
   completion type 3) dùng cho `GetConnectedDesktops`/`RequestDesktopScreenshot`.
-- `DesktopPickerView.swift`, `DesktopScreenView.swift` — tab "Xem màn hình Desktop".
-- `OrientationLock.swift` — `AppDelegate` + helper khoá/mở xoay ngang riêng cho
-  `DesktopScreenView` (app còn lại vẫn ép portrait).
+- `DesktopPickerView.swift`, `DesktopScreenView.swift` — tab "Xem màn hình Desktop" (zoom/pan bằng
+  gesture, giữ nguyên chiều dọc).
 
 ## Đổi icon
 
