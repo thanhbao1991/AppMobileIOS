@@ -11,9 +11,14 @@ actor SignalRClient {
     private var task: URLSessionWebSocketTask?
     private var shouldRun = false
     private var retryDelay: UInt64 = 3
+    private var invocationCounter = 0
+    private var pendingInvocations: [String: CheckedContinuation<Any?, Error>] = [:]
 
     /// entityName, action, id — nhận trên MainActor để các View cập nhật @State an toàn.
     private var onEntityChanged: (@MainActor (String, String, String) -> Void)?
+    /// Tab "Xem màn hình Desktop" gán khi đang mở, gỡ khi rời view — ảnh JPEG trả về từ
+    /// Desktop client qua "ScreenshotReceived".
+    private var onScreenshotReceived: (@MainActor (Data) -> Void)?
 
     func start(onEntityChanged: @escaping @MainActor (String, String, String) -> Void) {
         self.onEntityChanged = onEntityChanged
@@ -29,12 +34,34 @@ actor SignalRClient {
         task = nil
     }
 
+    func setScreenshotHandler(_ handler: (@MainActor (Data) -> Void)?) {
+        onScreenshotReceived = handler
+    }
+
+    /// Gửi invocation và đợi completion (type 3) khớp invocationId — dùng cho lời gọi cần kết quả
+    /// như GetConnectedDesktops, hoặc để biết ngay khi hub báo lỗi (vd. RequestDesktopScreenshot
+    /// nhắm vào 1 máy đã ngắt kết nối).
+    func invoke(_ method: String, args: [Any] = []) async throws -> Any? {
+        guard let ws = task else { throw URLError(.networkConnectionLost) }
+        invocationCounter += 1
+        let invocationId = String(invocationCounter)
+        let payload: [String: Any] = ["type": 1, "target": method, "arguments": args, "invocationId": invocationId]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        let text = String(data: data, encoding: .utf8)! + "\u{1e}"
+        try await ws.send(.string(text))
+
+        return try await withCheckedThrowingContinuation { continuation in
+            pendingInvocations[invocationId] = continuation
+        }
+    }
+
     private func connectLoop() async {
         while shouldRun {
             do {
                 try await connectOnce()
                 retryDelay = 3
             } catch {
+                failAllPendingInvocations(error)
                 if !shouldRun { return }
             }
             guard shouldRun else { return }
@@ -92,18 +119,49 @@ actor SignalRClient {
         }
     }
 
-    /// type 1 = invocation. "EntityChanged" arguments = [entityName, action, id, senderConnectionId, voice].
-    /// type 6 = ping từ server, không cần phản hồi ở phía client cho hub này.
+    /// type 1 = invocation ("EntityChanged" arguments = [entityName, action, id, senderConnectionId,
+    /// voice]; "ScreenshotReceived" arguments = [base64Bytes]). type 3 = completion (kết quả của
+    /// invoke() có invocationId, vd. GetConnectedDesktops). type 6 = ping từ server, không cần
+    /// phản hồi ở phía client cho hub này.
     private func handleRecord(_ record: String) {
         guard let data = record.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        guard (obj["type"] as? Int) == 1,
-              (obj["target"] as? String) == "EntityChanged",
-              let args = obj["arguments"] as? [Any], args.count >= 3,
-              let entityName = args[0] as? String,
-              let action = args[1] as? String,
-              let id = args[2] as? String else { return }
-        let callback = onEntityChanged
-        Task { @MainActor in callback?(entityName, action, id) }
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = obj["type"] as? Int else { return }
+
+        if type == 3 {
+            guard let invocationId = obj["invocationId"] as? String,
+                  let continuation = pendingInvocations.removeValue(forKey: invocationId) else { return }
+            if let errorMessage = obj["error"] as? String {
+                continuation.resume(throwing: NSError(domain: "SignalRHub", code: 0,
+                    userInfo: [NSLocalizedDescriptionKey: errorMessage]))
+            } else {
+                continuation.resume(returning: obj["result"])
+            }
+            return
+        }
+
+        guard type == 1, let target = obj["target"] as? String,
+              let args = obj["arguments"] as? [Any] else { return }
+
+        if target == "EntityChanged", args.count >= 3,
+           let entityName = args[0] as? String, let action = args[1] as? String, let id = args[2] as? String {
+            let callback = onEntityChanged
+            Task { @MainActor in callback?(entityName, action, id) }
+        } else if target == "ScreenshotReceived", let base64 = args.first as? String,
+                  let imageData = Data(base64Encoded: base64) {
+            let callback = onScreenshotReceived
+            Task { @MainActor in callback?(imageData) }
+        }
+    }
+
+    /// [connectionId: nhãn tên máy] — danh sách Desktop client đang mở app, cho màn hình chọn máy.
+    func fetchConnectedDesktops() async throws -> [String: String] {
+        let result = try await invoke("GetConnectedDesktops")
+        return (result as? [String: String]) ?? [:]
+    }
+
+    private func failAllPendingInvocations(_ error: Error) {
+        for (_, continuation) in pendingInvocations { continuation.resume(throwing: error) }
+        pendingInvocations.removeAll()
     }
 }

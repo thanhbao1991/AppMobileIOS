@@ -116,6 +116,14 @@ private struct MoreMenuView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        DesktopPickerView()
+                    } label: {
+                        Label("Xem màn hình Desktop", systemImage: "desktopcomputer")
+                    }
+                }
+
+                Section {
                     Button {
                         Task { await syncContacts() }
                     } label: {

@@ -21,6 +21,8 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIRequiresFullScreen: true
         NSContactsUsageDescription: Đồng bộ tên khách hàng vào Danh bạ để hiện tên khi khách gọi đến.
         CFBundleURLTypes:
