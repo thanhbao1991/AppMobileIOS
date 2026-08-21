@@ -4,7 +4,9 @@ import UIKit
 /// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`. Poll
 /// ảnh chụp qua hub mỗi ~0.1s (RequestDesktopScreenshot → Desktop tự chụp → ScreenshotReceived),
 /// không phải video thật — đủ để canh máy đang chạy gì. Giữ nguyên chiều dọc (không tự xoay ngang);
-/// 2 ngón để zoom, 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát.
+/// 2 ngón để zoom, 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát. Mặc định phóng to
+/// theo chiều cao chiếm hết khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên trái/phải
+/// bị crop, kéo 1 ngón để xem phần bị crop.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -27,12 +29,16 @@ struct DesktopScreenView: View {
             Color.black.ignoresSafeArea()
 
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .scaleEffect(scale)
-                    .offset(offset)
-                    .gesture(panGesture.simultaneously(with: zoomGesture))
+                GeometryReader { geo in
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .scaleEffect(scale)
+                        .offset(offset)
+                }
+                .gesture(panGesture.simultaneously(with: zoomGesture))
             } else if disconnected {
                 Text("\(label) đã ngắt kết nối")
                     .foregroundStyle(.white)
