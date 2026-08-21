@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`. Poll
-/// ảnh chụp qua hub mỗi ~0.1s (RequestDesktopScreenshot → Desktop tự chụp → ScreenshotReceived),
+/// ảnh chụp qua hub mỗi ~0.25s (RequestDesktopScreenshot → Desktop tự chụp → ScreenshotReceived),
 /// không phải video thật — đủ để canh máy đang chạy gì. Giữ nguyên chiều dọc (không tự xoay ngang);
 /// 2 ngón để zoom (chỉ zoom chiều ngang, chiều dọc luôn khớp khung xem — không bao giờ hở viền
 /// đen), 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát. Mặc định phóng to lấp đầy
@@ -215,11 +215,11 @@ struct DesktopScreenView: View {
                         continue
                     }
                     // Mạng chập chờn/reconnect thoáng qua rất hay gặp — chỉ báo mất kết nối thật
-                    // sau vài lần liên tiếp thất bại (~5s ở poll 0.1s/lần), tránh báo sai vì 1 lần hiccup.
+                    // sau vài lần liên tiếp thất bại (~5s ở poll 0.25s/lần), tránh báo sai vì 1 lần hiccup.
                     consecutiveFailures += 1
-                    if consecutiveFailures >= 50 { disconnected = true }
+                    if consecutiveFailures >= 20 { disconnected = true }
                 }
-                try? await Task.sleep(nanoseconds: 100_000_000)
+                try? await Task.sleep(nanoseconds: 250_000_000)
             }
         }
 
