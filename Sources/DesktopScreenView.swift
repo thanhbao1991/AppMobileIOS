@@ -49,7 +49,7 @@ struct DesktopScreenView: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size))
-                                .simultaneously(with: zoomGesture(minScale: minScale(image: image, frame: geo.size))))
+                                .simultaneously(with: zoomGesture(image: image, frame: geo.size)))
                             .simultaneousGesture(tapGesture(image: image, frame: geo.size))
                     }
                 }
@@ -105,13 +105,19 @@ struct DesktopScreenView: View {
     // Mặc định (scale = 1) đã lấp đầy khung xem (aspectFill) — không cho zoom vào thêm (tối đa =
     // đúng khung xem). Zoom ra tối đa = đúng điểm ảnh vừa khít chiều ngang (hết phần bị crop) —
     // quá mức đó sẽ hở viền đen 2 bên nên chặn lại, không cho zoom nhỏ hơn nữa.
-    private func zoomGesture(minScale: CGFloat) -> some Gesture {
+    private func zoomGesture(image: UIImage, frame: CGSize) -> some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                scale = min(1, max(minScale, lastScale * value))
+                scale = min(1, max(minScale(image: image, frame: frame), lastScale * value))
+                // Offset đã kéo (pan) trước đó có thể vượt quá maxOffsetX mới sau khi scale đổi
+                // (maxOffsetX tỷ lệ theo scale) — không reclamp sẽ hở viền đen 2 bên khi zoom nhỏ
+                // lại sau khi đã pan.
+                let maxX = maxOffsetX(image: image, frame: frame)
+                offset = CGSize(width: min(maxX, max(-maxX, offset.width)), height: 0)
             }
             .onEnded { _ in
                 lastScale = scale
+                lastOffset = offset
             }
     }
 
