@@ -36,9 +36,10 @@ struct DesktopScreenView: View {
                         .frame(width: geo.size.width, height: geo.size.height)
                         .scaleEffect(scale)
                         .offset(offset)
+                        .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size))
+                            .simultaneously(with: zoomGesture))
                 }
                 .clipped()
-                .gesture(panGesture.simultaneously(with: zoomGesture))
             } else if disconnected {
                 Text("\(label) đã ngắt kết nối")
                     .foregroundStyle(.white)
@@ -99,17 +100,28 @@ struct DesktopScreenView: View {
             }
     }
 
-    // Chỉ cho kéo trái/phải — giữ nguyên chiều dọc.
-    private var panGesture: some Gesture {
+    // Chỉ cho kéo trái/phải — giữ nguyên chiều dọc. Giới hạn trong đúng phần ảnh bị crop (aspectFill)
+    // đang phình ra ngoài khung xem theo scale hiện tại — không kéo quá để lộ nền đen.
+    private func panGesture(maxOffsetX: CGFloat) -> some Gesture {
         DragGesture()
             .onChanged { value in
-                offset = CGSize(
-                    width: lastOffset.width + value.translation.width,
-                    height: 0)
+                let newX = lastOffset.width + value.translation.width
+                offset = CGSize(width: min(maxOffsetX, max(-maxOffsetX, newX)), height: 0)
             }
             .onEnded { _ in
                 lastOffset = offset
             }
+    }
+
+    /// Ảnh (aspectFill) phủ hết chiều cao khung xem rồi phình ngang ra ngoài — tính đúng nửa phần
+    /// phình đó (đã nhân theo scale hiện tại) làm giới hạn kéo ngang tối đa mỗi bên.
+    private func maxOffsetX(image: UIImage, frame: CGSize) -> CGFloat {
+        guard image.size.height > 0, frame.height > 0 else { return 0 }
+        let imageAspect = image.size.width / image.size.height
+        let frameAspect = frame.width / frame.height
+        guard imageAspect > frameAspect else { return 0 }
+        let renderedWidth = frame.height * imageAspect
+        return max(0, (renderedWidth * scale - frame.width) / 2)
     }
 
     private func startPolling() {
