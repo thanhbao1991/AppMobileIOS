@@ -3,9 +3,17 @@ import Foundation
 
 /// Đồng bộ tên KhachHang vào Danh bạ iPhone theo SĐT, để Caller ID hiện tên khách khi gọi đến —
 /// trigger thủ công từ Menu (không chạy nền), theo yêu cầu user. Chỉ so khớp/ghi field
-/// givenName + phoneNumbers, không đụng family name hay field khác nếu contact đã tồn tại, để
-/// không ghi đè dữ liệu cá nhân nhân viên tự thêm vào danh bạ máy.
+/// givenName + phoneNumbers + 2 urlAddress riêng (IdKhachHang, FacebookThreadId), không đụng
+/// family name hay field khác nếu contact đã tồn tại, để không ghi đè dữ liệu cá nhân nhân viên
+/// tự thêm vào danh bạ máy.
+///
+/// IdKhachHang + FacebookThreadId lưu vào urlAddresses (label riêng) thay vì note — field note
+/// của Contacts cần entitlement riêng do Apple duyệt, urlAddresses thì không. Entry KhachHangId lưu
+/// dạng link "trasuaapp://khachhang/{id}" bấm được thẳng từ app Danh bạ/Recents — DeepLinkRouter mở
+/// app vào form tạo đơn Ship, prefill đúng khách đó (xem DeepLinkRouter.swift).
 enum ContactSyncService {
+    static let khachHangIdLabel = "Tạo đơn ĐENN"
+    static let threadIdLabel = "TraSuaApp FacebookThreadId"
     struct SyncResult {
         var created = 0
         var updated = 0
@@ -59,6 +67,7 @@ enum ContactSyncService {
         let keysToFetch: [CNKeyDescriptor] = [
             CNContactGivenNameKey as CNKeyDescriptor,
             CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactUrlAddressesKey as CNKeyDescriptor,
         ]
 
         var result = SyncResult()
@@ -88,9 +97,13 @@ enum ContactSyncService {
                 let matches = try store.unifiedContacts(matching: predicate, keysToFetch: keysToFetch)
 
                 if let existing = matches.first {
-                    if existing.givenName != ten {
+                    let desiredUrls = mergedUrlAddresses(existing: existing.urlAddresses, kh: kh)
+                    let nameChanged = existing.givenName != ten
+                    let urlsChanged = !urlAddressesEqual(existing.urlAddresses, desiredUrls)
+                    if nameChanged || urlsChanged {
                         let mutable = existing.mutableCopy() as! CNMutableContact
-                        mutable.givenName = ten
+                        if nameChanged { mutable.givenName = ten }
+                        if urlsChanged { mutable.urlAddresses = desiredUrls }
                         saveRequest.update(mutable)
                         hasPendingChanges = true
                         result.updated += 1
@@ -103,6 +116,7 @@ enum ContactSyncService {
                     newContact.phoneNumbers = [
                         CNLabeledValue(label: CNLabelPhoneNumberMobile, value: CNPhoneNumber(stringValue: phone))
                     ]
+                    newContact.urlAddresses = mergedUrlAddresses(existing: [], kh: kh)
                     saveRequest.add(newContact, toContainerWithIdentifier: nil)
                     hasPendingChanges = true
                     result.created += 1
@@ -116,5 +130,28 @@ enum ContactSyncService {
             try store.execute(saveRequest)
         }
         return result
+    }
+
+    /// Giữ nguyên mọi urlAddress khác (nhân viên tự thêm), chỉ thay 2 entry gắn label
+    /// khachHangIdLabel/threadIdLabel bằng giá trị mới nhất từ server. Bỏ entry threadId nếu
+    /// khách chưa có FacebookThreadId.
+    private static func mergedUrlAddresses(
+        existing: [CNLabeledValue<NSString>], kh: KhachHangDto
+    ) -> [CNLabeledValue<NSString>] {
+        var result = existing.filter { $0.label != khachHangIdLabel && $0.label != threadIdLabel }
+        result.append(CNLabeledValue(label: khachHangIdLabel, value: "trasuaapp://khachhang/\(kh.id)" as NSString))
+        if let threadId = kh.facebookThreadId, !threadId.trimmingCharacters(in: .whitespaces).isEmpty {
+            result.append(CNLabeledValue(label: threadIdLabel, value: threadId as NSString))
+        }
+        return result
+    }
+
+    private static func urlAddressesEqual(
+        _ a: [CNLabeledValue<NSString>], _ b: [CNLabeledValue<NSString>]
+    ) -> Bool {
+        let toSet: ([CNLabeledValue<NSString>]) -> Set<String> = { list in
+            Set(list.map { "\($0.label ?? "")=\($0.value)" })
+        }
+        return toSet(a) == toSet(b)
     }
 }

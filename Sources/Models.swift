@@ -305,6 +305,7 @@ struct KhachHangDto: Codable, Identifiable {
     let duocNhanVoucher: Bool
     let phones: [KhachHangPhoneDto]
     let addresses: [KhachHangAddressDto]
+    let facebookThreadId: String?
 }
 
 struct KhachHangCreateRequest: Encodable {

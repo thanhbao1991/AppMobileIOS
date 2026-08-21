@@ -23,6 +23,10 @@ targets:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
         NSContactsUsageDescription: Đồng bộ tên khách hàng vào Danh bạ để hiện tên khi khách gọi đến.
+        CFBundleURLTypes:
+          - CFBundleURLName: uk.denncoffee.appmobileios
+            CFBundleURLSchemes:
+              - trasuaapp
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: uk.denncoffee.appmobileios

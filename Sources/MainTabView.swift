@@ -36,6 +36,7 @@ enum MainTab: CaseIterable {
 struct MainTabView: View {
     @Binding var isLoggedIn: Bool
     @ObservedObject private var activeTab = ActiveTab.shared
+    @ObservedObject private var deepLink = DeepLinkRouter.shared
     /// Mặc định Hoá đơn dù Thống kê xếp trước về vị trí hiển thị — mở app luôn vào tab Hoá đơn
     /// theo yêu cầu, thứ tự khai báo trong MainTab không nhất thiết khớp mục mặc định.
     @State private var selection: MainTab = .hoaDon
@@ -65,6 +66,11 @@ struct MainTabView: View {
             case .chiTieu: activeTab.tab = .chiTieu
             default: activeTab.tab = .other
             }
+        }
+        // Link "trasuaapp://khachhang/{id}" bấm từ Danh bạ chỉ mang được khách đến app qua tab Hoá
+        // đơn (nơi có sheet tạo đơn) — chuyển tab trước, HoaDonListView tự đọc deepLink để mở sheet.
+        .onChange(of: deepLink.khachHangIdToOrder) { id in
+            if id != nil { selection = .hoaDon }
         }
     }
 

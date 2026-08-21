@@ -2,6 +2,7 @@ import Combine
 import SwiftUI
 
 struct HoaDonListView: View {
+    @ObservedObject private var deepLink = DeepLinkRouter.shared
     @State private var currentDate = Date()
     @State private var items: [HoaDonListDto] = []
     @State private var loading = false
@@ -160,9 +161,13 @@ struct HoaDonListView: View {
                 .padding()
             }
         }
-        .task { await load() }
+        .task {
+            await load()
+            openPendingDeepLink()
+        }
         .onReceive(clockTimer) { now = $0 }
         .onEntityChanged(["HoaDon"], tab: .hoaDon) { Task { await load() } }
+        .onChange(of: deepLink.khachHangIdToOrder) { _ in openPendingDeepLink() }
         .sheet(item: Binding(
             get: { selectedId.map { IdentifiableId($0) } },
             set: { selectedId = $0?.value }
@@ -231,6 +236,15 @@ struct HoaDonListView: View {
         items = await APIClient.shared.getHoaDonListByDay(dateIso)
         loading = false
         hasLoaded = true
+    }
+
+    /// Mở sheet tạo đơn Ship prefill khách từ link Danh bạ (DeepLinkRouter) — bỏ qua nếu đang có
+    /// sheet tạo đơn khác dở dang (creatingPending != nil) để không mất dữ liệu nhân viên đang nhập.
+    private func openPendingDeepLink() {
+        guard let id = deepLink.khachHangIdToOrder else { return }
+        deepLink.khachHangIdToOrder = nil
+        guard creatingPending == nil else { return }
+        creatingPending = PendingCreate(phanLoai: "Ship", presetKhachHangId: id)
     }
 }
 

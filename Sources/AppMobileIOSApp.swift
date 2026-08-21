@@ -10,6 +10,7 @@ struct AppMobileIOSApp: App {
                 // (.primary) tự đổi trắng theo Dark Mode hệ thống — gây chữ trắng trên nền sáng,
                 // mất tương phản. Khoá app luôn Light để khớp bộ màu vốn thiết kế cho nền sáng.
                 .preferredColorScheme(.light)
+                .onOpenURL { DeepLinkRouter.shared.handle($0) }
         }
     }
 }
