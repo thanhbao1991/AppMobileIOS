@@ -66,6 +66,7 @@ enum ContactSyncService {
         let store = CNContactStore()
         let keysToFetch: [CNKeyDescriptor] = [
             CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
             CNContactPhoneNumbersKey as CNKeyDescriptor,
             CNContactUrlAddressesKey as CNKeyDescriptor,
         ]
@@ -99,10 +100,15 @@ enum ContactSyncService {
                 if let existing = matches.first {
                     let desiredUrls = mergedUrlAddresses(existing: existing.urlAddresses, kh: kh)
                     let nameChanged = existing.givenName != ten
+                    // Tên khách trong DB luôn để hết vào givenName (không có family name riêng) —
+                    // xoá trắng family name cũ nếu có, tránh hiện tên ghép sai kiểu "Ten FamilyNameCu"
+                    // do nhân viên/hệ thống khác từng ghi vào đó.
+                    let familyNameChanged = !existing.familyName.isEmpty
                     let urlsChanged = !urlAddressesEqual(existing.urlAddresses, desiredUrls)
-                    if nameChanged || urlsChanged {
+                    if nameChanged || familyNameChanged || urlsChanged {
                         let mutable = existing.mutableCopy() as! CNMutableContact
                         if nameChanged { mutable.givenName = ten }
+                        if familyNameChanged { mutable.familyName = "" }
                         if urlsChanged { mutable.urlAddresses = desiredUrls }
                         saveRequest.update(mutable)
                         hasPendingChanges = true
