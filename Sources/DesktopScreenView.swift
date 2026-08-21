@@ -34,10 +34,10 @@ struct DesktopScreenView: View {
                         .resizable()
                         .scaledToFill()
                         .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
                         .scaleEffect(scale)
                         .offset(offset)
                 }
+                .clipped()
                 .gesture(panGesture.simultaneously(with: zoomGesture))
             } else if disconnected {
                 Text("\(label) đã ngắt kết nối")
