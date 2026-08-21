@@ -4,10 +4,12 @@ import UIKit
 /// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`. Poll
 /// ảnh chụp qua hub mỗi ~0.1s (RequestDesktopScreenshot → Desktop tự chụp → ScreenshotReceived),
 /// không phải video thật — đủ để canh máy đang chạy gì. Giữ nguyên chiều dọc (không tự xoay ngang);
-/// 2 ngón để zoom, 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát. Mặc định phóng to
-/// theo chiều cao chiếm hết khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên trái/phải
-/// bị crop, kéo 1 ngón để xem phần bị crop. Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên
-/// Desktop (SendClick → ClickRequested, Desktop tự raise routed event, không qua OS input).
+/// 2 ngón để zoom (chỉ zoom chiều ngang, chiều dọc luôn khớp khung xem — không bao giờ hở viền
+/// đen), 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát. Mặc định phóng to lấp đầy
+/// khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên trái/phải bị crop, kéo 1 ngón để
+/// xem phần bị crop, zoom ra tối đa đúng lúc hết crop (không cho nhỏ hơn nữa). Chạm vào ảnh = click
+/// chuột trái tại đúng vị trí đó trên Desktop (SendClick → ClickRequested, Desktop tự click bằng
+/// UI Automation pattern — Invoke/SelectionItem/Toggle — không qua OS input).
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -36,7 +38,9 @@ struct DesktopScreenView: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: geo.size.width, height: geo.size.height)
-                            .scaleEffect(scale)
+                            // Chỉ scale theo chiều NGANG — chiều cao giữ nguyên y=1 luôn khớp đúng
+                            // khung xem (aspectFill baseline), không bao giờ hở viền đen trên/dưới.
+                            .scaleEffect(x: scale, y: 1)
                             .offset(offset)
 
                         // Gesture gắn vào lớp overlay KHÔNG bị scaleEffect/offset — location/translation
@@ -45,7 +49,7 @@ struct DesktopScreenView: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size))
-                                .simultaneously(with: zoomGesture))
+                                .simultaneously(with: zoomGesture(minScale: minScale(image: image, frame: geo.size))))
                             .simultaneousGesture(tapGesture(image: image, frame: geo.size))
                     }
                 }
@@ -98,12 +102,13 @@ struct DesktopScreenView: View {
         }
     }
 
-    // Mặc định (scale = 1) đã lấp đầy chiều cao khung xem (aspectFill) — không cho zoom vào thêm
-    // (tối đa = đúng khung xem), chỉ cho zoom ra (thu nhỏ, tối thiểu 0.1) để xem lại phần bị crop.
-    private var zoomGesture: some Gesture {
+    // Mặc định (scale = 1) đã lấp đầy khung xem (aspectFill) — không cho zoom vào thêm (tối đa =
+    // đúng khung xem). Zoom ra tối đa = đúng điểm ảnh vừa khít chiều ngang (hết phần bị crop) —
+    // quá mức đó sẽ hở viền đen 2 bên nên chặn lại, không cho zoom nhỏ hơn nữa.
+    private func zoomGesture(minScale: CGFloat) -> some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                scale = min(1, max(0.1, lastScale * value))
+                scale = min(1, max(minScale, lastScale * value))
             }
             .onEnded { _ in
                 lastScale = scale
@@ -134,6 +139,17 @@ struct DesktopScreenView: View {
         return max(0, (renderedWidth * scale - frame.width) / 2)
     }
 
+    /// scale nhỏ nhất mà chiều ngang vẫn còn phủ đủ khung xem (renderedWidth * scale == frame.width)
+    /// — nhỏ hơn nữa sẽ hở viền đen 2 bên trái/phải.
+    private func minScale(image: UIImage, frame: CGSize) -> CGFloat {
+        guard image.size.height > 0, frame.height > 0 else { return 1 }
+        let imageAspect = image.size.width / image.size.height
+        let frameAspect = frame.width / frame.height
+        guard imageAspect > frameAspect else { return 1 }
+        let renderedWidth = frame.height * imageAspect
+        return frame.width / renderedWidth
+    }
+
     // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop.
     private func tapGesture(image: UIImage, frame: CGSize) -> some Gesture {
         SpatialTapGesture()
@@ -151,9 +167,10 @@ struct DesktopScreenView: View {
     private func imagePoint(from location: CGPoint, frame: CGSize, image: UIImage) -> CGPoint? {
         guard image.size.width > 0, image.size.height > 0, frame.width > 0, frame.height > 0 else { return nil }
 
+        // scaleEffect chỉ áp theo chiều ngang (x: scale, y: 1) — chiều dọc không transform gì cả.
         let center = CGPoint(x: frame.width / 2, y: frame.height / 2)
         let localX = (location.x - offset.width - center.x) / scale + center.x
-        let localY = (location.y - offset.height - center.y) / scale + center.y
+        let localY = location.y
         guard localX >= 0, localX <= frame.width, localY >= 0, localY <= frame.height else { return nil }
 
         let imageAspect = image.size.width / image.size.height
