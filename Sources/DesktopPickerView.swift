@@ -1,8 +1,11 @@
 import SwiftUI
 
-/// Tự vào thẳng máy Desktop client (TraSuaApp.Desktop) xếp cuối danh sách (sort theo tên máy) —
-/// không cần chọn tay. Nếu chưa tải xong/không có máy nào thì hiện trạng thái tương ứng.
+/// Tự vào thẳng máy Desktop client (TraSuaApp.Desktop) có tên cố định `targetMachineName` —
+/// xác định bởi ĐÚNG TÊN MÁY (khớp `Environment.MachineName` phía Desktop), không phải theo vị
+/// trí/thứ tự trong danh sách (danh sách có thể đổi khi thêm/bớt máy khác). Không cần chọn tay.
 struct DesktopPickerView: View {
+    private let targetMachineName = "DESKTOP-118TMVD"
+
     @State private var target: (id: String, label: String)?
     @State private var loading = false
     @State private var errorMessage: String?
@@ -15,7 +18,7 @@ struct DesktopPickerView: View {
                 ProgressView()
             } else {
                 VStack(spacing: 12) {
-                    Text(errorMessage ?? "Không có máy nào đang mở app")
+                    Text(errorMessage ?? "Không tìm thấy máy \"\(targetMachineName)\" đang mở app")
                         .foregroundStyle(.secondary)
                     Button("Thử lại") { Task { await load() } }
                 }
@@ -30,7 +33,9 @@ struct DesktopPickerView: View {
         defer { loading = false }
         do {
             let result = try await SignalRClient.shared.fetchConnectedDesktops()
-            target = result.map { ($0.key, $0.value) }.sorted { $0.label < $1.label }.last
+            if let match = result.first(where: { $0.value == targetMachineName }) {
+                target = (match.key, match.value)
+            }
             errorMessage = nil
         } catch {
             errorMessage = "Không tải được danh sách: \(error.localizedDescription)"

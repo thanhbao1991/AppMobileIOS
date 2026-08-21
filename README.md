@@ -74,8 +74,8 @@ Program: ký được 1 năm.
 - `SignalRClient.swift` — ngoài "EntityChanged" còn có `invoke()` (invocation kèm invocationId, đợi
   completion type 3) dùng cho `GetConnectedDesktops`/`RequestDesktopScreenshot`.
 - `DesktopPickerView.swift`, `DesktopScreenView.swift` — tab "Xem màn hình Desktop": tự vào thẳng
-  máy xếp cuối danh sách (sort theo tên), không cần chọn tay; zoom/pan bằng gesture, giữ nguyên
-  chiều dọc.
+  máy tên `DESKTOP-118TMVD` (`targetMachineName` hardcode, xác định bởi tên chứ không theo vị trí
+  trong danh sách), không cần chọn tay; zoom/pan bằng gesture, giữ nguyên chiều dọc.
 
 ## Đổi icon
 
