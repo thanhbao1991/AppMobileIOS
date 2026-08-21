@@ -1,39 +1,27 @@
 import SwiftUI
 
-/// Danh sách Desktop client (TraSuaApp.Desktop) đang mở, tự đăng ký qua hub "/hub/entity"
-/// (RegisterAsDesktop). Chọn 1 máy để xem — xem `DesktopScreenView`.
+/// Tự vào thẳng máy Desktop client (TraSuaApp.Desktop) xếp cuối danh sách (sort theo tên máy) —
+/// không cần chọn tay. Nếu chưa tải xong/không có máy nào thì hiện trạng thái tương ứng.
 struct DesktopPickerView: View {
-    @State private var desktops: [(id: String, label: String)] = []
+    @State private var target: (id: String, label: String)?
     @State private var loading = false
     @State private var errorMessage: String?
 
     var body: some View {
-        List {
-            if loading && desktops.isEmpty {
+        Group {
+            if let target {
+                DesktopScreenView(desktopId: target.id, label: target.label)
+            } else if loading {
                 ProgressView()
-            } else if desktops.isEmpty {
-                Text(errorMessage ?? "Không có máy nào đang mở app")
-                    .foregroundStyle(.secondary)
             } else {
-                ForEach(desktops, id: \.id) { desktop in
-                    NavigationLink {
-                        DesktopScreenView(desktopId: desktop.id, label: desktop.label)
-                    } label: {
-                        Label(desktop.label, systemImage: "desktopcomputer")
-                    }
+                VStack(spacing: 12) {
+                    Text(errorMessage ?? "Không có máy nào đang mở app")
+                        .foregroundStyle(.secondary)
+                    Button("Thử lại") { Task { await load() } }
                 }
             }
         }
         .navigationTitle("Xem màn hình Desktop")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    Task { await load() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-            }
-        }
         .task { await load() }
     }
 
@@ -42,7 +30,7 @@ struct DesktopPickerView: View {
         defer { loading = false }
         do {
             let result = try await SignalRClient.shared.fetchConnectedDesktops()
-            desktops = result.map { ($0.key, $0.value) }.sorted { $0.label < $1.label }
+            target = result.map { ($0.key, $0.value) }.sorted { $0.label < $1.label }.last
             errorMessage = nil
         } catch {
             errorMessage = "Không tải được danh sách: \(error.localizedDescription)"
