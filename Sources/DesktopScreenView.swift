@@ -48,18 +48,23 @@ struct DesktopScreenView: View {
 
     private func startPolling() {
         pollTask = Task {
+            var consecutiveFailures = 0
             while !Task.isCancelled {
                 do {
                     _ = try await SignalRClient.shared.invoke("RequestDesktopScreenshot", args: [currentDesktopId])
+                    consecutiveFailures = 0
                     disconnected = false
                 } catch {
                     // connectionId có thể đổi giữa lúc chọn máy (DesktopPickerView) và lúc poll —
                     // reconnect mạng/IIS làm Desktop tự đăng ký lại với id mới. Thử tự tìm lại theo
-                    // tên máy (label) trước khi báo mất kết nối hẳn.
+                    // tên máy (label) trước khi tính là 1 lần lỗi.
                     if await tryResolveNewId() {
                         continue
                     }
-                    disconnected = true
+                    // Mạng chập chờn/reconnect thoáng qua rất hay gặp — chỉ báo mất kết nối thật
+                    // sau vài lần liên tiếp thất bại (~5s), tránh báo sai vì 1 lần hiccup.
+                    consecutiveFailures += 1
+                    if consecutiveFailures >= 3 { disconnected = true }
                 }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
             }
