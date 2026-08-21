@@ -10,6 +10,7 @@ struct DesktopScreenView: View {
     let label: String
 
     @Environment(\.dismiss) private var dismiss
+    @State private var currentDesktopId: String = ""
     @State private var image: UIImage?
     @State private var disconnected = false
     @State private var pollTask: Task<Void, Never>?
@@ -34,6 +35,7 @@ struct DesktopScreenView: View {
         .statusBarHidden(true)
         .navigationBarHidden(true)
         .onAppear {
+            currentDesktopId = desktopId
             OrientationLock.lockLandscape()
             startPolling()
         }
@@ -48,8 +50,15 @@ struct DesktopScreenView: View {
         pollTask = Task {
             while !Task.isCancelled {
                 do {
-                    _ = try await SignalRClient.shared.invoke("RequestDesktopScreenshot", args: [desktopId])
+                    _ = try await SignalRClient.shared.invoke("RequestDesktopScreenshot", args: [currentDesktopId])
+                    disconnected = false
                 } catch {
+                    // connectionId có thể đổi giữa lúc chọn máy (DesktopPickerView) và lúc poll —
+                    // reconnect mạng/IIS làm Desktop tự đăng ký lại với id mới. Thử tự tìm lại theo
+                    // tên máy (label) trước khi báo mất kết nối hẳn.
+                    if await tryResolveNewId() {
+                        continue
+                    }
                     disconnected = true
                 }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -64,5 +73,13 @@ struct DesktopScreenView: View {
                 }
             }
         }
+    }
+
+    private func tryResolveNewId() async -> Bool {
+        guard let desktops = try? await SignalRClient.shared.fetchConnectedDesktops(),
+              let match = desktops.first(where: { $0.value == label }),
+              match.key != currentDesktopId else { return false }
+        currentDesktopId = match.key
+        return true
     }
 }
