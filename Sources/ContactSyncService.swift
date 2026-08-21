@@ -72,8 +72,6 @@ enum ContactSyncService {
         ]
 
         var result = SyncResult()
-        let saveRequest = CNSaveRequest()
-        var hasPendingChanges = false
 
         // API trả về khachHangs đã sắp theo LastOrderAt ?? LastModified giảm dần (mới nhất trước) —
         // khi 2 khách trùng cùng 1 effectivePhone (số bị thu hồi/tái cấp cho người khác, hoặc quy
@@ -110,9 +108,18 @@ enum ContactSyncService {
                         if nameChanged { mutable.givenName = ten }
                         if familyNameChanged { mutable.familyName = "" }
                         if urlsChanged { mutable.urlAddresses = desiredUrls }
-                        saveRequest.update(mutable)
-                        hasPendingChanges = true
-                        result.updated += 1
+                        // Mỗi contact 1 CNSaveRequest riêng, execute ngay — nếu gộp chung 1 request
+                        // cho hàng nghìn contact rồi execute 1 lần ở cuối, CHỈ 1 contact lỗi (vd contact
+                        // từ nguồn CardDAV/Exchange không cho sửa familyName) là store.execute() ném lỗi
+                        // và TOÀN BỘ batch bị rollback, không ai được lưu dù đa số hợp lệ.
+                        let req = CNSaveRequest()
+                        req.update(mutable)
+                        do {
+                            try store.execute(req)
+                            result.updated += 1
+                        } catch {
+                            result.failed += 1
+                        }
                     } else {
                         result.skipped += 1
                     }
@@ -123,18 +130,20 @@ enum ContactSyncService {
                         CNLabeledValue(label: CNLabelPhoneNumberMobile, value: CNPhoneNumber(stringValue: phone))
                     ]
                     newContact.urlAddresses = mergedUrlAddresses(existing: [], kh: kh)
-                    saveRequest.add(newContact, toContainerWithIdentifier: nil)
-                    hasPendingChanges = true
-                    result.created += 1
+                    let req = CNSaveRequest()
+                    req.add(newContact, toContainerWithIdentifier: nil)
+                    do {
+                        try store.execute(req)
+                        result.created += 1
+                    } catch {
+                        result.failed += 1
+                    }
                 }
             } catch {
                 result.failed += 1
             }
         }
 
-        if hasPendingChanges {
-            try store.execute(saveRequest)
-        }
         return result
     }
 
