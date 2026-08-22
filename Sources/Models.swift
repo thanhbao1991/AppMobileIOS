@@ -108,7 +108,6 @@ struct HoaDonDetailDto: Decodable {
     let bankName: String?
     let bankAccountNo: String?
     let bankAccountName: String?
-    let tongSoLuong: Int?
     let chiTietHoaDons: [ChiTietHoaDonResponseDto]?
     let chiTietHoaDonToppings: [ChiTietHoaDonToppingResponseDto]?
     let payments: [HoaDonPaymentBriefDto]?

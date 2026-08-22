@@ -522,7 +522,9 @@ enum BillTextBuilder {
     /// hàng đủ để khách nhận diện, đổi lại nhường chỗ cho link trang QR (xem HoaDonController.
     /// GetBillQrByHoaDonId) tự vẽ đủ số tiền/QR/thông tin đầy đủ khi khách bấm vào.
     static func smsText(_ d: HoaDonDetailDto) -> String {
-        let soLy = d.tongSoLuong ?? (d.chiTietHoaDons?.reduce(0) { $0 + $1.soLuong } ?? 0)
+        // TongSoLuong (HoaDonDto, Backend) chưa từng được populate ở đâu — luôn 0, không dùng được.
+        // Tự cộng từ chiTietHoaDons (đã có sẵn trong HoaDonDetailDto) thay vì tin field đó.
+        let soLy = d.chiTietHoaDons?.reduce(0) { $0 + $1.soLuong } ?? 0
         let amountVnd = Int(amount(d).rounded())
         // ND chỉ ghi mã đơn (không kèm tên khách như billAddInfo dùng cho QR) — ThuChuyenKhoanTuNganHangAsync
         // chỉ cần mã đầu tiên để đối chiếu tự động, không cần tên (xem buildCodesWithNoKhac).
