@@ -52,8 +52,11 @@ struct HoaDonDetailView: View {
             shipperPickerSheet
         }
         .sheet(isPresented: $showSmsComposer) {
-            if let detail, let phone = detail.soDienThoaiText, !phone.isEmpty {
-                SMSComposerView(recipients: [phone], body: BillTextBuilder.smsText(detail)) {
+            if let detail {
+                // Không có SĐT vẫn mở soạn sẵn nội dung — nhân viên tự chọn người nhận trong app
+                // Tin nhắn, chỉ bỏ qua bước prefill recipient.
+                let phone = detail.soDienThoaiText?.isEmpty == false ? [detail.soDienThoaiText!] : []
+                SMSComposerView(recipients: phone, body: BillTextBuilder.smsText(detail)) {
                     showSmsComposer = false
                 }
             }
@@ -231,10 +234,10 @@ struct HoaDonDetailView: View {
         let singlePaymentBank = payments.count == 1 ? payments[0].phuongThucThanhToanId.lowercased() == PaymentMethod.chuyenKhoanId : nil
         let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
-        // "Gửi SMS" chỉ hiện khi có SĐT (bắt buộc để gửi) và máy hỗ trợ gửi SMS thật (canSendText
-        // false trên máy không có SIM/không cấu hình Tin nhắn — ẩn hẳn thay vì hiện nút bấm vô ích).
+        // "Gửi SMS" luôn hiện kể cả hoá đơn không có SĐT — soạn sẵn nội dung, nhân viên tự chọn
+        // người nhận trong app Tin nhắn. Chỉ ẩn khi máy không hỗ trợ gửi SMS thật (không SIM/không
+        // cấu hình Tin nhắn — canSendText() false, hiện nút cũng không bấm được).
         let canSms = MFMessageComposeViewController.canSendText()
-            && !(d.soDienThoaiText?.isEmpty ?? true)
 
         return VStack(spacing: 10) {
             HStack(spacing: 10) {
