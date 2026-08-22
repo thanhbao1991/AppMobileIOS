@@ -526,10 +526,13 @@ enum BillTextBuilder {
         let amountVnd = Int(amount(d).rounded())
         // ND chỉ ghi mã đơn (không kèm tên khách như billAddInfo dùng cho QR) — ThuChuyenKhoanTuNganHangAsync
         // chỉ cần mã đầu tiên để đối chiếu tự động, không cần tên (xem buildCodesWithNoKhac).
-        let maCode = buildCodesWithNoKhac(buildMaHoaDon(d.id), d.maHoaDonNoKhac)
+        let ma = buildMaHoaDon(d.id)
+        let maCode = buildCodesWithNoKhac(ma, d.maHoaDonNoKhac)
         let bank = d.bankName ?? "VIETINBANK"
         let stk = d.bankAccountNo ?? ""
-        let link = "\(Prefs.apiBase)/api/HoaDon/\(d.id)/qr"
+        // Dùng mã ngắn "HDxxxxxxxx" thay vì Guid đầy đủ (36 ký tự) — Backend tự tra Guid thật từ 8
+        // hex đầu (xem HoaDonController.GetBillQrByHoaDonId/ResolveIdByShortCodeAsync).
+        let link = "\(Prefs.publicBase)/api/HoaDon/\(ma)/qr"
         let amountFormatter = NumberFormatter()
         amountFormatter.numberStyle = .decimal
         amountFormatter.groupingSeparator = "."

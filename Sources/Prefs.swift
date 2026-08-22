@@ -2,6 +2,9 @@ import Foundation
 
 enum Prefs {
     static let apiBase = "https://api.denncoffee.uk"
+    /// Domain gốc (không tiền tố "api.") — cùng Backend, thêm binding IIS + DNS record riêng chỉ
+    /// để dùng cho link gửi khách (SMS) không muốn lộ "api." ra ngoài.
+    static let publicBase = "https://denncoffee.uk"
     private static let defaults = UserDefaults.standard
     private static let keyToken = "token"
     private static let keyRefreshToken = "refresh_token"
