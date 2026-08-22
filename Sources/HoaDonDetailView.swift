@@ -524,22 +524,22 @@ enum BillTextBuilder {
     static func smsText(_ d: HoaDonDetailDto) -> String {
         let soLy = d.tongSoLuong ?? (d.chiTietHoaDons?.reduce(0) { $0 + $1.soLuong } ?? 0)
         let amountVnd = Int(amount(d).rounded())
-        let addInfo: String
-        if let billAddInfo = d.billAddInfo, !billAddInfo.isEmpty {
-            addInfo = billAddInfo
-        } else {
-            let ten = (d.tenKhachHangText?.isEmpty == false) ? d.tenKhachHangText! : "KHACH"
-            let ma = buildMaHoaDon(d.id)
-            let codes = buildCodesWithNoKhac(ma, d.maHoaDonNoKhac)
-            addInfo = toAsciiNoDiacritics("\(ten) \(codes)", upper: true)
-        }
+        // ND chỉ ghi mã đơn (không kèm tên khách như billAddInfo dùng cho QR) — ThuChuyenKhoanTuNganHangAsync
+        // chỉ cần mã đầu tiên để đối chiếu tự động, không cần tên (xem buildCodesWithNoKhac).
+        let maCode = buildCodesWithNoKhac(buildMaHoaDon(d.id), d.maHoaDonNoKhac)
         let bank = d.bankName ?? "VIETINBANK"
         let stk = d.bankAccountNo ?? ""
         let link = "\(Prefs.apiBase)/api/HoaDon/\(d.id)/qr"
+        let amountFormatter = NumberFormatter()
+        amountFormatter.numberStyle = .decimal
+        amountFormatter.groupingSeparator = "."
+        let amountText = amountFormatter.string(from: NSNumber(value: amountVnd)) ?? "\(amountVnd)"
         return """
-            DENN: \(soLy) ly, \(amountVnd)d
-            STK \(stk) \(bank)
-            ND: \(addInfo)
+            DENN: Cam on quy khach da tin yeu.
+            \(soLy) ly, \(amountText)d
+            STK: \(stk)
+            NH: \(bank)
+            ND: \(maCode)
             QR: \(link)
             """
     }
