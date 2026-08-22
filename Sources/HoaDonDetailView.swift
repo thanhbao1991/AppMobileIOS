@@ -536,7 +536,12 @@ enum BillTextBuilder {
         let bank = d.bankName ?? "VIETINBANK"
         let stk = d.bankAccountNo ?? ""
         let link = "\(Prefs.apiBase)/api/HoaDon/\(d.id)/qr"
-        return "DENN: \(soLy) ly, \(amountVnd)d. STK \(stk) \(bank). ND: \(addInfo). QR: \(link)"
+        return """
+            DENN: \(soLy) ly, \(amountVnd)d
+            STK \(stk) \(bank)
+            ND: \(addInfo)
+            QR: \(link)
+            """
     }
 
     static func build(_ d: HoaDonDetailDto) -> String {
