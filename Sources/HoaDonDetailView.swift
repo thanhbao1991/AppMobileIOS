@@ -536,7 +536,10 @@ enum BillTextBuilder {
         let stk = d.bankAccountNo ?? ""
         // Dùng mã ngắn "HDxxxxxxxx" thay vì Guid đầy đủ (36 ký tự) — Backend tự tra Guid thật từ 8
         // hex đầu (xem HoaDonController.GetBillQrByHoaDonId/ResolveIdByShortCodeAsync).
-        let link = "\(Prefs.publicBase)/api/HoaDon/\(ma)/qr"
+        // ĐÃ THỬ domain gốc denncoffee.uk (Prefs.publicBase) 2026-08-22 nhưng rollback ngay trong
+        // ngày — dùng chung cert với api.denncoffee.uk khiến app bị treo do HTTP/2 connection
+        // coalescing giữa 2 host (xem Prefs.swift + memory project_sms_qr_link_bare_domain).
+        let link = "\(Prefs.apiBase)/api/HoaDon/\(ma)/qr"
         let amountFormatter = NumberFormatter()
         amountFormatter.numberStyle = .decimal
         amountFormatter.groupingSeparator = "."
