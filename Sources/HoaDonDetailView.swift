@@ -1,3 +1,4 @@
+import MessageUI
 import SwiftUI
 import UIKit
 
@@ -13,6 +14,7 @@ struct HoaDonDetailView: View {
     @State private var showShipperPicker = false
     @State private var pendingAction: PendingAction?
     @State private var copiedFeedback = false
+    @State private var showSmsComposer = false
 
     var body: some View {
         NavigationStack {
@@ -48,6 +50,13 @@ struct HoaDonDetailView: View {
         .task { await load() }
         .sheet(isPresented: $showShipperPicker) {
             shipperPickerSheet
+        }
+        .sheet(isPresented: $showSmsComposer) {
+            if let detail, let phone = detail.soDienThoaiText, !phone.isEmpty {
+                SMSComposerView(recipients: [phone], body: BillTextBuilder.smsText(detail)) {
+                    showSmsComposer = false
+                }
+            }
         }
         .confirmationDialog(
             pendingAction?.title ?? "",
@@ -222,12 +231,25 @@ struct HoaDonDetailView: View {
         let singlePaymentBank = payments.count == 1 ? payments[0].phuongThucThanhToanId.lowercased() == PaymentMethod.chuyenKhoanId : nil
         let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
+        // "Gửi SMS" chỉ hiện khi có SĐT (bắt buộc để gửi) và máy hỗ trợ gửi SMS thật (canSendText
+        // false trên máy không có SIM/không cấu hình Tin nhắn — ẩn hẳn thay vì hiện nút bấm vô ích).
+        let canSms = MFMessageComposeViewController.canSendText()
+            && !(d.soDienThoaiText?.isEmpty ?? true)
+
         return VStack(spacing: 10) {
-            ActionButtonView(
-                icon: copiedFeedback ? "checkmark" : "doc.on.doc", code: nil,
-                caption: copiedFeedback ? "Đã copy" : "Gửi Bill", color: .brandPrimary
-            ) {
-                Task { await copyBillImage(d) }
+            HStack(spacing: 10) {
+                ActionButtonView(
+                    icon: copiedFeedback ? "checkmark" : "doc.on.doc", code: nil,
+                    caption: copiedFeedback ? "Đã copy" : "Gửi Bill", color: .brandPrimary
+                ) {
+                    Task { await copyBillImage(d) }
+                }
+
+                if canSms {
+                    ActionButtonView(icon: "message", code: nil, caption: "Gửi SMS", color: .brandPrimary) {
+                        showSmsComposer = true
+                    }
+                }
             }
 
             if d.conLai > 0 {
@@ -492,6 +514,29 @@ enum BillTextBuilder {
             .replacingOccurrences(of: "đ", with: "d")
             .replacingOccurrences(of: "Đ", with: "D")
         return upper ? folded.uppercased() : folded
+    }
+
+    /// Tin SMS soạn sẵn cho khách không có Zalo/Facebook để nhận "Gửi Bill" — cố giữ GSM-7 thuần
+    /// (không dấu, không ký tự lạ) để 1 tin SMS đủ chứa (~160 ký tự), tránh vỡ thành 2 đoạn tốn
+    /// tiền hơn. KHÔNG kèm tên chủ TK (dài, đã có sẵn trên trang link QR) — chỉ STK + tên ngân
+    /// hàng đủ để khách nhận diện, đổi lại nhường chỗ cho link trang QR (xem HoaDonController.
+    /// GetBillQrByHoaDonId) tự vẽ đủ số tiền/QR/thông tin đầy đủ khi khách bấm vào.
+    static func smsText(_ d: HoaDonDetailDto) -> String {
+        let soLy = d.tongSoLuong ?? (d.chiTietHoaDons?.reduce(0) { $0 + $1.soLuong } ?? 0)
+        let amountVnd = Int(amount(d).rounded())
+        let addInfo: String
+        if let billAddInfo = d.billAddInfo, !billAddInfo.isEmpty {
+            addInfo = billAddInfo
+        } else {
+            let ten = (d.tenKhachHangText?.isEmpty == false) ? d.tenKhachHangText! : "KHACH"
+            let ma = buildMaHoaDon(d.id)
+            let codes = buildCodesWithNoKhac(ma, d.maHoaDonNoKhac)
+            addInfo = toAsciiNoDiacritics("\(ten) \(codes)", upper: true)
+        }
+        let bank = d.bankName ?? "VIETINBANK"
+        let stk = d.bankAccountNo ?? ""
+        let link = "\(Prefs.apiBase)/api/HoaDon/\(d.id)/qr"
+        return "DENN: \(soLy) ly, \(amountVnd)d. STK \(stk) \(bank). ND: \(addInfo). QR: \(link)"
     }
 
     static func build(_ d: HoaDonDetailDto) -> String {

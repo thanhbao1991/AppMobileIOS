@@ -103,6 +103,12 @@ struct HoaDonDetailDto: Decodable {
     /// Nội dung chuyển khoản QR tính sẵn ("TEN HD1234 DEN HD9999") — Backend build (khớp
     /// BankQrConfig.BuildAddInfo / HoaDonPrinter Desktop), không tự ghép lại ở client nữa.
     let billAddInfo: String?
+    /// Thông tin tài khoản nhận tiền — đọc thẳng từ Backend (BankQrConfig), không hardcode lại ở
+    /// client, khớp nguyên tắc "1 nguồn duy nhất" (xem HoaDonDto.cs). Dùng để soạn SMS/hiển thị.
+    let bankName: String?
+    let bankAccountNo: String?
+    let bankAccountName: String?
+    let tongSoLuong: Int?
     let chiTietHoaDons: [ChiTietHoaDonResponseDto]?
     let chiTietHoaDonToppings: [ChiTietHoaDonToppingResponseDto]?
     let payments: [HoaDonPaymentBriefDto]?
