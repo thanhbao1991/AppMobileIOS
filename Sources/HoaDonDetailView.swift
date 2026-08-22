@@ -530,7 +530,9 @@ enum BillTextBuilder {
         // chỉ cần mã đầu tiên để đối chiếu tự động, không cần tên (xem buildCodesWithNoKhac).
         let ma = buildMaHoaDon(d.id)
         let maCode = buildCodesWithNoKhac(ma, d.maHoaDonNoKhac)
-        let bank = d.bankName ?? "VIETINBANK"
+        // "VietinBank" (viết hoa chữ đầu) chỉ để hiển thị đẹp trong SMS — d.bankName ("VIETINBANK")
+        // là mã ngân hàng dùng cho VietQR API, không đổi cách viết đó (giữ nguyên BankQrConfig).
+        let bankDisplay = "VietinBank"
         let stk = d.bankAccountNo ?? ""
         // Dùng mã ngắn "HDxxxxxxxx" thay vì Guid đầy đủ (36 ký tự) — Backend tự tra Guid thật từ 8
         // hex đầu (xem HoaDonController.GetBillQrByHoaDonId/ResolveIdByShortCodeAsync).
@@ -540,12 +542,11 @@ enum BillTextBuilder {
         amountFormatter.groupingSeparator = "."
         let amountText = amountFormatter.string(from: NSNumber(value: amountVnd)) ?? "\(amountVnd)"
         return """
-            DENN: Cam on quy khach da tin yeu.
-            \(soLy) ly, \(amountText)d
-            STK: \(stk)
-            NH: \(bank)
+            DENN: Cam on quy khach!
+            Don \(soLy) ly: \(amountText)d
+            \(bankDisplay) STK: \(stk)
             ND: \(maCode)
-            QR: \(link)
+            Ma QR: \(link)
             """
     }
 
