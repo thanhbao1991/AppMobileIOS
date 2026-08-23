@@ -8,8 +8,9 @@ import UIKit
 /// đen), 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát. Mặc định phóng to lấp đầy
 /// khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên trái/phải bị crop, kéo 1 ngón để
 /// xem phần bị crop, zoom ra tối đa đúng lúc hết crop (không cho nhỏ hơn nữa). Chạm vào ảnh = click
-/// chuột trái tại đúng vị trí đó trên Desktop (SendClick → ClickRequested, Desktop tự click bằng
-/// UI Automation pattern — Invoke/SelectionItem/Toggle — không qua OS input).
+/// chuột trái tại đúng vị trí đó trên Desktop — toạ độ chạm gửi kèm lượt poll chụp màn hình tiếp
+/// theo (không phải 1 hub method riêng), Desktop tự click bằng UI Automation pattern —
+/// Invoke/SelectionItem/Toggle — không qua OS input.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -26,6 +27,9 @@ struct DesktopScreenView: View {
     @State private var lastScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
+    /// Toạ độ chạm chờ gửi kèm lượt poll chụp màn hình TIẾP THEO (không phải 1 lời gọi riêng — xem
+    /// ghi chú trong `tapGesture`).
+    @State private var pendingClick: CGPoint?
 
     var body: some View {
         ZStack {
@@ -156,14 +160,15 @@ struct DesktopScreenView: View {
         return frame.width / renderedWidth
     }
 
-    // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop.
+    // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop. Không gọi hub riêng — 1 event
+    // riêng ("SendClick"/"ClickRequested") đã thử và Desktop không bao giờ nhận được dù relay giống
+    // hệt CaptureScreenshotRequested (nguyên nhân chưa rõ). Thay vào đó chỉ ghi lại toạ độ, gửi kèm
+    // lượt poll chụp màn hình tiếp theo trong `startPolling()` — kênh đó đã verify chạy ổn định.
     private func tapGesture(image: UIImage, frame: CGSize) -> some Gesture {
         SpatialTapGesture()
             .onEnded { value in
                 guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
-                let targetId = currentDesktopId
-                Task { _ = try? await SignalRClient.shared.invoke(
-                    "SendClick", args: [targetId, Double(point.x), Double(point.y)]) }
+                pendingClick = point
             }
     }
 
@@ -209,7 +214,12 @@ struct DesktopScreenView: View {
             var consecutiveFailures = 0
             while !Task.isCancelled {
                 do {
-                    _ = try await SignalRClient.shared.invoke("RequestDesktopScreenshot", args: [currentDesktopId])
+                    let click = pendingClick
+                    pendingClick = nil
+                    let clickXArg: Any = click != nil ? Double(click!.x) : NSNull()
+                    let clickYArg: Any = click != nil ? Double(click!.y) : NSNull()
+                    _ = try await SignalRClient.shared.invoke(
+                        "RequestDesktopScreenshot", args: [currentDesktopId, clickXArg, clickYArg])
                     consecutiveFailures = 0
                     disconnected = false
                     isReconnecting = false
