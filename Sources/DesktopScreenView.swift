@@ -3,10 +3,15 @@ import UIKit
 
 /// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`. KHÔNG còn
 /// hỏi từng ảnh (poll) — vào màn hình gọi `StartWatchingDesktop` 1 lần, Desktop tự đẩy khung hình
-/// liên tục theo nhịp của chính nó (thu nhỏ 60% + JPEG quality thấp) qua `ScreenshotReceived` tới
-/// khi rời màn hình gọi `StopWatchingDesktop`; không phải video thật nhưng bỏ hẳn round-trip
-/// request-response mỗi khung hình nên mượt hơn hẳn bản poll cũ. 1 watchdog tự gọi lại
-/// `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect). Giữ nguyên chiều
+/// liên tục theo nhịp của chính nó qua `ScreenshotReceived` tới khi rời màn hình gọi
+/// `StopWatchingDesktop`. Mỗi khung hình chỉ là DIRTY-RECT (dải ngang đã đổi so với lần trước, x/y/
+/// w/h kèm ảnh) — Desktop bỏ qua hoàn toàn lượt gửi nếu màn hình đứng yên (thường xuyên với POS),
+/// chỉ gửi full-frame lúc khung đầu tiên + định kỳ ~150 lượt để tự "chữa lành". `applyFrame()` vẽ
+/// đè patch lên canvas (`image`) đang hiển thị thay vì thay hẳn ảnh mỗi lần — không phải video thật
+/// (không mã hoá H.264) nhưng bỏ hẳn round-trip request-response VÀ hầu hết băng thông của khung
+/// hình không đổi, nên mượt + nét hơn hẳn bản poll/full-frame cũ. 1 watchdog tự gọi lại
+/// `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect) — ngưỡng phải RỘNG
+/// (10s) vì màn hình đứng yên hợp lệ cũng không có khung hình mới trong lúc đó. Giữ nguyên chiều
 /// dọc (không tự xoay ngang); 2 ngón để zoom (chỉ zoom chiều ngang, chiều dọc luôn khớp khung xem —
 /// không bao giờ hở viền đen), 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát. Mặc định
 /// phóng to lấp đầy khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên trái/phải bị
@@ -218,13 +223,8 @@ struct DesktopScreenView: View {
 
     private func startWatching() {
         Task {
-            await SignalRClient.shared.setScreenshotHandler { data in
-                if let uiImage = UIImage(data: data) {
-                    image = uiImage
-                    lastFrameAt = Date()
-                    disconnected = false
-                    isReconnecting = false
-                }
+            await SignalRClient.shared.setScreenshotHandler { data, x, y, w, h in
+                applyFrame(data, x: x, y: y, w: w, h: h)
             }
             _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId])
         }
@@ -232,25 +232,51 @@ struct DesktopScreenView: View {
         // Desktop tự đẩy khung hình — không có gì để "hỏi lại" nếu mạng rớt, nên cần tự kiểm tra
         // độ mới của khung hình cuối cùng và chủ động gọi lại StartWatchingDesktop khi cần (bù cho
         // cả 2 trường hợp: máy Desktop reconnect đổi connectionId, HOẶC chính iOS reconnect khiến
-        // Desktop đang đẩy nhầm về 1 connectionId cũ đã chết).
+        // Desktop đang đẩy nhầm về 1 connectionId cũ đã chết). Ngưỡng "lâu không thấy gì" phải RỘNG
+        // hơn hẳn 1 khung hình đơn lẻ — giờ Desktop chỉ gửi khi có gì đổi (dirty-rect) + 1 khung hình
+        // "chữa lành" định kỳ mỗi ~150 lượt chụp (~6s), nên màn hình đứng yên hoàn toàn cũng có thể
+        // hợp lệ không có khung hình mới suốt vài giây — không phải dấu hiệu mất kết nối.
         watchdogTask = Task {
             var staleTicks = 0
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { return }
 
-                let stale = Date().timeIntervalSince(lastFrameAt) > 2
+                let stale = Date().timeIntervalSince(lastFrameAt) > 10
                 if !stale { staleTicks = 0; continue }
 
                 staleTicks += 1
                 _ = await tryResolveNewId()
                 _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId])
 
-                // ~20s không nhận được khung hình nào dù đã thử gọi lại nhiều lần — báo mất kết nối
-                // thật, tránh báo sai vì 1-2 lần hiccup mạng thoáng qua.
-                if staleTicks >= 10 { disconnected = true }
+                // ~10s (ngưỡng stale) + ~30s thử lại nhiều lần vẫn không có gì — báo mất kết nối thật.
+                if staleTicks >= 15 { disconnected = true }
             }
         }
+    }
+
+    /// Vẽ đè khung hình mới (có thể chỉ là 1 dải dirty-rect) lên canvas đang hiển thị. Khung hình
+    /// đầu tiên (chưa có canvas) hoặc khung "chữa lành" định kỳ (kích thước khác canvas hiện có)
+    /// coi như thay hẳn canvas; còn lại vẽ patch đúng vị trí (x, y) lên canvas cũ.
+    @MainActor
+    private func applyFrame(_ data: Data, x: Int, y: Int, w: Int, h: Int) {
+        guard let patch = UIImage(data: data) else { return }
+        let isFullReplace = x == 0 && y == 0
+            && (image == nil || CGSize(width: w, height: h) != image!.size)
+        if isFullReplace {
+            image = patch
+        } else if let canvas = image {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            let renderer = UIGraphicsImageRenderer(size: canvas.size, format: format)
+            image = renderer.image { _ in
+                canvas.draw(at: .zero)
+                patch.draw(at: CGPoint(x: x, y: y))
+            }
+        }
+        lastFrameAt = Date()
+        disconnected = false
+        isReconnecting = false
     }
 
     private func tryResolveNewId() async -> Bool {

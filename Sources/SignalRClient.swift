@@ -16,9 +16,10 @@ actor SignalRClient {
 
     /// entityName, action, id — nhận trên MainActor để các View cập nhật @State an toàn.
     private var onEntityChanged: (@MainActor (String, String, String) -> Void)?
-    /// Tab "Xem màn hình Desktop" gán khi đang mở, gỡ khi rời view — ảnh JPEG trả về từ
+    /// Tab "Xem màn hình Desktop" gán khi đang mở, gỡ khi rời view — ảnh JPEG (dirty-rect, không
+    /// phải lúc nào cũng full-frame) + toạ độ x/y/w/h cần vẽ đè lên canvas hiện có, trả về từ
     /// Desktop client qua "ScreenshotReceived".
-    private var onScreenshotReceived: (@MainActor (Data) -> Void)?
+    private var onScreenshotReceived: (@MainActor (Data, Int, Int, Int, Int) -> Void)?
 
     func start(onEntityChanged: @escaping @MainActor (String, String, String) -> Void) {
         self.onEntityChanged = onEntityChanged
@@ -34,7 +35,7 @@ actor SignalRClient {
         task = nil
     }
 
-    func setScreenshotHandler(_ handler: (@MainActor (Data) -> Void)?) {
+    func setScreenshotHandler(_ handler: (@MainActor (Data, Int, Int, Int, Int) -> Void)?) {
         onScreenshotReceived = handler
     }
 
@@ -120,9 +121,10 @@ actor SignalRClient {
     }
 
     /// type 1 = invocation ("EntityChanged" arguments = [entityName, action, id, senderConnectionId,
-    /// voice]; "ScreenshotReceived" arguments = [base64Bytes]). type 3 = completion (kết quả của
-    /// invoke() có invocationId, vd. GetConnectedDesktops). type 6 = ping từ server, không cần
-    /// phản hồi ở phía client cho hub này.
+    /// voice]; "ScreenshotReceived" arguments = [base64Bytes, x, y, width, height] — ảnh có thể chỉ
+    /// là 1 dải ngang cần vẽ đè lên canvas hiện có, không phải lúc nào cũng full-frame). type 3 =
+    /// completion (kết quả của invoke() có invocationId, vd. GetConnectedDesktops). type 6 = ping từ
+    /// server, không cần phản hồi ở phía client cho hub này.
     private func handleRecord(_ record: String) {
         guard let data = record.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -147,10 +149,12 @@ actor SignalRClient {
            let entityName = args[0] as? String, let action = args[1] as? String, let id = args[2] as? String {
             let callback = onEntityChanged
             Task { @MainActor in callback?(entityName, action, id) }
-        } else if target == "ScreenshotReceived", let base64 = args.first as? String,
-                  let imageData = Data(base64Encoded: base64) {
+        } else if target == "ScreenshotReceived", args.count >= 5,
+                  let base64 = args[0] as? String, let imageData = Data(base64Encoded: base64),
+                  let x = (args[1] as? NSNumber)?.intValue, let y = (args[2] as? NSNumber)?.intValue,
+                  let w = (args[3] as? NSNumber)?.intValue, let h = (args[4] as? NSNumber)?.intValue {
             let callback = onScreenshotReceived
-            Task { @MainActor in callback?(imageData) }
+            Task { @MainActor in callback?(imageData, x, y, w, h) }
         }
     }
 
