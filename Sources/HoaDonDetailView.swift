@@ -15,6 +15,7 @@ struct HoaDonDetailView: View {
     @State private var pendingAction: PendingAction?
     @State private var copiedFeedback = false
     @State private var showSmsComposer = false
+    @State private var qrImage: UIImage?
 
     var body: some View {
         NavigationStack {
@@ -168,6 +169,17 @@ struct HoaDonDetailView: View {
                     if d.giamGia > 0 { infoRow("Giảm giá", HoaDonFormatting.money(d.giamGia)) }
                     infoRow("Thành tiền", HoaDonFormatting.money(d.thanhTien))
                     infoRow("Đã thu", HoaDonFormatting.money(d.daThu))
+                    if let qrImage {
+                        HStack {
+                            Spacer()
+                            Image(uiImage: qrImage)
+                                .resizable()
+                                .interpolation(.none)
+                                .frame(width: 130, height: 130)
+                                .padding(.vertical, 6)
+                            Spacer()
+                        }
+                    }
                     Divider()
                     HStack {
                         Text("CÒN LẠI").font(.caption.bold()).foregroundColor(.textMuted)
@@ -444,6 +456,17 @@ struct HoaDonDetailView: View {
         loading = true
         detail = await APIClient.shared.getHoaDonDetail(hoaDonId)
         loading = false
+        await loadQrImage()
+    }
+
+    /// QR hiển thị ngay trong màn chi tiết (không chỉ trong ảnh "Gửi Bill") — cùng addInfo/amount
+    /// với copyBillImage nên khách quét đúng y hệt nội dung CK sẽ dùng khi gửi bill.
+    private func loadQrImage() async {
+        guard let d = detail else { qrImage = nil; return }
+        let addInfo = d.billAddInfo ?? ""
+        let amount = BillTextBuilder.amount(d)
+        let data = await APIClient.shared.getBillQrImage(amount: amount, addInfo: addInfo)
+        qrImage = data.flatMap { UIImage(data: $0) }
     }
 
     /// Render chi tiết hoá đơn thành ảnh, copy vào clipboard để dán thẳng vào chat Zalo/Facebook —
