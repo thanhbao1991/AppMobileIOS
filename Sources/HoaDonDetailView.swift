@@ -141,6 +141,12 @@ struct HoaDonDetailView: View {
                             if let dc = d.diaChiText, !dc.isEmpty { iconRow("location.fill", dc) }
                         }
                         Spacer()
+                        if let qrImage {
+                            Image(uiImage: qrImage)
+                                .resizable()
+                                .interpolation(.none)
+                                .frame(width: 90, height: 90)
+                        }
                     }
                     if let gc = d.ghiChu, !gc.isEmpty { iconRow("note.text", gc) }
                 }
@@ -169,17 +175,6 @@ struct HoaDonDetailView: View {
                     if d.giamGia > 0 { infoRow("Giảm giá", HoaDonFormatting.money(d.giamGia)) }
                     infoRow("Thành tiền", HoaDonFormatting.money(d.thanhTien))
                     infoRow("Đã thu", HoaDonFormatting.money(d.daThu))
-                    if let qrImage {
-                        HStack {
-                            Spacer()
-                            Image(uiImage: qrImage)
-                                .resizable()
-                                .interpolation(.none)
-                                .frame(width: 130, height: 130)
-                                .padding(.vertical, 6)
-                            Spacer()
-                        }
-                    }
                     Divider()
                     HStack {
                         Text("CÒN LẠI").font(.caption.bold()).foregroundColor(.textMuted)
