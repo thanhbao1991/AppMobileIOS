@@ -14,12 +14,16 @@ import UIKit
 ///
 /// Điều khiển: TOÀN BỘ gesture xử lý qua 1 view raw-touch duy nhất (`RemoteControlSurface`, xem
 /// `KeyCaptureView.swift`) — không compose nhiều gesture recognizer độc lập, tránh xung đột (1 ngón
-/// và 2 ngón nằm trên các recognizer khác nhau từng gây vừa gửi lệnh chuột vừa cuộn cùng lúc). Ngữ
-/// nghĩa: 1 ngón CHẠM (không đáng kể di chuyển) = click chuột trái thật tại đúng điểm đó (move+down+up
-/// qua Win32 SendInput phía Desktop); 1 ngón KÉO thật sự = pan khung nhìn (chỉ có tác dụng khi đang
-/// zoom); 2 ngón kéo = cuộn; pinch 2 ngón = zoom KHUNG NHÌN (không đổi độ phân giải Desktop thật).
-/// Nút bàn phím góc trên bật `KeyCaptureView` để gõ phím thật. `imagePoint()` quy đổi toạ độ chạm
-/// trên khung nhìn (đã bị scale/offset do zoom) về đúng pixel trong ảnh Desktop gốc.
+/// và 2 ngón nằm trên các recognizer khác nhau từng gây vừa gửi lệnh chuột vừa cuộn cùng lúc; 2 ngón
+/// cũng tự phân định RÕ 1 trong 2 hành vi cuộn/zoom cho trọn lượt chạm, tránh vừa cuộn vừa zoom giật
+/// do rung tay). Ngữ nghĩa: 1 ngón CHẠM (không đáng kể di chuyển) = click chuột trái thật tại đúng
+/// điểm đó (move+down+up qua Win32 SendInput phía Desktop); GIỮ YÊN đủ lâu (long-press) = click chuột
+/// phải; 1 ngón KÉO thật sự = pan khung nhìn (hoạt động ở mọi mức zoom, kể cả chưa zoom — để xem phần
+/// bị crop do màn hình điện thoại không tỉ lệ khớp màn hình Desktop); 2 ngón kéo = cuộn; pinch 2 ngón
+/// = zoom KHUNG NHÌN (không đổi độ phân giải Desktop thật) — nhỏ nhất tới `minScale()` (thấy TOÀN BỘ
+/// màn hình Desktop, không crop chiều nào) tới lớn nhất 4x (zoom sâu để bấm chính xác). Nút bàn phím
+/// góc trên bật `KeyCaptureView` để gõ phím thật. `imagePoint()` quy đổi toạ độ chạm trên khung nhìn
+/// (đã bị scale/offset do zoom) về đúng pixel trong ảnh Desktop gốc.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -57,9 +61,10 @@ struct DesktopScreenView: View {
 
                         RemoteControlSurface(
                             onTap: { location in handleTap(at: location, frame: geo.size, image: image) },
-                            onPan: { delta in handlePan(delta: delta, frame: geo.size) },
+                            onLongPress: { location in handleLongPress(at: location, frame: geo.size, image: image) },
+                            onPan: { delta in handlePan(delta: delta, frame: geo.size, image: image) },
                             onScroll: { location, deltaY in handleScroll(at: location, deltaY: deltaY, frame: geo.size, image: image) },
-                            onPinch: { factor in handlePinch(factor: factor, frame: geo.size) })
+                            onPinch: { factor in handlePinch(factor: factor, frame: geo.size, image: image) })
                     }
                 }
                 .clipped()
@@ -147,12 +152,21 @@ struct DesktopScreenView: View {
         }
     }
 
-    // 1 ngón kéo thật sự = pan khung nhìn — clampOffset tự ép offset=0 khi scale=1 nên vô hại lúc
-    // chưa zoom, không gửi lệnh chuột gì trong lúc kéo.
-    private func handlePan(delta: CGSize, frame: CGSize) {
+    // Giữ yên (không di chuyển) đủ lâu = click chuột phải.
+    private func handleLongPress(at location: CGPoint, frame: CGSize, image: UIImage) {
+        guard let point = imagePoint(from: location, frame: frame, image: image) else { return }
+        let targetId = currentDesktopId
+        Task { _ = try? await SignalRClient.shared.invoke(
+            "SendRightClick", args: [targetId, Double(point.x), Double(point.y)]) }
+    }
+
+    // 1 ngón kéo thật sự = pan khung nhìn — hoạt động ở MỌI mức scale (kể cả scale=1 mặc định, để
+    // xem phần bị crop do màn hình điện thoại không tỉ lệ khớp màn hình Desktop), không gửi lệnh
+    // chuột gì trong lúc kéo. clampOffset tự trả về 0 ở những chiều/scale không còn gì để pan.
+    private func handlePan(delta: CGSize, frame: CGSize, image: UIImage) {
         offset = clampOffset(
             CGSize(width: offset.width + delta.width, height: offset.height + delta.height),
-            scale: scale, frame: frame)
+            scale: scale, frame: frame, image: image)
     }
 
     private func handleScroll(at location: CGPoint, deltaY: CGFloat, frame: CGSize, image: UIImage) {
@@ -163,18 +177,43 @@ struct DesktopScreenView: View {
     }
 
     // factor = tỉ lệ khoảng cách 2 ngón hiện tại / lần trước (RemoteControlSurfaceView đã tính sẵn)
-    // — nhân dồn trực tiếp vào scale, KHÔNG đổi độ phân giải capture Desktop, chỉ đổi khung nhìn.
-    private func handlePinch(factor: CGFloat, frame: CGSize) {
-        scale = max(1, min(4, scale * factor))
-        offset = clampOffset(offset, scale: scale, frame: frame)
+    // — nhân dồn trực tiếp vào scale. Chặn dưới = minScale(image,frame) (đủ nhỏ để thấy TOÀN BỘ màn
+    // hình Desktop, không crop chiều nào) thay vì cứng 1, chặn trên = 4 (zoom sâu để bấm chính xác).
+    // KHÔNG đổi độ phân giải capture Desktop, chỉ đổi khung nhìn.
+    private func handlePinch(factor: CGFloat, frame: CGSize, image: UIImage) {
+        scale = max(minScale(image: image, frame: frame), min(4, scale * factor))
+        offset = clampOffset(offset, scale: scale, frame: frame, image: image)
     }
 
-    /// scaleEffect(scale) phóng to quanh tâm khung xem — content sau baseline aspectFill đã khớp
-    /// đúng kích thước frame (không dư/thiếu), nên phần phình thêm do zoom chỉ đơn giản là
-    /// frame*(scale-1)/2 mỗi chiều — không cần biết tỉ lệ ảnh gốc như hàm imagePoint bên dưới.
-    private func clampOffset(_ o: CGSize, scale: CGFloat, frame: CGSize) -> CGSize {
-        let maxX = frame.width * (scale - 1) / 2
-        let maxY = frame.height * (scale - 1) / 2
+    /// Kích thước ảnh sau `.scaledToFill()` (TRƯỚC `scaleEffect(scale)`) — 1 chiều luôn khớp đúng
+    /// frame (chiều "vừa khít"), chiều còn lại phình ra ngoài (chiều bị crop ở scale=1 mặc định).
+    private func baselineRenderedSize(image: UIImage, frame: CGSize) -> CGSize {
+        guard image.size.height > 0, frame.height > 0 else { return frame }
+        let imageAspect = image.size.width / image.size.height
+        let frameAspect = frame.width / frame.height
+        if imageAspect > frameAspect {
+            return CGSize(width: frame.height * imageAspect, height: frame.height)
+        } else {
+            return CGSize(width: frame.width, height: frame.width / imageAspect)
+        }
+    }
+
+    /// scale nhỏ nhất để không còn crop chiều nào (toàn bộ ảnh Desktop vừa đúng khung xem, có thể
+    /// hở viền đen 2 bên/trên-dưới nếu tỉ lệ khác nhau) — đúng lúc renderedSize0*scale khớp frame ở
+    /// chiều đang bị crop tại baseline; chiều kia tự động vừa khít vì cùng tỉ lệ ảnh gốc.
+    private func minScale(image: UIImage, frame: CGSize) -> CGFloat {
+        let size0 = baselineRenderedSize(image: image, frame: frame)
+        guard size0.width > 0, size0.height > 0 else { return 1 }
+        return min(frame.width / size0.width, frame.height / size0.height)
+    }
+
+    /// scaleEffect(scale) phóng to/thu nhỏ quanh tâm khung xem một content đã có kích thước baseline
+    /// (`baselineRenderedSize`) — phần phình/hụt so với frame ở scale bất kỳ chỉ đơn giản là
+    /// size0*scale - frame mỗi chiều, đúng cho cả scale<1 (zoom ra) lẫn scale>1 (zoom vào).
+    private func clampOffset(_ o: CGSize, scale: CGFloat, frame: CGSize, image: UIImage) -> CGSize {
+        let size0 = baselineRenderedSize(image: image, frame: frame)
+        let maxX = max(0, (size0.width * scale - frame.width) / 2)
+        let maxY = max(0, (size0.height * scale - frame.height) / 2)
         return CGSize(width: min(maxX, max(-maxX, o.width)), height: min(maxY, max(-maxY, o.height)))
     }
 
@@ -189,27 +228,12 @@ struct DesktopScreenView: View {
         let localY = (location.y - offset.height - center.y) / scale + center.y
         guard localX >= 0, localX <= frame.width, localY >= 0, localY <= frame.height else { return nil }
 
-        let imageAspect = image.size.width / image.size.height
-        let frameAspect = frame.width / frame.height
+        let size0 = baselineRenderedSize(image: image, frame: frame)
+        let contentX = localX + (size0.width - frame.width) / 2
+        let contentY = localY + (size0.height - frame.height) / 2
 
-        let renderedWidth: CGFloat
-        let renderedHeight: CGFloat
-        let contentX: CGFloat
-        let contentY: CGFloat
-        if imageAspect > frameAspect {
-            renderedHeight = frame.height
-            renderedWidth = frame.height * imageAspect
-            contentX = localX + (renderedWidth - frame.width) / 2
-            contentY = localY
-        } else {
-            renderedWidth = frame.width
-            renderedHeight = frame.width / imageAspect
-            contentX = localX
-            contentY = localY + (renderedHeight - frame.height) / 2
-        }
-
-        let imageX = contentX * (image.size.width / renderedWidth)
-        let imageY = contentY * (image.size.height / renderedHeight)
+        let imageX = contentX * (image.size.width / size0.width)
+        let imageY = contentY * (image.size.height / size0.height)
         guard imageX >= 0, imageX <= image.size.width, imageY >= 0, imageY <= image.size.height else { return nil }
         return CGPoint(x: imageX, y: imageY)
     }

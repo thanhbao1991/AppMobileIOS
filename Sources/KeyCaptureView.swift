@@ -73,6 +73,7 @@ struct KeyCaptureView: UIViewRepresentable {
 /// `RawTouchGestureDetectorRegion`) — chỉ tham khảo Ý TƯỞNG kiến trúc, code bên dưới tự viết lại.
 final class RemoteControlSurfaceView: UIView {
     var onTap: ((CGPoint) -> Void)?
+    var onLongPress: ((CGPoint) -> Void)?
     var onPan: ((CGSize) -> Void)?
     var onScroll: ((CGPoint, CGFloat) -> Void)?
     var onPinch: ((CGFloat) -> Void)?
@@ -82,9 +83,13 @@ final class RemoteControlSurfaceView: UIView {
     private var trackedTouches: [UITouch] = []
 
     // 1 ngón: chỉ pan khi di chuyển thật sự (> ngưỡng), thả tay không di chuyển mới coi là tap=click.
+    // Giữ yên > longPressDelay không di chuyển = long-press = click chuột phải (huỷ tap thường).
     private var singleStart: CGPoint = .zero
     private var singleLast: CGPoint = .zero
     private var singleMoved = false
+    private var longPressTimer: Timer?
+    private var longPressFired = false
+    private let longPressDelay: TimeInterval = 0.5
 
     // Đã từng có ≥2 ngón trong lượt chạm hiện tại — chặn hẳn tap/pan cho ngón còn sót lại lúc nhấc
     // bớt 1 ngón, tới khi TẤT CẢ ngón rời khỏi màn hình (count về 0) mới reset cho lượt chạm kế tiếp.
@@ -92,6 +97,15 @@ final class RemoteControlSurfaceView: UIView {
 
     private var multiLastMidY: CGFloat = 0
     private var multiLastDistance: CGFloat = 0
+
+    // 2 ngón thật (rung tay) luôn lẫn 1 chút cả 2 loại chuyển động — CHỈ áp dụng MỘT trong 2 hành vi
+    // (cuộn hoặc zoom) cho trọn lượt chạm hiện tại, quyết định bằng tổng biên độ nào vượt trội hẳn,
+    // tránh vừa cuộn vừa zoom giật cục ngoài ý muốn.
+    private enum MultiIntent { case undecided, scroll, zoom }
+    private var multiIntent: MultiIntent = .undecided
+    private var multiCumScroll: CGFloat = 0
+    private var multiCumPinch: CGFloat = 0
+    private let multiDecideThreshold: CGFloat = 8
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         trackedTouches.append(contentsOf: touches)
@@ -103,7 +117,10 @@ final class RemoteControlSurfaceView: UIView {
         case .single:
             guard let t = trackedTouches.first else { return }
             let loc = t.location(in: self)
-            if hypot(loc.x - singleStart.x, loc.y - singleStart.y) > 6 { singleMoved = true }
+            if hypot(loc.x - singleStart.x, loc.y - singleStart.y) > 6 {
+                singleMoved = true
+                cancelLongPressTimer()
+            }
             if singleMoved {
                 onPan?(CGSize(width: loc.x - singleLast.x, height: loc.y - singleLast.y))
             }
@@ -114,24 +131,47 @@ final class RemoteControlSurfaceView: UIView {
             let p1 = trackedTouches[1].location(in: self)
             let midY = (p0.y + p1.y) / 2
             let distance = max(1, hypot(p0.x - p1.x, p0.y - p1.y))
-            onScroll?(CGPoint(x: (p0.x + p1.x) / 2, y: midY), midY - multiLastMidY)
-            if multiLastDistance > 0 { onPinch?(distance / multiLastDistance) }
+            let scrollDelta = midY - multiLastMidY
+            let distanceDelta = distance - multiLastDistance
+            let pinchFactor = multiLastDistance > 0 ? distance / multiLastDistance : 1
             multiLastMidY = midY
             multiLastDistance = distance
+
+            switch multiIntent {
+            case .scroll:
+                onScroll?(CGPoint(x: (p0.x + p1.x) / 2, y: midY), scrollDelta)
+            case .zoom:
+                onPinch?(pinchFactor)
+            case .undecided:
+                multiCumScroll += abs(scrollDelta)
+                multiCumPinch += abs(distanceDelta)
+                if multiCumScroll > multiCumPinch * 2, multiCumScroll > multiDecideThreshold {
+                    multiIntent = .scroll
+                } else if multiCumPinch > multiCumScroll * 2, multiCumPinch > multiDecideThreshold {
+                    multiIntent = .zoom
+                }
+            }
         case .idle:
             break
         }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if mode == .single, !singleMoved, !hadMultiTouch { onTap?(singleStart) }
+        if mode == .single, !singleMoved, !hadMultiTouch, !longPressFired { onTap?(singleStart) }
+        cancelLongPressTimer()
         trackedTouches.removeAll { touches.contains($0) }
         refreshMode()
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        cancelLongPressTimer()
         trackedTouches.removeAll { touches.contains($0) }
         refreshMode()
+    }
+
+    private func cancelLongPressTimer() {
+        longPressTimer?.invalidate()
+        longPressTimer = nil
     }
 
     private func refreshMode() {
@@ -139,6 +179,7 @@ final class RemoteControlSurfaceView: UIView {
         case 0:
             mode = .idle
             hadMultiTouch = false
+            longPressFired = false
         case 1:
             mode = .single
             if hadMultiTouch {
@@ -149,10 +190,21 @@ final class RemoteControlSurfaceView: UIView {
                 singleStart = loc
                 singleLast = loc
                 singleMoved = false
+                longPressFired = false
+                cancelLongPressTimer()
+                longPressTimer = Timer.scheduledTimer(withTimeInterval: longPressDelay, repeats: false) { [weak self] _ in
+                    guard let self, self.mode == .single, !self.singleMoved, !self.hadMultiTouch else { return }
+                    self.longPressFired = true
+                    self.onLongPress?(self.singleStart)
+                }
             }
         default:
             mode = .multi
             hadMultiTouch = true
+            cancelLongPressTimer()
+            multiIntent = .undecided
+            multiCumScroll = 0
+            multiCumPinch = 0
             let p0 = trackedTouches[0].location(in: self)
             let p1 = trackedTouches[1].location(in: self)
             multiLastMidY = (p0.y + p1.y) / 2
@@ -163,6 +215,7 @@ final class RemoteControlSurfaceView: UIView {
 
 struct RemoteControlSurface: UIViewRepresentable {
     let onTap: (CGPoint) -> Void
+    let onLongPress: (CGPoint) -> Void
     let onPan: (CGSize) -> Void
     let onScroll: (CGPoint, CGFloat) -> Void
     let onPinch: (CGFloat) -> Void
@@ -176,6 +229,7 @@ struct RemoteControlSurface: UIViewRepresentable {
 
     func updateUIView(_ uiView: RemoteControlSurfaceView, context: Context) {
         uiView.onTap = onTap
+        uiView.onLongPress = onLongPress
         uiView.onPan = onPan
         uiView.onScroll = onScroll
         uiView.onPinch = onPinch
