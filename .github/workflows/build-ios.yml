@@ -22,6 +22,18 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      # CFBundleShortVersionString/CFBundleVersion trong project.yml cố định "1.0"/"1" (không đổi
+      # bao giờ) — stamp gitSha+build time vào đây để app hiện được đang chạy bản build nào (xem
+      # trong Menu > cạnh tên tài khoản), tránh nhầm "chưa cài bản mới" như Backend đã làm với
+      # /health/ui. Info.plist do xcodegen SINH RA ở bước trên (info.path trong project.yml), nên
+      # phải patch SAU generate, TRƯỚC build.
+      - name: Stamp build version into Info.plist
+        run: |
+          SHORT_SHA=$(git rev-parse --short=8 HEAD)
+          BUILD_TIME=$(date -u +%Y%m%d%H%M%S)
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${SHORT_SHA}" Sources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_TIME}" Sources/Info.plist
+
       - name: Build unsigned .app
         run: |
           xcodebuild \

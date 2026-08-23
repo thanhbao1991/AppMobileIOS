@@ -150,6 +150,8 @@ private struct MoreMenuView: View {
                     } label: {
                         Label("Đăng xuất", systemImage: "rectangle.portrait.and.arrow.right")
                     }
+                } footer: {
+                    Text("Phiên bản \(appVersionString)")
                 }
             }
             .navigationBarHidden(true)
@@ -169,6 +171,15 @@ private struct MoreMenuView: View {
                 Text("Vào Cài đặt > ĐENN > Danh bạ để bật quyền truy cập trước khi đồng bộ.")
             }
         }
+    }
+
+    // CI stamp gitSha vào CFBundleShortVersionString + build time (UTC) vào CFBundleVersion (xem
+    // .github/workflows/build-ios.yml) — hiện ra đây để biết chắc điện thoại đang chạy bản build
+    // nào, tránh nhầm "chưa cài bản mới" khi test tính năng vừa sửa.
+    private var appVersionString: String {
+        let sha = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let buildTime = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "\(sha) (\(buildTime))"
     }
 
     private func syncContacts() async {
