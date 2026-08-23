@@ -21,9 +21,10 @@ import UIKit
 /// phải; 1 ngón KÉO thật sự = pan khung nhìn (hoạt động ở mọi mức zoom, kể cả chưa zoom — để xem phần
 /// bị crop do màn hình điện thoại không tỉ lệ khớp màn hình Desktop); 2 ngón kéo = cuộn; pinch 2 ngón
 /// = zoom KHUNG NHÌN (không đổi độ phân giải Desktop thật) — nhỏ nhất tới `minScale()` (thấy TOÀN BỘ
-/// màn hình Desktop, không crop chiều nào) tới lớn nhất 4x (zoom sâu để bấm chính xác). Nút bàn phím
-/// góc trên bật `KeyCaptureView` để gõ phím thật. `imagePoint()` quy đổi toạ độ chạm trên khung nhìn
-/// (đã bị scale/offset do zoom) về đúng pixel trong ảnh Desktop gốc.
+/// màn hình Desktop, không crop chiều nào) tới lớn nhất `maxScale()` (đúng 1 pixel ảnh Desktop = 1
+/// điểm màn hình điện thoại — zoom quá mức đó chỉ phóng to mờ thêm, không thấy chi tiết gì hơn). Nút
+/// bàn phím góc trên bật `KeyCaptureView` để gõ phím thật. `imagePoint()` quy đổi toạ độ chạm trên
+/// khung nhìn (đã bị scale/offset do zoom) về đúng pixel trong ảnh Desktop gốc.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -177,11 +178,12 @@ struct DesktopScreenView: View {
     }
 
     // factor = tỉ lệ khoảng cách 2 ngón hiện tại / lần trước (RemoteControlSurfaceView đã tính sẵn)
-    // — nhân dồn trực tiếp vào scale. Chặn dưới = minScale(image,frame) (đủ nhỏ để thấy TOÀN BỘ màn
-    // hình Desktop, không crop chiều nào) thay vì cứng 1, chặn trên = 4 (zoom sâu để bấm chính xác).
-    // KHÔNG đổi độ phân giải capture Desktop, chỉ đổi khung nhìn.
+    // — nhân dồn trực tiếp vào scale. Chặn dưới = minScale (thấy TOÀN BỘ màn hình Desktop, không crop
+    // chiều nào), chặn trên = maxScale (đúng 1 pixel ảnh Desktop = 1 điểm màn hình điện thoại — zoom
+    // quá mức đó chỉ phóng to mờ thêm, không thấy chi tiết gì hơn). KHÔNG đổi độ phân giải capture
+    // Desktop, chỉ đổi khung nhìn.
     private func handlePinch(factor: CGFloat, frame: CGSize, image: UIImage) {
-        scale = max(minScale(image: image, frame: frame), min(4, scale * factor))
+        scale = max(minScale(image: image, frame: frame), min(maxScale(image: image, frame: frame), scale * factor))
         offset = clampOffset(offset, scale: scale, frame: frame, image: image)
     }
 
@@ -205,6 +207,16 @@ struct DesktopScreenView: View {
         let size0 = baselineRenderedSize(image: image, frame: frame)
         guard size0.width > 0, size0.height > 0 else { return 1 }
         return min(frame.width / size0.width, frame.height / size0.height)
+    }
+
+    /// scale lớn nhất còn CÓ Ý NGHĨA — đúng lúc 1 pixel ảnh Desktop chiếm đúng 1 điểm màn hình điện
+    /// thoại (`image.size` là số pixel thật, vì ảnh JPEG giải mã ở scale=1 — không nhân theo
+    /// UIScreen.scale). `size0` cùng tỉ lệ khung hình với `image` nên chỉ cần 1 phép chia là đủ cho
+    /// cả 2 chiều. Zoom quá mức này chỉ phóng to mờ thêm (upscale), không thấy chi tiết gì hơn.
+    private func maxScale(image: UIImage, frame: CGSize) -> CGFloat {
+        let size0 = baselineRenderedSize(image: image, frame: frame)
+        guard size0.width > 0 else { return 1 }
+        return max(1, image.size.width / size0.width)
     }
 
     /// scaleEffect(scale) phóng to/thu nhỏ quanh tâm khung xem một content đã có kích thước baseline

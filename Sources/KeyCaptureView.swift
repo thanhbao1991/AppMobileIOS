@@ -82,14 +82,17 @@ final class RemoteControlSurfaceView: UIView {
     private var mode: Mode = .idle
     private var trackedTouches: [UITouch] = []
 
-    // 1 ngón: chỉ pan khi di chuyển thật sự (> ngưỡng), thả tay không di chuyển mới coi là tap=click.
-    // Giữ yên > longPressDelay không di chuyển = long-press = click chuột phải (huỷ tap thường).
+    // 1 ngón: pan khi di chuyển thật sự vượt ngưỡng (đủ lớn để không nhầm rung tay khi chạm nhẹ
+    // thành kéo). Quyết định tap/long-press CHỈ khi thả tay (KHÔNG dùng Timer — không đáng tin cậy
+    // giữa lúc đang track touch, timer có thể không kịp fire đúng lúc): thả tay mà tổng di chuyển
+    // vẫn nhỏ hơn ngưỡng → giữ đủ lâu (elapsed ≥ longPressDelay) = long-press = chuột phải, ngược
+    // lại = tap thường = chuột trái.
+    private let moveThreshold: CGFloat = 12
+    private let longPressDelay: TimeInterval = 0.5
     private var singleStart: CGPoint = .zero
     private var singleLast: CGPoint = .zero
+    private var singleDownAt: Date = .distantPast
     private var singleMoved = false
-    private var longPressTimer: Timer?
-    private var longPressFired = false
-    private let longPressDelay: TimeInterval = 0.5
 
     // Đã từng có ≥2 ngón trong lượt chạm hiện tại — chặn hẳn tap/pan cho ngón còn sót lại lúc nhấc
     // bớt 1 ngón, tới khi TẤT CẢ ngón rời khỏi màn hình (count về 0) mới reset cho lượt chạm kế tiếp.
@@ -117,9 +120,8 @@ final class RemoteControlSurfaceView: UIView {
         case .single:
             guard let t = trackedTouches.first else { return }
             let loc = t.location(in: self)
-            if hypot(loc.x - singleStart.x, loc.y - singleStart.y) > 6 {
+            if !singleMoved, hypot(loc.x - singleStart.x, loc.y - singleStart.y) > moveThreshold {
                 singleMoved = true
-                cancelLongPressTimer()
             }
             if singleMoved {
                 onPan?(CGSize(width: loc.x - singleLast.x, height: loc.y - singleLast.y))
@@ -157,21 +159,20 @@ final class RemoteControlSurfaceView: UIView {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if mode == .single, !singleMoved, !hadMultiTouch, !longPressFired { onTap?(singleStart) }
-        cancelLongPressTimer()
+        if mode == .single, !singleMoved, !hadMultiTouch {
+            if Date().timeIntervalSince(singleDownAt) >= longPressDelay {
+                onLongPress?(singleStart)
+            } else {
+                onTap?(singleStart)
+            }
+        }
         trackedTouches.removeAll { touches.contains($0) }
         refreshMode()
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        cancelLongPressTimer()
         trackedTouches.removeAll { touches.contains($0) }
         refreshMode()
-    }
-
-    private func cancelLongPressTimer() {
-        longPressTimer?.invalidate()
-        longPressTimer = nil
     }
 
     private func refreshMode() {
@@ -179,7 +180,6 @@ final class RemoteControlSurfaceView: UIView {
         case 0:
             mode = .idle
             hadMultiTouch = false
-            longPressFired = false
         case 1:
             mode = .single
             if hadMultiTouch {
@@ -189,19 +189,12 @@ final class RemoteControlSurfaceView: UIView {
                 let loc = trackedTouches[0].location(in: self)
                 singleStart = loc
                 singleLast = loc
+                singleDownAt = Date()
                 singleMoved = false
-                longPressFired = false
-                cancelLongPressTimer()
-                longPressTimer = Timer.scheduledTimer(withTimeInterval: longPressDelay, repeats: false) { [weak self] _ in
-                    guard let self, self.mode == .single, !self.singleMoved, !self.hadMultiTouch else { return }
-                    self.longPressFired = true
-                    self.onLongPress?(self.singleStart)
-                }
             }
         default:
             mode = .multi
             hadMultiTouch = true
-            cancelLongPressTimer()
             multiIntent = .undecided
             multiCumScroll = 0
             multiCumPinch = 0
