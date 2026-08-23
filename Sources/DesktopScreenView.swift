@@ -1,24 +1,21 @@
 import SwiftUI
 import UIKit
 
-/// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`. KHÔNG còn
-/// hỏi từng ảnh (poll) — vào màn hình gọi `StartWatchingDesktop` 1 lần, Desktop tự đẩy khung hình
-/// liên tục theo nhịp của chính nó qua `ScreenshotReceived` tới khi rời màn hình gọi
-/// `StopWatchingDesktop`. Mỗi khung hình chỉ là DIRTY-RECT (dải ngang đã đổi so với lần trước, x/y/
-/// w/h kèm ảnh) — Desktop bỏ qua hoàn toàn lượt gửi nếu màn hình đứng yên (thường xuyên với POS),
-/// chỉ gửi full-frame lúc khung đầu tiên + định kỳ ~150 lượt để tự "chữa lành". `applyFrame()` vẽ
-/// đè patch lên canvas (`image`) đang hiển thị thay vì thay hẳn ảnh mỗi lần — không phải video thật
-/// (không mã hoá H.264) nhưng bỏ hẳn round-trip request-response VÀ hầu hết băng thông của khung
-/// hình không đổi, nên mượt + nét hơn hẳn bản poll/full-frame cũ. 1 watchdog tự gọi lại
-/// `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect) — ngưỡng phải RỘNG
-/// (10s) vì màn hình đứng yên hợp lệ cũng không có khung hình mới trong lúc đó. Giữ nguyên chiều
-/// dọc (không tự xoay ngang); 2 ngón để zoom (chỉ zoom chiều ngang, chiều dọc luôn khớp khung xem —
-/// không bao giờ hở viền đen), 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát. Mặc định
-/// phóng to lấp đầy khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên trái/phải bị
-/// crop, kéo 1 ngón để xem phần bị crop, zoom ra tối đa đúng lúc hết crop (không cho nhỏ hơn nữa).
-/// Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi `SendClick` ngay lập tức
-/// (không chờ khung hình kế), Desktop quy đổi lại toạ độ thật rồi click bằng `ButtonBase.OnClick()`
-/// (qua reflection, đúng hành vi click thật) — không qua OS input.
+/// Xem + ĐIỀU KHIỂN cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`.
+/// Luôn ở chế độ điều khiển ngay khi vào màn hình — không có công tắc "chỉ xem" nữa. KHÔNG hỏi từng
+/// ảnh (poll) — vào màn hình gọi `StartWatchingDesktop` 1 lần, Desktop tự đẩy khung hình liên tục
+/// theo nhịp của chính nó qua `ScreenshotReceived` tới khi rời màn hình gọi `StopWatchingDesktop`.
+/// Mỗi khung hình chỉ là DIRTY-RECT (dải ngang đã đổi so với lần trước, x/y/w/h kèm ảnh) — Desktop bỏ
+/// qua hoàn toàn lượt gửi nếu màn hình đứng yên (thường xuyên với POS), chỉ gửi full-frame lúc khung
+/// đầu tiên + định kỳ ~150 lượt để tự "chữa lành". `applyFrame()` vẽ đè patch lên canvas (`image`)
+/// đang hiển thị thay vì thay hẳn ảnh mỗi lần. 1 watchdog tự gọi lại `StartWatchingDesktop` nếu lâu
+/// không có khung hình mới (mạng rớt/reconnect) — ngưỡng phải RỘNG (10s) vì màn hình đứng yên hợp lệ
+/// cũng không có khung hình mới trong lúc đó.
+///
+/// Điều khiển: 1 ngón kéo = chuột thật (move+down+up qua Win32 SendInput phía Desktop, xem
+/// `controlGesture`), 2 ngón kéo = cuộn (`TwoFingerScrollView`), nút bàn phím góc trên bật
+/// `KeyCaptureView` để gõ phím thật vào Desktop. Ảnh luôn phóng to lấp đầy khung xem (aspectFill,
+/// không pan/zoom được nữa) — `imagePoint()` quy đổi toạ độ chạm về đúng pixel trong ảnh gốc.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -32,14 +29,6 @@ struct DesktopScreenView: View {
     @State private var watchdogTask: Task<Void, Never>?
     @State private var lastFrameAt: Date = .distantPast
 
-    @State private var scale: CGFloat = 1
-    @State private var lastScale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-
-    // Remote control (chuột+bàn phím thật qua Win32 SendInput phía Desktop) — chế độ riêng vì
-    // 1-ngón-kéo ở chế độ Xem đã dùng để pan ảnh, không thể vừa pan vừa kéo chuột thật cùng lúc.
-    @State private var isControlMode = false
     @State private var isKeyboardActive = false
     @State private var isDraggingControl = false
     @State private var lastMoveSentAt: Date = .distantPast
@@ -55,30 +44,15 @@ struct DesktopScreenView: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: geo.size.width, height: geo.size.height)
-                            // Chỉ scale theo chiều NGANG — chiều cao giữ nguyên y=1 luôn khớp đúng
-                            // khung xem (aspectFill baseline), không bao giờ hở viền đen trên/dưới.
-                            .scaleEffect(x: scale, y: 1)
-                            .offset(offset)
 
-                        // Gesture gắn vào lớp overlay KHÔNG bị scaleEffect/offset — location/translation
-                        // đọc được luôn là toạ độ màn hình thật (viewport), tự quy đổi ngược sang toạ độ
-                        // ảnh gốc bằng scale/offset đang biết, không phụ thuộc SwiftUI tự làm việc đó.
-                        if isControlMode {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .gesture(controlGesture(image: image, frame: geo.size))
-                            TwoFingerScrollView { location, deltaY in
-                                guard let point = imagePoint(from: location, frame: geo.size, image: image) else { return }
-                                let targetId = currentDesktopId
-                                Task { _ = try? await SignalRClient.shared.invoke(
-                                    "SendMouseScroll", args: [targetId, Double(point.x), Double(point.y), Double(-deltaY) * 3]) }
-                            }
-                        } else {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size))
-                                    .simultaneously(with: zoomGesture(image: image, frame: geo.size)))
-                                .simultaneousGesture(tapGesture(image: image, frame: geo.size))
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .gesture(controlGesture(image: image, frame: geo.size))
+                        TwoFingerScrollView { location, deltaY in
+                            guard let point = imagePoint(from: location, frame: geo.size, image: image) else { return }
+                            let targetId = currentDesktopId
+                            Task { _ = try? await SignalRClient.shared.invoke(
+                                "SendMouseScroll", args: [targetId, Double(point.x), Double(point.y), Double(-deltaY) * 3]) }
                         }
                     }
                 }
@@ -92,22 +66,12 @@ struct DesktopScreenView: View {
 
             VStack {
                 HStack {
-                    Picker("", selection: $isControlMode) {
-                        Text("Xem").tag(false)
-                        Text("Điều khiển").tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 180)
-                    .padding(.leading)
-
                     Spacer()
 
-                    if isControlMode {
-                        Button { isKeyboardActive.toggle() } label: {
-                            Image(systemName: isKeyboardActive ? "keyboard.chevron.compact.down" : "keyboard")
-                                .font(.title2)
-                                .foregroundStyle(.white, .black.opacity(0.5))
-                        }
+                    Button { isKeyboardActive.toggle() } label: {
+                        Image(systemName: isKeyboardActive ? "keyboard.chevron.compact.down" : "keyboard")
+                            .font(.title2)
+                            .foregroundStyle(.white, .black.opacity(0.5))
                     }
 
                     Button { dismiss() } label: {
@@ -162,66 +126,9 @@ struct DesktopScreenView: View {
                 Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId]) }
             }
         }
-        .onChange(of: isControlMode) { active in
-            if !active { isKeyboardActive = false }
-        }
     }
 
-    // Mặc định (scale = 1) đã lấp đầy khung xem (aspectFill) — không cho zoom vào thêm (tối đa =
-    // đúng khung xem). Zoom ra tối đa = đúng điểm ảnh vừa khít chiều ngang (hết phần bị crop) —
-    // quá mức đó sẽ hở viền đen 2 bên nên chặn lại, không cho zoom nhỏ hơn nữa.
-    private func zoomGesture(image: UIImage, frame: CGSize) -> some Gesture {
-        MagnificationGesture()
-            .onChanged { value in
-                scale = min(1, max(minScale(image: image, frame: frame), lastScale * value))
-                // Offset đã kéo (pan) trước đó có thể vượt quá maxOffsetX mới sau khi scale đổi
-                // (maxOffsetX tỷ lệ theo scale) — không reclamp sẽ hở viền đen 2 bên khi zoom nhỏ
-                // lại sau khi đã pan.
-                let maxX = maxOffsetX(image: image, frame: frame)
-                offset = CGSize(width: min(maxX, max(-maxX, offset.width)), height: 0)
-            }
-            .onEnded { _ in
-                lastScale = scale
-                lastOffset = offset
-            }
-    }
-
-    // Chỉ cho kéo trái/phải — giữ nguyên chiều dọc. Giới hạn trong đúng phần ảnh bị crop (aspectFill)
-    // đang phình ra ngoài khung xem theo scale hiện tại — không kéo quá để lộ nền đen.
-    private func panGesture(maxOffsetX: CGFloat) -> some Gesture {
-        DragGesture()
-            .onChanged { value in
-                let newX = lastOffset.width + value.translation.width
-                offset = CGSize(width: min(maxOffsetX, max(-maxOffsetX, newX)), height: 0)
-            }
-            .onEnded { _ in
-                lastOffset = offset
-            }
-    }
-
-    /// Ảnh (aspectFill) phủ hết chiều cao khung xem rồi phình ngang ra ngoài — tính đúng nửa phần
-    /// phình đó (đã nhân theo scale hiện tại) làm giới hạn kéo ngang tối đa mỗi bên.
-    private func maxOffsetX(image: UIImage, frame: CGSize) -> CGFloat {
-        guard image.size.height > 0, frame.height > 0 else { return 0 }
-        let imageAspect = image.size.width / image.size.height
-        let frameAspect = frame.width / frame.height
-        guard imageAspect > frameAspect else { return 0 }
-        let renderedWidth = frame.height * imageAspect
-        return max(0, (renderedWidth * scale - frame.width) / 2)
-    }
-
-    /// scale nhỏ nhất mà chiều ngang vẫn còn phủ đủ khung xem (renderedWidth * scale == frame.width)
-    /// — nhỏ hơn nữa sẽ hở viền đen 2 bên trái/phải.
-    private func minScale(image: UIImage, frame: CGSize) -> CGFloat {
-        guard image.size.height > 0, frame.height > 0 else { return 1 }
-        let imageAspect = image.size.width / image.size.height
-        let frameAspect = frame.width / frame.height
-        guard imageAspect > frameAspect else { return 1 }
-        let renderedWidth = frame.height * imageAspect
-        return frame.width / renderedWidth
-    }
-
-    // Chế độ Điều khiển: 1 ngón kéo = chuột thật (move+down+up qua Win32 SendInput phía Desktop).
+    // Luôn ở chế độ điều khiển: 1 ngón kéo = chuột thật (move+down+up qua Win32 SendInput phía Desktop).
     // DragGesture(minimumDistance: 0) tự nhiên phủ luôn trường hợp tap-không-di-chuyển = click
     // (down rồi up ngay tại cùng toạ độ), không cần tapGesture riêng nữa. Throttle MouseMove ~30ms
     // giống nhịp capture Desktop, tránh spam quá nhiều lệnh trong 1 lần kéo dài.
@@ -252,28 +159,12 @@ struct DesktopScreenView: View {
             }
     }
 
-    // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi ngay lập tức.
-    private func tapGesture(image: UIImage, frame: CGSize) -> some Gesture {
-        SpatialTapGesture()
-            .onEnded { value in
-                guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
-                let targetId = currentDesktopId
-                Task { _ = try? await SignalRClient.shared.invoke(
-                    "SendClick", args: [targetId, Double(point.x), Double(point.y)]) }
-            }
-    }
-
-    /// Quy đổi 1 điểm chạm trên viewport (chưa bị scaleEffect/offset) về đúng toạ độ pixel trong
-    /// ảnh cửa sổ Desktop gốc — tự đảo ngược scale/offset (đang biết) rồi đảo ngược phần aspectFill
-    /// phình ra ngoài khung xem.
+    /// Quy đổi 1 điểm chạm trên viewport về đúng toạ độ pixel trong ảnh cửa sổ Desktop gốc — đảo
+    /// ngược phần aspectFill phình ra ngoài khung xem (ảnh luôn phóng to lấp đầy, không pan/zoom).
     private func imagePoint(from location: CGPoint, frame: CGSize, image: UIImage) -> CGPoint? {
-        guard image.size.width > 0, image.size.height > 0, frame.width > 0, frame.height > 0 else { return nil }
-
-        // scaleEffect chỉ áp theo chiều ngang (x: scale, y: 1) — chiều dọc không transform gì cả.
-        let center = CGPoint(x: frame.width / 2, y: frame.height / 2)
-        let localX = (location.x - offset.width - center.x) / scale + center.x
-        let localY = location.y
-        guard localX >= 0, localX <= frame.width, localY >= 0, localY <= frame.height else { return nil }
+        guard image.size.width > 0, image.size.height > 0, frame.width > 0, frame.height > 0,
+              location.x >= 0, location.x <= frame.width, location.y >= 0, location.y <= frame.height
+        else { return nil }
 
         let imageAspect = image.size.width / image.size.height
         let frameAspect = frame.width / frame.height
@@ -285,13 +176,13 @@ struct DesktopScreenView: View {
         if imageAspect > frameAspect {
             renderedHeight = frame.height
             renderedWidth = frame.height * imageAspect
-            contentX = localX + (renderedWidth - frame.width) / 2
-            contentY = localY
+            contentX = location.x + (renderedWidth - frame.width) / 2
+            contentY = location.y
         } else {
             renderedWidth = frame.width
             renderedHeight = frame.width / imageAspect
-            contentX = localX
-            contentY = localY + (renderedHeight - frame.height) / 2
+            contentX = location.x
+            contentY = location.y + (renderedHeight - frame.height) / 2
         }
 
         let imageX = contentX * (image.size.width / renderedWidth)
