@@ -116,26 +116,23 @@ struct CongNoListView: View {
     /// giới hạn bởi viewport như chụp màn hình thường. Kèm 1 mã QR duy nhất cho TỔNG nợ đang lọc
     /// (không gắn với 1 hoá đơn cụ thể vì có thể gộp nhiều đơn) — lấy qua Backend /api/HoaDon/bill-qr,
     /// dùng chung BankQrConfig với Desktop/Mobile (xem [[project_bank_qr_consolidation]]). addInfo
-    /// chỉ ghi mã hoá đơn đầu và cuối trong danh sách đang hiển thị (mới nhất DEN cũ nhất, khớp
-    /// thứ tự sortedItems), không liệt kê hết — tránh vượt giới hạn ký tự nội dung CK ngân hàng,
-    /// khớp cách HoaDonDetailView rút gọn (xem BillTextBuilder.buildCodesWithNoKhac). Nối bằng chữ
-    /// "DEN" chứ không ký tự đặc biệt như "...." vì nhiều app ngân hàng lọc bỏ dấu chấm lặp. Đọc
-    /// `item.maHoaDon` (Backend tính sẵn) thay vì tự cắt chuỗi id — fallback buildMaHoaDon chỉ
-    /// dùng khi Backend chưa publish bản có field này.
+    /// tính hẳn trên Backend qua /api/HoaDon/gop-addinfo (BankQrConfig.BuildAddInfo là nguồn DUY
+    /// NHẤT, không còn bản build song song bằng Swift nữa — tránh lệch format như vụ thiếu "SEVQR"
+    /// 2026-08-23). Chỉ ghi mã hoá đơn đầu và cuối trong danh sách đang hiển thị (mới nhất DEN cũ
+    /// nhất), không liệt kê hết — tránh vượt giới hạn ký tự nội dung CK ngân hàng. `item.maHoaDon`
+    /// (Backend tính sẵn) ưu tiên hơn tự cắt chuỗi id.
     private func copyBillImage() async {
         let snapshot = sortedItems
         let total = snapshot.reduce(0.0) { $0 + $1.conLai }
         let codes = snapshot.map { $0.maHoaDon?.isEmpty == false ? $0.maHoaDon! : BillTextBuilder.buildMaHoaDon($0.id) }
-        let codesText: String
-        if let first = codes.first, let last = codes.last {
-            codesText = first == last ? first : "\(first) DEN \(last)"
+        let addInfo: String
+        if let maDau = codes.first {
+            let maCuoi = codes.last == maDau ? nil : codes.last
+            addInfo = await APIClient.shared.getGopAddInfo(ten: searchText, maDau: maDau, maCuoi: maCuoi)
+                ?? "SEVQR " + BillTextBuilder.toAsciiNoDiacritics("\(searchText) \(maDau)", upper: true)
         } else {
-            codesText = ""
+            addInfo = "SEVQR " + BillTextBuilder.toAsciiNoDiacritics(searchText, upper: true)
         }
-        // "SEVQR " bắt buộc để SePay nhận báo biến động số dư từ VietinBank — xem
-        // BankQrConfig.BuildAddInfo (Backend, nguồn chính cho QR 1 hoá đơn); đây là đường build
-        // riêng cho QR gộp nhiều đơn (không có DTO server tương ứng) nên phải tự thêm ở đây.
-        let addInfo = "SEVQR " + BillTextBuilder.toAsciiNoDiacritics("\(searchText) \(codesText)", upper: true)
         let qrData = await APIClient.shared.getBillQrImage(amount: total, addInfo: addInfo)
         let qrImage = qrData.flatMap { UIImage(data: $0) }
 

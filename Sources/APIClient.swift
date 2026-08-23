@@ -187,6 +187,21 @@ actor APIClient {
         return data
     }
 
+    /// Nội dung chuyển khoản cho QR GỘP NHIỀU hoá đơn (CongNoListView) — tính trên Backend qua
+    /// BankQrConfig.BuildAddInfo, KHÔNG tự build ở Swift nữa (từng lệch tiền tố "SEVQR" giữa 2 bên
+    /// hồi 2026-08-23 vì có 2 bản implement song song).
+    func getGopAddInfo(ten: String, maDau: String, maCuoi: String?) async -> String? {
+        var query = "ten=\(ten.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")" +
+                    "&maDau=\(maDau.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        if let maCuoi, !maCuoi.isEmpty {
+            query += "&maCuoi=\(maCuoi.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        }
+        let req = makeRequest("/api/HoaDon/gop-addinfo?\(query)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<String>.self, from: data), env.isSuccess else { return nil }
+        return env.data
+    }
+
     func getHoaDonDetail(_ id: String) async -> HoaDonDetailDto? {
         let req = makeRequest("/api/HoaDon/\(id)")
         let (data, _) = await send(req)
