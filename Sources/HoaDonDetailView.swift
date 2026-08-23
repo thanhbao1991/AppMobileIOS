@@ -451,18 +451,10 @@ struct HoaDonDetailView: View {
     /// đang cuộn ngoài viewport. Kèm mã QR VietQR lấy qua Backend /api/HoaDon/bill-qr — proxy này
     /// dùng chung BankQrConfig với Desktop nên đổi tài khoản ngân hàng ở 1 chỗ là mọi client cùng
     /// ra 1 mã QR. addInfo đọc thẳng `d.billAddInfo` (Backend tính sẵn, khớp 1:1
-    /// BankQrConfig.BuildAddInfo/HoaDonPrinter Desktop) — fallback tự build tại client chỉ dùng
-    /// khi Backend chưa publish bản có field này (billAddInfo nil, ví dụ đang test build mới).
+    /// BankQrConfig.BuildAddInfo/HoaDonPrinter Desktop) — không tự build lại ở client nữa (đã bỏ
+    /// fallback, Backend luôn trả field này rồi).
     private func copyBillImage(_ d: HoaDonDetailDto) async {
-        let addInfo: String
-        if let billAddInfo = d.billAddInfo, !billAddInfo.isEmpty {
-            addInfo = billAddInfo
-        } else {
-            let ten = (d.tenKhachHangText?.isEmpty == false) ? d.tenKhachHangText! : "KHACH"
-            let ma = BillTextBuilder.buildMaHoaDon(d.id)
-            let codes = BillTextBuilder.buildCodesWithNoKhac(ma, d.maHoaDonNoKhac)
-            addInfo = "SEVQR " + BillTextBuilder.toAsciiNoDiacritics("\(ten) \(codes)", upper: true)
-        }
+        let addInfo = d.billAddInfo ?? ""
         let amount = BillTextBuilder.amount(d)
 
         let qrData = await APIClient.shared.getBillQrImage(amount: amount, addInfo: addInfo)

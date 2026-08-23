@@ -132,7 +132,10 @@ struct CongNoListView: View {
         } else {
             codesText = ""
         }
-        let addInfo = BillTextBuilder.toAsciiNoDiacritics("\(searchText) \(codesText)", upper: true)
+        // "SEVQR " bắt buộc để SePay nhận báo biến động số dư từ VietinBank — xem
+        // BankQrConfig.BuildAddInfo (Backend, nguồn chính cho QR 1 hoá đơn); đây là đường build
+        // riêng cho QR gộp nhiều đơn (không có DTO server tương ứng) nên phải tự thêm ở đây.
+        let addInfo = "SEVQR " + BillTextBuilder.toAsciiNoDiacritics("\(searchText) \(codesText)", upper: true)
         let qrData = await APIClient.shared.getBillQrImage(amount: total, addInfo: addInfo)
         let qrImage = qrData.flatMap { UIImage(data: $0) }
 
