@@ -461,7 +461,7 @@ struct HoaDonDetailView: View {
             let ten = (d.tenKhachHangText?.isEmpty == false) ? d.tenKhachHangText! : "KHACH"
             let ma = BillTextBuilder.buildMaHoaDon(d.id)
             let codes = BillTextBuilder.buildCodesWithNoKhac(ma, d.maHoaDonNoKhac)
-            addInfo = BillTextBuilder.toAsciiNoDiacritics("\(ten) \(codes)", upper: true)
+            addInfo = "SEVQR " + BillTextBuilder.toAsciiNoDiacritics("\(ten) \(codes)", upper: true)
         }
         let amount = BillTextBuilder.amount(d)
 
