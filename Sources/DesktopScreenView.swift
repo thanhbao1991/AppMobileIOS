@@ -1,16 +1,19 @@
 import SwiftUI
 import UIKit
 
-/// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`. Poll
-/// ảnh chụp qua hub mỗi ~0.25s (RequestDesktopScreenshot → Desktop tự chụp → ScreenshotReceived),
-/// không phải video thật — đủ để canh máy đang chạy gì. Giữ nguyên chiều dọc (không tự xoay ngang);
-/// 2 ngón để zoom (chỉ zoom chiều ngang, chiều dọc luôn khớp khung xem — không bao giờ hở viền
-/// đen), 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát. Mặc định phóng to lấp đầy
-/// khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên trái/phải bị crop, kéo 1 ngón để
-/// xem phần bị crop, zoom ra tối đa đúng lúc hết crop (không cho nhỏ hơn nữa). Chạm vào ảnh = click
-/// chuột trái tại đúng vị trí đó trên Desktop — toạ độ chạm gửi kèm lượt poll chụp màn hình tiếp
-/// theo (không phải 1 hub method riêng), Desktop tự click bằng UI Automation pattern —
-/// Invoke/SelectionItem/Toggle — không qua OS input.
+/// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`. KHÔNG còn
+/// hỏi từng ảnh (poll) — vào màn hình gọi `StartWatchingDesktop` 1 lần, Desktop tự đẩy khung hình
+/// liên tục theo nhịp của chính nó (thu nhỏ 60% + JPEG quality thấp) qua `ScreenshotReceived` tới
+/// khi rời màn hình gọi `StopWatchingDesktop`; không phải video thật nhưng bỏ hẳn round-trip
+/// request-response mỗi khung hình nên mượt hơn hẳn bản poll cũ. 1 watchdog tự gọi lại
+/// `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect). Giữ nguyên chiều
+/// dọc (không tự xoay ngang); 2 ngón để zoom (chỉ zoom chiều ngang, chiều dọc luôn khớp khung xem —
+/// không bao giờ hở viền đen), 1 ngón để kéo khung hình đang xem, nút X góc trên để thoát. Mặc định
+/// phóng to lấp đầy khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên trái/phải bị
+/// crop, kéo 1 ngón để xem phần bị crop, zoom ra tối đa đúng lúc hết crop (không cho nhỏ hơn nữa).
+/// Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi `SendClick` ngay lập tức
+/// (không chờ khung hình kế), Desktop quy đổi lại toạ độ thật rồi click bằng `ButtonBase.OnClick()`
+/// (qua reflection, đúng hành vi click thật) — không qua OS input.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -21,15 +24,13 @@ struct DesktopScreenView: View {
     @State private var image: UIImage?
     @State private var disconnected = false
     @State private var isReconnecting = false
-    @State private var pollTask: Task<Void, Never>?
+    @State private var watchdogTask: Task<Void, Never>?
+    @State private var lastFrameAt: Date = .distantPast
 
     @State private var scale: CGFloat = 1
     @State private var lastScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
-    /// Toạ độ chạm chờ gửi kèm lượt poll chụp màn hình TIẾP THEO (không phải 1 lời gọi riêng — xem
-    /// ghi chú trong `tapGesture`).
-    @State private var pendingClick: CGPoint?
 
     var body: some View {
         ZStack {
@@ -95,14 +96,21 @@ struct DesktopScreenView: View {
         .navigationBarHidden(true)
         .onAppear {
             currentDesktopId = desktopId
-            startPolling()
+            startWatching()
         }
         .onDisappear {
-            pollTask?.cancel()
-            Task { await SignalRClient.shared.setScreenshotHandler(nil) }
+            watchdogTask?.cancel()
+            let target = currentDesktopId
+            Task {
+                _ = try? await SignalRClient.shared.invoke("StopWatchingDesktop", args: [target])
+                await SignalRClient.shared.setScreenshotHandler(nil)
+            }
         }
         .onChange(of: scenePhase) { newPhase in
-            if newPhase == .active { isReconnecting = true }
+            if newPhase == .active {
+                isReconnecting = true
+                Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId]) }
+            }
         }
     }
 
@@ -160,15 +168,14 @@ struct DesktopScreenView: View {
         return frame.width / renderedWidth
     }
 
-    // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop. Không gọi hub riêng — 1 event
-    // riêng ("SendClick"/"ClickRequested") đã thử và Desktop không bao giờ nhận được dù relay giống
-    // hệt CaptureScreenshotRequested (nguyên nhân chưa rõ). Thay vào đó chỉ ghi lại toạ độ, gửi kèm
-    // lượt poll chụp màn hình tiếp theo trong `startPolling()` — kênh đó đã verify chạy ổn định.
+    // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi ngay lập tức.
     private func tapGesture(image: UIImage, frame: CGSize) -> some Gesture {
         SpatialTapGesture()
             .onEnded { value in
                 guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
-                pendingClick = point
+                let targetId = currentDesktopId
+                Task { _ = try? await SignalRClient.shared.invoke(
+                    "SendClick", args: [targetId, Double(point.x), Double(point.y)]) }
             }
     }
 
@@ -209,43 +216,39 @@ struct DesktopScreenView: View {
         return CGPoint(x: imageX, y: imageY)
     }
 
-    private func startPolling() {
-        pollTask = Task {
-            var consecutiveFailures = 0
-            while !Task.isCancelled {
-                do {
-                    let click = pendingClick
-                    pendingClick = nil
-                    let clickXArg: Any = click != nil ? Double(click!.x) : NSNull()
-                    let clickYArg: Any = click != nil ? Double(click!.y) : NSNull()
-                    _ = try await SignalRClient.shared.invoke(
-                        "RequestDesktopScreenshot", args: [currentDesktopId, clickXArg, clickYArg])
-                    consecutiveFailures = 0
-                    disconnected = false
-                    isReconnecting = false
-                } catch {
-                    // connectionId có thể đổi giữa lúc chọn máy (DesktopPickerView) và lúc poll —
-                    // reconnect mạng/IIS làm Desktop tự đăng ký lại với id mới. Thử tự tìm lại theo
-                    // tên máy (label) trước khi tính là 1 lần lỗi.
-                    if await tryResolveNewId() {
-                        continue
-                    }
-                    // Mạng chập chờn/reconnect thoáng qua rất hay gặp — chỉ báo mất kết nối thật
-                    // sau vài lần liên tiếp thất bại (~5s ở poll 0.25s/lần), tránh báo sai vì 1 lần hiccup.
-                    consecutiveFailures += 1
-                    if consecutiveFailures >= 20 { disconnected = true }
-                }
-                try? await Task.sleep(nanoseconds: 250_000_000)
-            }
-        }
-
+    private func startWatching() {
         Task {
             await SignalRClient.shared.setScreenshotHandler { data in
                 if let uiImage = UIImage(data: data) {
                     image = uiImage
+                    lastFrameAt = Date()
                     disconnected = false
                     isReconnecting = false
                 }
+            }
+            _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId])
+        }
+
+        // Desktop tự đẩy khung hình — không có gì để "hỏi lại" nếu mạng rớt, nên cần tự kiểm tra
+        // độ mới của khung hình cuối cùng và chủ động gọi lại StartWatchingDesktop khi cần (bù cho
+        // cả 2 trường hợp: máy Desktop reconnect đổi connectionId, HOẶC chính iOS reconnect khiến
+        // Desktop đang đẩy nhầm về 1 connectionId cũ đã chết).
+        watchdogTask = Task {
+            var staleTicks = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard !Task.isCancelled else { return }
+
+                let stale = Date().timeIntervalSince(lastFrameAt) > 2
+                if !stale { staleTicks = 0; continue }
+
+                staleTicks += 1
+                _ = await tryResolveNewId()
+                _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId])
+
+                // ~20s không nhận được khung hình nào dù đã thử gọi lại nhiều lần — báo mất kết nối
+                // thật, tránh báo sai vì 1-2 lần hiccup mạng thoáng qua.
+                if staleTicks >= 10 { disconnected = true }
             }
         }
     }
