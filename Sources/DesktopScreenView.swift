@@ -12,10 +12,13 @@ import UIKit
 /// không có khung hình mới (mạng rớt/reconnect) — ngưỡng phải RỘNG (10s) vì màn hình đứng yên hợp lệ
 /// cũng không có khung hình mới trong lúc đó.
 ///
-/// Điều khiển: 1 ngón kéo = chuột thật (move+down+up qua Win32 SendInput phía Desktop, xem
-/// `controlGesture`), 2 ngón kéo = cuộn (`TwoFingerScrollView`), nút bàn phím góc trên bật
-/// `KeyCaptureView` để gõ phím thật vào Desktop. Ảnh luôn phóng to lấp đầy khung xem (aspectFill,
-/// không pan/zoom được nữa) — `imagePoint()` quy đổi toạ độ chạm về đúng pixel trong ảnh gốc.
+/// Điều khiển: mặc định (scale = 1, chưa zoom) 1 ngón kéo = chuột thật (move+down+up qua Win32
+/// SendInput phía Desktop, xem `controlGesture`), 2 ngón kéo = cuộn (`TwoFingerScrollView`), nút bàn
+/// phím góc trên bật `KeyCaptureView` để gõ phím thật. Giống RustDesk: bấm 2 ngón (`zoomGesture`) để
+/// zoom KHUNG NHÌN (không đổi độ phân giải Desktop thật) — lúc đã zoom (scale > 1), 1 ngón kéo đổi
+/// nghĩa thành PAN khung nhìn để tìm đúng chỗ cần bấm, chạm không di chuyển (hoặc di chuyển rất ít)
+/// mới tính là click, giữ đúng độ chính xác toạ độ dù đang zoom bao nhiêu. `imagePoint()` quy đổi
+/// toạ độ chạm trên khung nhìn (đã bị scale/offset) về đúng pixel trong ảnh Desktop gốc.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -33,6 +36,14 @@ struct DesktopScreenView: View {
     @State private var isDraggingControl = false
     @State private var lastMoveSentAt: Date = .distantPast
 
+    // Zoom khung nhìn kiểu RustDesk — KHÔNG đổi độ phân giải capture bên Desktop, chỉ đổi phần ảnh
+    // đang hiển thị/quy đổi toạ độ. scale = 1 (mặc định) = điều khiển trực tiếp như trước.
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+    @State private var zoomPanTranslation: CGSize = .zero
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -44,10 +55,13 @@ struct DesktopScreenView: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: geo.size.width, height: geo.size.height)
+                            .scaleEffect(scale)
+                            .offset(offset)
 
                         Color.clear
                             .contentShape(Rectangle())
-                            .gesture(controlGesture(image: image, frame: geo.size))
+                            .gesture(controlGesture(image: image, frame: geo.size)
+                                .simultaneously(with: zoomGesture(frame: geo.size)))
                         TwoFingerScrollView { location, deltaY in
                             guard let point = imagePoint(from: location, frame: geo.size, image: image) else { return }
                             let targetId = currentDesktopId
@@ -128,13 +142,27 @@ struct DesktopScreenView: View {
         }
     }
 
-    // Luôn ở chế độ điều khiển: 1 ngón kéo = chuột thật (move+down+up qua Win32 SendInput phía Desktop).
-    // DragGesture(minimumDistance: 0) tự nhiên phủ luôn trường hợp tap-không-di-chuyển = click
-    // (down rồi up ngay tại cùng toạ độ), không cần tapGesture riêng nữa. Throttle MouseMove ~30ms
-    // giống nhịp capture Desktop, tránh spam quá nhiều lệnh trong 1 lần kéo dài.
+    // scale == 1 (mặc định, chưa zoom): 1 ngón kéo = chuột thật, giống trước — DragGesture
+    // (minimumDistance: 0) tự nhiên phủ luôn trường hợp tap-không-di-chuyển = click. Throttle
+    // MouseMove ~30ms giống nhịp capture Desktop.
+    //
+    // scale > 1 (đã zoom, kiểu RustDesk): 1 ngón kéo đổi nghĩa thành PAN khung nhìn (không gửi lệnh
+    // chuột gì trong lúc kéo) — chỉ khi thả tay mà DI CHUYỂN RẤT ÍT (coi là tap, không phải pan) mới
+    // gửi click tại đúng điểm đó. Tránh vừa pan vừa vô tình bấm nhầm khi đang tìm chỗ cần bấm.
     private func controlGesture(image: UIImage, frame: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                if scale > 1.01 {
+                    let delta = CGSize(
+                        width: value.translation.width - zoomPanTranslation.width,
+                        height: value.translation.height - zoomPanTranslation.height)
+                    offset = clampOffset(
+                        CGSize(width: offset.width + delta.width, height: offset.height + delta.height),
+                        scale: scale, frame: frame)
+                    zoomPanTranslation = value.translation
+                    return
+                }
+
                 guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
                 let targetId = currentDesktopId
                 if !isDraggingControl {
@@ -151,6 +179,20 @@ struct DesktopScreenView: View {
                 }
             }
             .onEnded { value in
+                if scale > 1.01 {
+                    let wasPan = abs(value.translation.width) > 6 || abs(value.translation.height) > 6
+                    zoomPanTranslation = .zero
+                    guard !wasPan, let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
+                    let targetId = currentDesktopId
+                    Task {
+                        _ = try? await SignalRClient.shared.invoke(
+                            "SendMouseDown", args: [targetId, Double(point.x), Double(point.y)])
+                        _ = try? await SignalRClient.shared.invoke(
+                            "SendMouseUp", args: [targetId, Double(point.x), Double(point.y)])
+                    }
+                    return
+                }
+
                 isDraggingControl = false
                 guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
                 let targetId = currentDesktopId
@@ -159,12 +201,46 @@ struct DesktopScreenView: View {
             }
     }
 
-    /// Quy đổi 1 điểm chạm trên viewport về đúng toạ độ pixel trong ảnh cửa sổ Desktop gốc — đảo
-    /// ngược phần aspectFill phình ra ngoài khung xem (ảnh luôn phóng to lấp đầy, không pan/zoom).
+    // Pinch 2 ngón = zoom khung nhìn (1...4x, KHÔNG đổi độ phân giải capture Desktop). Snap về đúng
+    // scale=1/offset=.zero khi thả tay gần mức chưa zoom, để controlGesture quay lại chế độ điều
+    // khiển trực tiếp thay vì kẹt ở scale ~1.005 do sai số cử chỉ.
+    private func zoomGesture(frame: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                scale = max(1, min(4, lastScale * value))
+                offset = clampOffset(offset, scale: scale, frame: frame)
+            }
+            .onEnded { _ in
+                lastScale = scale
+                lastOffset = offset
+                if scale <= 1.01 {
+                    scale = 1
+                    lastScale = 1
+                    offset = .zero
+                    lastOffset = .zero
+                }
+            }
+    }
+
+    /// scaleEffect(scale) phóng to quanh tâm khung xem — content sau baseline aspectFill đã khớp
+    /// đúng kích thước frame (không dư/thiếu), nên phần phình thêm do zoom chỉ đơn giản là
+    /// frame*(scale-1)/2 mỗi chiều — không cần biết tỉ lệ ảnh gốc như hàm imagePoint bên dưới.
+    private func clampOffset(_ o: CGSize, scale: CGFloat, frame: CGSize) -> CGSize {
+        let maxX = frame.width * (scale - 1) / 2
+        let maxY = frame.height * (scale - 1) / 2
+        return CGSize(width: min(maxX, max(-maxX, o.width)), height: min(maxY, max(-maxY, o.height)))
+    }
+
+    /// Quy đổi 1 điểm chạm trên khung nhìn (đã bị scaleEffect/offset do zoom) về đúng toạ độ pixel
+    /// trong ảnh cửa sổ Desktop gốc — đảo ngược zoom trước, rồi đảo ngược phần aspectFill phình ra
+    /// ngoài khung xem (baseline, độc lập với zoom).
     private func imagePoint(from location: CGPoint, frame: CGSize, image: UIImage) -> CGPoint? {
-        guard image.size.width > 0, image.size.height > 0, frame.width > 0, frame.height > 0,
-              location.x >= 0, location.x <= frame.width, location.y >= 0, location.y <= frame.height
-        else { return nil }
+        guard image.size.width > 0, image.size.height > 0, frame.width > 0, frame.height > 0 else { return nil }
+
+        let center = CGPoint(x: frame.width / 2, y: frame.height / 2)
+        let localX = (location.x - offset.width - center.x) / scale + center.x
+        let localY = (location.y - offset.height - center.y) / scale + center.y
+        guard localX >= 0, localX <= frame.width, localY >= 0, localY <= frame.height else { return nil }
 
         let imageAspect = image.size.width / image.size.height
         let frameAspect = frame.width / frame.height
@@ -176,13 +252,13 @@ struct DesktopScreenView: View {
         if imageAspect > frameAspect {
             renderedHeight = frame.height
             renderedWidth = frame.height * imageAspect
-            contentX = location.x + (renderedWidth - frame.width) / 2
-            contentY = location.y
+            contentX = localX + (renderedWidth - frame.width) / 2
+            contentY = localY
         } else {
             renderedWidth = frame.width
             renderedHeight = frame.width / imageAspect
-            contentX = location.x
-            contentY = location.y + (renderedHeight - frame.height) / 2
+            contentX = localX
+            contentY = localY + (renderedHeight - frame.height) / 2
         }
 
         let imageX = contentX * (image.size.width / renderedWidth)
