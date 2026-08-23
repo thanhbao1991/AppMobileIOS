@@ -12,13 +12,14 @@ import UIKit
 /// không có khung hình mới (mạng rớt/reconnect) — ngưỡng phải RỘNG (10s) vì màn hình đứng yên hợp lệ
 /// cũng không có khung hình mới trong lúc đó.
 ///
-/// Điều khiển: mặc định (scale = 1, chưa zoom) 1 ngón kéo = chuột thật (move+down+up qua Win32
-/// SendInput phía Desktop, xem `controlGesture`), 2 ngón kéo = cuộn (`TwoFingerScrollView`), nút bàn
-/// phím góc trên bật `KeyCaptureView` để gõ phím thật. Giống RustDesk: bấm 2 ngón (`zoomGesture`) để
-/// zoom KHUNG NHÌN (không đổi độ phân giải Desktop thật) — lúc đã zoom (scale > 1), 1 ngón kéo đổi
-/// nghĩa thành PAN khung nhìn để tìm đúng chỗ cần bấm, chạm không di chuyển (hoặc di chuyển rất ít)
-/// mới tính là click, giữ đúng độ chính xác toạ độ dù đang zoom bao nhiêu. `imagePoint()` quy đổi
-/// toạ độ chạm trên khung nhìn (đã bị scale/offset) về đúng pixel trong ảnh Desktop gốc.
+/// Điều khiển: TOÀN BỘ gesture xử lý qua 1 view raw-touch duy nhất (`RemoteControlSurface`, xem
+/// `KeyCaptureView.swift`) — không compose nhiều gesture recognizer độc lập, tránh xung đột (1 ngón
+/// và 2 ngón nằm trên các recognizer khác nhau từng gây vừa gửi lệnh chuột vừa cuộn cùng lúc). Ngữ
+/// nghĩa: 1 ngón CHẠM (không đáng kể di chuyển) = click chuột trái thật tại đúng điểm đó (move+down+up
+/// qua Win32 SendInput phía Desktop); 1 ngón KÉO thật sự = pan khung nhìn (chỉ có tác dụng khi đang
+/// zoom); 2 ngón kéo = cuộn; pinch 2 ngón = zoom KHUNG NHÌN (không đổi độ phân giải Desktop thật).
+/// Nút bàn phím góc trên bật `KeyCaptureView` để gõ phím thật. `imagePoint()` quy đổi toạ độ chạm
+/// trên khung nhìn (đã bị scale/offset do zoom) về đúng pixel trong ảnh Desktop gốc.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -33,16 +34,12 @@ struct DesktopScreenView: View {
     @State private var lastFrameAt: Date = .distantPast
 
     @State private var isKeyboardActive = false
-    @State private var isDraggingControl = false
-    @State private var lastMoveSentAt: Date = .distantPast
 
-    // Zoom khung nhìn kiểu RustDesk — KHÔNG đổi độ phân giải capture bên Desktop, chỉ đổi phần ảnh
-    // đang hiển thị/quy đổi toạ độ. scale = 1 (mặc định) = điều khiển trực tiếp như trước.
+    // Zoom khung nhìn — KHÔNG đổi độ phân giải capture bên Desktop, chỉ đổi phần ảnh đang hiển
+    // thị/quy đổi toạ độ. scale = 1 (mặc định) = không zoom. onPinch cho ratio tăng dần mỗi lần
+    // move (distance/lastDistance) nên cập nhật nhân dồn trực tiếp, không cần snapshot lastScale.
     @State private var scale: CGFloat = 1
-    @State private var lastScale: CGFloat = 1
     @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-    @State private var zoomPanTranslation: CGSize = .zero
 
     var body: some View {
         ZStack {
@@ -58,16 +55,11 @@ struct DesktopScreenView: View {
                             .scaleEffect(scale)
                             .offset(offset)
 
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .gesture(controlGesture(image: image, frame: geo.size)
-                                .simultaneously(with: zoomGesture(frame: geo.size)))
-                        TwoFingerScrollView { location, deltaY in
-                            guard let point = imagePoint(from: location, frame: geo.size, image: image) else { return }
-                            let targetId = currentDesktopId
-                            Task { _ = try? await SignalRClient.shared.invoke(
-                                "SendMouseScroll", args: [targetId, Double(point.x), Double(point.y), Double(-deltaY) * 3]) }
-                        }
+                        RemoteControlSurface(
+                            onTap: { location in handleTap(at: location, frame: geo.size, image: image) },
+                            onPan: { delta in handlePan(delta: delta, frame: geo.size) },
+                            onScroll: { location, deltaY in handleScroll(at: location, deltaY: deltaY, frame: geo.size, image: image) },
+                            onPinch: { factor in handlePinch(factor: factor, frame: geo.size) })
                     }
                 }
                 .clipped()
@@ -142,84 +134,39 @@ struct DesktopScreenView: View {
         }
     }
 
-    // scale == 1 (mặc định, chưa zoom): 1 ngón kéo = chuột thật, giống trước — DragGesture
-    // (minimumDistance: 0) tự nhiên phủ luôn trường hợp tap-không-di-chuyển = click. Throttle
-    // MouseMove ~30ms giống nhịp capture Desktop.
-    //
-    // scale > 1 (đã zoom, kiểu RustDesk): 1 ngón kéo đổi nghĩa thành PAN khung nhìn (không gửi lệnh
-    // chuột gì trong lúc kéo) — chỉ khi thả tay mà DI CHUYỂN RẤT ÍT (coi là tap, không phải pan) mới
-    // gửi click tại đúng điểm đó. Tránh vừa pan vừa vô tình bấm nhầm khi đang tìm chỗ cần bấm.
-    private func controlGesture(image: UIImage, frame: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                if scale > 1.01 {
-                    let delta = CGSize(
-                        width: value.translation.width - zoomPanTranslation.width,
-                        height: value.translation.height - zoomPanTranslation.height)
-                    offset = clampOffset(
-                        CGSize(width: offset.width + delta.width, height: offset.height + delta.height),
-                        scale: scale, frame: frame)
-                    zoomPanTranslation = value.translation
-                    return
-                }
-
-                guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
-                let targetId = currentDesktopId
-                if !isDraggingControl {
-                    isDraggingControl = true
-                    lastMoveSentAt = .distantPast
-                    Task { _ = try? await SignalRClient.shared.invoke(
-                        "SendMouseDown", args: [targetId, Double(point.x), Double(point.y)]) }
-                } else {
-                    let now = Date()
-                    guard now.timeIntervalSince(lastMoveSentAt) >= 0.03 else { return }
-                    lastMoveSentAt = now
-                    Task { _ = try? await SignalRClient.shared.invoke(
-                        "SendMouseMove", args: [targetId, Double(point.x), Double(point.y)]) }
-                }
-            }
-            .onEnded { value in
-                if scale > 1.01 {
-                    let wasPan = abs(value.translation.width) > 6 || abs(value.translation.height) > 6
-                    zoomPanTranslation = .zero
-                    guard !wasPan, let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
-                    let targetId = currentDesktopId
-                    Task {
-                        _ = try? await SignalRClient.shared.invoke(
-                            "SendMouseDown", args: [targetId, Double(point.x), Double(point.y)])
-                        _ = try? await SignalRClient.shared.invoke(
-                            "SendMouseUp", args: [targetId, Double(point.x), Double(point.y)])
-                    }
-                    return
-                }
-
-                isDraggingControl = false
-                guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
-                let targetId = currentDesktopId
-                Task { _ = try? await SignalRClient.shared.invoke(
-                    "SendMouseUp", args: [targetId, Double(point.x), Double(point.y)]) }
-            }
+    // Chạm (không di chuyển đáng kể) = click chuột trái thật — 1 lượt move+down+up atomic tại đúng
+    // điểm chạm, không có bước "move" rời trước đó (khác kéo-giữ-nút kiểu cũ).
+    private func handleTap(at location: CGPoint, frame: CGSize, image: UIImage) {
+        guard let point = imagePoint(from: location, frame: frame, image: image) else { return }
+        let targetId = currentDesktopId
+        Task {
+            _ = try? await SignalRClient.shared.invoke(
+                "SendMouseDown", args: [targetId, Double(point.x), Double(point.y)])
+            _ = try? await SignalRClient.shared.invoke(
+                "SendMouseUp", args: [targetId, Double(point.x), Double(point.y)])
+        }
     }
 
-    // Pinch 2 ngón = zoom khung nhìn (1...4x, KHÔNG đổi độ phân giải capture Desktop). Snap về đúng
-    // scale=1/offset=.zero khi thả tay gần mức chưa zoom, để controlGesture quay lại chế độ điều
-    // khiển trực tiếp thay vì kẹt ở scale ~1.005 do sai số cử chỉ.
-    private func zoomGesture(frame: CGSize) -> some Gesture {
-        MagnificationGesture()
-            .onChanged { value in
-                scale = max(1, min(4, lastScale * value))
-                offset = clampOffset(offset, scale: scale, frame: frame)
-            }
-            .onEnded { _ in
-                lastScale = scale
-                lastOffset = offset
-                if scale <= 1.01 {
-                    scale = 1
-                    lastScale = 1
-                    offset = .zero
-                    lastOffset = .zero
-                }
-            }
+    // 1 ngón kéo thật sự = pan khung nhìn — clampOffset tự ép offset=0 khi scale=1 nên vô hại lúc
+    // chưa zoom, không gửi lệnh chuột gì trong lúc kéo.
+    private func handlePan(delta: CGSize, frame: CGSize) {
+        offset = clampOffset(
+            CGSize(width: offset.width + delta.width, height: offset.height + delta.height),
+            scale: scale, frame: frame)
+    }
+
+    private func handleScroll(at location: CGPoint, deltaY: CGFloat, frame: CGSize, image: UIImage) {
+        guard let point = imagePoint(from: location, frame: frame, image: image) else { return }
+        let targetId = currentDesktopId
+        Task { _ = try? await SignalRClient.shared.invoke(
+            "SendMouseScroll", args: [targetId, Double(point.x), Double(point.y), Double(-deltaY) * 3]) }
+    }
+
+    // factor = tỉ lệ khoảng cách 2 ngón hiện tại / lần trước (RemoteControlSurfaceView đã tính sẵn)
+    // — nhân dồn trực tiếp vào scale, KHÔNG đổi độ phân giải capture Desktop, chỉ đổi khung nhìn.
+    private func handlePinch(factor: CGFloat, frame: CGSize) {
+        scale = max(1, min(4, scale * factor))
+        offset = clampOffset(offset, scale: scale, frame: frame)
     }
 
     /// scaleEffect(scale) phóng to quanh tâm khung xem — content sau baseline aspectFill đã khớp
