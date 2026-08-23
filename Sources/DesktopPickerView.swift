@@ -1,27 +1,32 @@
 import SwiftUI
 
-/// Tự vào thẳng máy Desktop client (TraSuaApp.Desktop) có tên cố định `targetMachineName` —
-/// xác định bởi ĐÚNG TÊN MÁY (khớp `Environment.MachineName` phía Desktop), không phải theo vị
-/// trí/thứ tự trong danh sách (danh sách có thể đổi khi thêm/bớt máy khác). Không cần chọn tay.
+/// Danh sách các máy Desktop client (TraSuaApp.Desktop) đang mở app và đã đăng ký với hub — chọn 1
+/// máy để vào xem/điều khiển. [ĐÃ BỎ 2026-08-24] khoá cứng chỉ vào thẳng 1 máy theo tên cố định —
+/// khôi phục lại chọn tay vì cần chọn được cả máy dev khi test tính năng mới.
 struct DesktopPickerView: View {
-    private let targetMachineName = "DESKTOP-118TMVD"
-
-    @State private var target: (id: String, label: String)?
+    @State private var desktops: [(id: String, label: String)] = []
     @State private var loading = false
     @State private var errorMessage: String?
 
     var body: some View {
         Group {
-            if let target {
-                DesktopScreenView(desktopId: target.id, label: target.label)
-            } else if loading {
+            if loading && desktops.isEmpty {
                 ProgressView()
-            } else {
+            } else if desktops.isEmpty {
                 VStack(spacing: 12) {
-                    Text(errorMessage ?? "Không tìm thấy máy \"\(targetMachineName)\" đang mở app")
+                    Text(errorMessage ?? "Không có máy nào đang mở app")
                         .foregroundStyle(.secondary)
                     Button("Thử lại") { Task { await load() } }
                 }
+            } else {
+                List(desktops, id: \.id) { desktop in
+                    NavigationLink {
+                        DesktopScreenView(desktopId: desktop.id, label: desktop.label)
+                    } label: {
+                        Label(desktop.label, systemImage: "desktopcomputer")
+                    }
+                }
+                .refreshable { await load() }
             }
         }
         .navigationTitle("Xem màn hình Desktop")
@@ -33,9 +38,7 @@ struct DesktopPickerView: View {
         defer { loading = false }
         do {
             let result = try await SignalRClient.shared.fetchConnectedDesktops()
-            if let match = result.first(where: { $0.value == targetMachineName }) {
-                target = (match.key, match.value)
-            }
+            desktops = result.map { (id: $0.key, label: $0.value) }
             errorMessage = nil
         } catch {
             errorMessage = "Không tải được danh sách: \(error.localizedDescription)"
