@@ -187,6 +187,9 @@ struct HoaDonCreateFormView: View {
                                         if let dt = kh.phones.first?.soDienThoai {
                                             Text(dt).font(.caption).foregroundColor(.textMuted)
                                         }
+                                        if let dc = kh.addresses.first?.diaChi, !dc.isEmpty {
+                                            Text(dc).font(.caption).foregroundColor(.textMuted)
+                                        }
                                     }
                                     Spacer()
                                 }
