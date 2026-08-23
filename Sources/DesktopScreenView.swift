@@ -37,6 +37,13 @@ struct DesktopScreenView: View {
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
 
+    // Remote control (chuột+bàn phím thật qua Win32 SendInput phía Desktop) — chế độ riêng vì
+    // 1-ngón-kéo ở chế độ Xem đã dùng để pan ảnh, không thể vừa pan vừa kéo chuột thật cùng lúc.
+    @State private var isControlMode = false
+    @State private var isKeyboardActive = false
+    @State private var isDraggingControl = false
+    @State private var lastMoveSentAt: Date = .distantPast
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -56,11 +63,23 @@ struct DesktopScreenView: View {
                         // Gesture gắn vào lớp overlay KHÔNG bị scaleEffect/offset — location/translation
                         // đọc được luôn là toạ độ màn hình thật (viewport), tự quy đổi ngược sang toạ độ
                         // ảnh gốc bằng scale/offset đang biết, không phụ thuộc SwiftUI tự làm việc đó.
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size))
-                                .simultaneously(with: zoomGesture(image: image, frame: geo.size)))
-                            .simultaneousGesture(tapGesture(image: image, frame: geo.size))
+                        if isControlMode {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .gesture(controlGesture(image: image, frame: geo.size))
+                            TwoFingerScrollView { location, deltaY in
+                                guard let point = imagePoint(from: location, frame: geo.size, image: image) else { return }
+                                let targetId = currentDesktopId
+                                Task { _ = try? await SignalRClient.shared.invoke(
+                                    "SendMouseScroll", args: [targetId, Double(point.x), Double(point.y), Double(-deltaY) * 3]) }
+                            }
+                        } else {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size))
+                                    .simultaneously(with: zoomGesture(image: image, frame: geo.size)))
+                                .simultaneousGesture(tapGesture(image: image, frame: geo.size))
+                        }
                     }
                 }
                 .clipped()
@@ -73,7 +92,24 @@ struct DesktopScreenView: View {
 
             VStack {
                 HStack {
+                    Picker("", selection: $isControlMode) {
+                        Text("Xem").tag(false)
+                        Text("Điều khiển").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
+                    .padding(.leading)
+
                     Spacer()
+
+                    if isControlMode {
+                        Button { isKeyboardActive.toggle() } label: {
+                            Image(systemName: isKeyboardActive ? "keyboard.chevron.compact.down" : "keyboard")
+                                .font(.title2)
+                                .foregroundStyle(.white, .black.opacity(0.5))
+                        }
+                    }
+
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.title)
@@ -83,6 +119,15 @@ struct DesktopScreenView: View {
                 }
                 Spacer()
             }
+
+            KeyCaptureView(isActive: $isKeyboardActive, onText: { text in
+                let targetId = currentDesktopId
+                Task { _ = try? await SignalRClient.shared.invoke("SendKeyText", args: [targetId, text]) }
+            }, onSpecial: { key in
+                let targetId = currentDesktopId
+                Task { _ = try? await SignalRClient.shared.invoke("SendKeySpecial", args: [targetId, key]) }
+            })
+            .frame(width: 0, height: 0)
 
             // App bị hạ xuống nền một lúc rồi mở lại trong lúc vẫn ở màn hình này — poll/kết nối
             // SignalR đã treo/rớt trong lúc đó, ảnh cũ vẫn còn hiện nên cần báo rõ đang nối lại,
@@ -116,6 +161,9 @@ struct DesktopScreenView: View {
                 isReconnecting = true
                 Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId]) }
             }
+        }
+        .onChange(of: isControlMode) { active in
+            if !active { isKeyboardActive = false }
         }
     }
 
@@ -171,6 +219,37 @@ struct DesktopScreenView: View {
         guard imageAspect > frameAspect else { return 1 }
         let renderedWidth = frame.height * imageAspect
         return frame.width / renderedWidth
+    }
+
+    // Chế độ Điều khiển: 1 ngón kéo = chuột thật (move+down+up qua Win32 SendInput phía Desktop).
+    // DragGesture(minimumDistance: 0) tự nhiên phủ luôn trường hợp tap-không-di-chuyển = click
+    // (down rồi up ngay tại cùng toạ độ), không cần tapGesture riêng nữa. Throttle MouseMove ~30ms
+    // giống nhịp capture Desktop, tránh spam quá nhiều lệnh trong 1 lần kéo dài.
+    private func controlGesture(image: UIImage, frame: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
+                let targetId = currentDesktopId
+                if !isDraggingControl {
+                    isDraggingControl = true
+                    lastMoveSentAt = .distantPast
+                    Task { _ = try? await SignalRClient.shared.invoke(
+                        "SendMouseDown", args: [targetId, Double(point.x), Double(point.y)]) }
+                } else {
+                    let now = Date()
+                    guard now.timeIntervalSince(lastMoveSentAt) >= 0.03 else { return }
+                    lastMoveSentAt = now
+                    Task { _ = try? await SignalRClient.shared.invoke(
+                        "SendMouseMove", args: [targetId, Double(point.x), Double(point.y)]) }
+                }
+            }
+            .onEnded { value in
+                isDraggingControl = false
+                guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
+                let targetId = currentDesktopId
+                Task { _ = try? await SignalRClient.shared.invoke(
+                    "SendMouseUp", args: [targetId, Double(point.x), Double(point.y)]) }
+            }
     }
 
     // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi ngay lập tức.
