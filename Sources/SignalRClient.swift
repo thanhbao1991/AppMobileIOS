@@ -20,6 +20,9 @@ actor SignalRClient {
     /// phải lúc nào cũng full-frame) + toạ độ x/y/w/h cần vẽ đè lên canvas hiện có, trả về từ
     /// Desktop client qua "ScreenshotReceived".
     private var onScreenshotReceived: (@MainActor (Data, Int, Int, Int, Int) -> Void)?
+    /// Đường VP9 mới (ScreenAgent sidecar) — song song onScreenshotReceived (JPEG cũ) trong lúc
+    /// verify. data = 1 khung VP9 đã encode (không phải NAL Annex-B).
+    private var onVideoFrameReceived: (@MainActor (Data, Bool) -> Void)?
 
     func start(onEntityChanged: @escaping @MainActor (String, String, String) -> Void) {
         self.onEntityChanged = onEntityChanged
@@ -37,6 +40,10 @@ actor SignalRClient {
 
     func setScreenshotHandler(_ handler: (@MainActor (Data, Int, Int, Int, Int) -> Void)?) {
         onScreenshotReceived = handler
+    }
+
+    func setVideoFrameHandler(_ handler: (@MainActor (Data, Bool) -> Void)?) {
+        onVideoFrameReceived = handler
     }
 
     /// Gửi invocation và đợi completion (type 3) khớp invocationId — dùng cho lời gọi cần kết quả
@@ -155,6 +162,11 @@ actor SignalRClient {
                   let w = (args[3] as? NSNumber)?.intValue, let h = (args[4] as? NSNumber)?.intValue {
             let callback = onScreenshotReceived
             Task { @MainActor in callback?(imageData, x, y, w, h) }
+        } else if target == "VideoFrameReceived", args.count >= 2,
+                  let base64 = args[0] as? String, let nalData = Data(base64Encoded: base64),
+                  let isKeyframe = args[1] as? Bool {
+            let callback = onVideoFrameReceived
+            Task { @MainActor in callback?(nalData, isKeyframe) }
         }
     }
 

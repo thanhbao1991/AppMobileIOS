@@ -1,4 +1,8 @@
 name: AppMobileIOS
+packages:
+  libvpx:
+    url: https://github.com/ronnyf/libvpx.git
+    branch: release/webrtc
 options:
   bundleIdPrefix: uk.denncoffee
   deploymentTarget:
@@ -12,6 +16,9 @@ targets:
     sources:
       - path: Sources
       - path: Assets.xcassets
+    dependencies:
+      - package: libvpx
+        product: libvpx
     info:
       path: Sources/Info.plist
       properties:
