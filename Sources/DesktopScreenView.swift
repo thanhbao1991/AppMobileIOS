@@ -36,18 +36,26 @@ struct DesktopScreenView: View {
     /// phải `id` (connection id đổi mỗi lần Desktop reconnect nên không dùng để nhớ được).
     private static let lastLabelKey = "DesktopScreenView.lastDesktopLabel"
 
+    /// Chiều cao đo được của nội dung (ảnh + dải chọn máy), dùng để sheet chỉ cao vừa đủ thay vì bung
+    /// gần hết màn hình — không tính thanh navigation (đo riêng bằng hằng số ước lượng bên dưới vì
+    /// nav bar nằm ngoài VStack này, do `NavigationStack` bọc từ `HoaDonListView` quản lý).
+    @State private var contentHeight: CGFloat = 420
+    private let navBarHeightEstimate: CGFloat = 44
+
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 0)
-
             screenArea
-
-            Spacer(minLength: 0)
 
             Divider()
 
             pickerStrip
         }
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: DesktopSheetHeightKey.self, value: geo.size.height)
+            }
+        )
+        .onPreferenceChange(DesktopSheetHeightKey.self) { contentHeight = $0 }
         .background(Color(.systemBackground))
         .navigationTitle("Xem màn hình Desktop")
         .navigationBarTitleDisplayMode(.inline)
@@ -63,6 +71,8 @@ struct DesktopScreenView: View {
             isReconnecting = true
             Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [id]) }
         }
+        .presentationDetents([.height(contentHeight + navBarHeightEstimate)])
+        .presentationDragIndicator(.visible)
     }
 
     /// Khung đen chỉ cao vừa đúng theo tỉ lệ ảnh nhận được (Desktop chụp `HoaDonGrid` — thường lùn,
@@ -265,4 +275,9 @@ struct DesktopScreenView: View {
         selectedDesktopId = match.key
         return true
     }
+}
+
+private struct DesktopSheetHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
