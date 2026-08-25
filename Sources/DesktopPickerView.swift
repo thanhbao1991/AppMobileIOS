@@ -13,11 +13,15 @@ struct DesktopPickerView: View {
             if loading && desktops.isEmpty {
                 ProgressView()
             } else if desktops.isEmpty {
-                VStack(spacing: 12) {
+                // Vuốt xuống để làm mới thay vì nút "Thử lại" — ScrollView cần content cao hơn 0 để
+                // gesture kéo nhận được dù danh sách rỗng.
+                ScrollView {
                     Text(errorMessage ?? "Không có máy nào đang mở app")
                         .foregroundStyle(.secondary)
-                    Button("Thử lại") { Task { await load() } }
+                        .padding(.top, 100)
+                        .frame(maxWidth: .infinity)
                 }
+                .refreshable { await load() }
             } else {
                 List(desktops, id: \.id) { desktop in
                     NavigationLink {
