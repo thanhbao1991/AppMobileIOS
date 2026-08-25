@@ -30,6 +30,12 @@ actor SignalRClient {
         loopTask = Task { await connectLoop() }
     }
 
+    /// Còn kết nối thật hay không — dùng để QUYẾT ĐỊNH có cần kickReconnect() hay không khi quay lại
+    /// foreground, thay vì luôn ép reconnect vô điều kiện (trước đây làm vậy khiến app switch NHANH
+    /// trong lúc background task (~30s) vẫn còn hiệu lực bị NGẮT reconnect không cần thiết — kết nối
+    /// thật ra vẫn còn sống, chỉ là bị buộc tái tạo lại, tạo cảm giác "mất kết nối liền").
+    var isConnected: Bool { task != nil }
+
     func stop() {
         shouldRun = false
         loopTask?.cancel()

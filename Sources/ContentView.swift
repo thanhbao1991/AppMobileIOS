@@ -49,8 +49,17 @@ struct ContentView: View {
                     UIApplication.shared.endBackgroundTask(backgroundTaskId)
                     backgroundTaskId = .invalid
                 }
+                // CHỈ kickReconnect khi kết nối THẬT SỰ đã chết — beginBackgroundTask ở trên xin
+                // ~30s thực thi nền, kết nối THƯỜNG vẫn còn sống suốt thời gian đó (đổi app nhanh
+                // rồi quay lại ngay). Trước đây ép reconnect VÔ ĐIỀU KIỆN mỗi lần quay lại foreground
+                // — dù kết nối vẫn còn sống, vẫn bị phá đi tạo lại, đúng cảm giác "mất kết nối liền"
+                // user báo dù có beginBackgroundTask.
                 if isLoggedIn {
-                    Task { await SignalRClient.shared.kickReconnect() }
+                    Task {
+                        if await !SignalRClient.shared.isConnected {
+                            await SignalRClient.shared.kickReconnect()
+                        }
+                    }
                 }
             }
         }
