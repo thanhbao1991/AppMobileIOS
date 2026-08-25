@@ -79,6 +79,10 @@ struct DesktopScreenView: View {
     /// rộng hơn nhiều so với màn hình dọc điện thoại) — trước đây ép `maxHeight: .infinity` khiến
     /// khung cao gần hết màn hình trong khi ảnh chỉ chiếm 1 dải mỏng ở giữa do `scaledToFit`, để lộ
     /// viền đen thừa rất nhiều phía trên/dưới.
+    // Chiều cao tính THẲNG theo chiều rộng màn hình (cố định, không phụ thuộc layout của sheet) —
+    // trước đây dùng .aspectRatio(fit) + .frame(maxWidth: .infinity) khiến chiều cao của khung này
+    // và chiều cao đo được của sheet (qua GeometryReader ở `body`) phụ thuộc vòng tròn lẫn nhau,
+    // SwiftUI xử lý bằng cách co khung này về gần 0 (chỉ còn navbar+picker strip hiện ra được).
     @ViewBuilder
     private var screenArea: some View {
         ZStack {
@@ -111,9 +115,10 @@ struct DesktopScreenView: View {
                 .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
             }
         }
-        .aspectRatio(screenAspectRatio, contentMode: .fit)
-        .frame(maxWidth: .infinity)
+        .frame(width: screenWidth, height: screenWidth / screenAspectRatio)
     }
+
+    private var screenWidth: CGFloat { UIScreen.main.bounds.width }
 
     private var screenAspectRatio: CGFloat {
         guard let image, image.size.height > 0 else { return 16.0 / 9.0 }
