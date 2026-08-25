@@ -1,13 +1,16 @@
 import SwiftUI
 
 /// Thống kê theo THÁNG — giống hệt bố cục/màu/thứ tự card của ThongKeView (theo ngày), chỉ khác dữ
-/// liệu lấy theo cả tháng đang xem (có thể đổi tháng qua MonthDateBar). Gọi 6 endpoint /api/ThongKe
+/// liệu lấy theo cả tháng đang xem (có thể đổi tháng qua MonthDateBar). Gọi 5 endpoint /api/ThongKe
 /// *-thang song song (thêm GetTongNo dùng chung, vốn đã là số toàn cục không lọc theo kỳ). StatCard/
 /// AmountRow/SubTotalRow/màu thongKe* tái dùng nguyên từ ThongKeView.swift (đã bỏ `private` ở đó).
+/// Không có card "Công nợ" (khác bản ngày) — số đó chỉ là tập con của "Tổng nợ hiện tại" trong tháng
+/// hiện tại, và với tháng đã qua thì tụt về gần 0 khi nợ đã trả hết, gây hiểu nhầm "tháng đó không nợ".
+/// Không có dòng "Kiểm tiền" trong card Thanh toán — kiểm tiền là thao tác đối chiếu ngăn kéo cuối
+/// NGÀY, cộng dồn cả tháng thành 1 số không còn ý nghĩa vật lý (không có số dư đầu kỳ).
 struct ThongKeThangView: View {
     @State private var currentDate = Date()
     @State private var chiTieu: ThongKeChiTieuDto?
-    @State private var congNo: ThongKeCongNoDto?
     @State private var thanhToan: ThongKeThanhToanDto?
     @State private var doanhThu: ThongKeDoanhThuNgayDto?
     @State private var traNo: ThongKeTraNoNgayDto?
@@ -15,11 +18,6 @@ struct ThongKeThangView: View {
     @State private var tongNo: TongNoDto?
     @State private var hasLoaded = false
     @State private var expandedCards: Set<ThongKeThangCard> = []
-
-    private var kiemTien: Double? {
-        guard let tm = thanhToan?.danhSachTienMat.first?.soTien, let chi = chiTieu?.chiTieuNgay else { return nil }
-        return tm - chi
-    }
 
     var body: some View {
         NavigationStack {
@@ -41,9 +39,6 @@ struct ThongKeThangView: View {
                                     if thanhToan.tongChuyenKhoan > 0 {
                                         AmountRow(label: "Chuyển khoản", value: thanhToan.tongChuyenKhoan)
                                     }
-                                    if let kiemTien {
-                                        AmountRow(label: "Kiểm tiền", value: kiemTien, color: .thongKeBlue)
-                                    }
                                 }
                             }
                             if let doanhThu {
@@ -52,15 +47,6 @@ struct ThongKeThangView: View {
                                 } content: {
                                     ForEach(doanhThu.danhSach) { item in
                                         AmountRow(label: item.ten, value: item.doanhThu)
-                                    }
-                                }
-                            }
-                            if let congNo {
-                                StatCard(icon: "exclamationmark.circle", title: "Công nợ", value: congNo.tongCongNoNgay, color: .thongKeBrown, isExpanded: expandedCards.contains(.congNo)) {
-                                    toggle(.congNo)
-                                } content: {
-                                    ForEach(congNo.danhSachCongNoNgay) { item in
-                                        AmountRow(label: item.tenKhachHang, value: item.soTienNo)
                                     }
                                 }
                             }
@@ -102,7 +88,7 @@ struct ThongKeThangView: View {
                                 }
                             }
                             if let tongNo {
-                                StatCard(icon: "chart.bar", title: "Tổng nợ", value: tongNo.tongConLai, color: .thongKeOrange, isExpanded: expandedCards.contains(.tongNo)) {
+                                StatCard(icon: "chart.bar", title: "Tổng nợ hiện tại", value: tongNo.tongConLai, color: .thongKeOrange, isExpanded: expandedCards.contains(.tongNo)) {
                                     toggle(.tongNo)
                                 } content: {
                                     ForEach(tongNo.danhSach) { item in
@@ -138,18 +124,17 @@ struct ThongKeThangView: View {
         let nam = cal.component(.year, from: currentDate)
 
         async let a = APIClient.shared.getThongKeChiTieuThang(thang: thang, nam: nam)
-        async let b = APIClient.shared.getThongKeCongNoThang(thang: thang, nam: nam)
         async let c = APIClient.shared.getThongKeThanhToanThang(thang: thang, nam: nam)
         async let d = APIClient.shared.getThongKeDoanhThuThang(thang: thang, nam: nam)
         async let e = APIClient.shared.getThongKeTraNoThang(thang: thang, nam: nam)
         async let f = APIClient.shared.getThongKeDonChuaThanhToanThang(thang: thang, nam: nam)
         async let g = APIClient.shared.getTongNo()
 
-        (chiTieu, congNo, thanhToan, doanhThu, traNo, chuaThanhToan, tongNo) = await (a, b, c, d, e, f, g)
+        (chiTieu, thanhToan, doanhThu, traNo, chuaThanhToan, tongNo) = await (a, c, d, e, f, g)
         hasLoaded = true
     }
 }
 
 private enum ThongKeThangCard: Hashable {
-    case thanhToan, doanhThu, congNo, traNo, chiTieu, chuaThanhToan, tongNo
+    case thanhToan, doanhThu, traNo, chiTieu, chuaThanhToan, tongNo
 }

@@ -213,9 +213,6 @@ actor APIClient {
     func getThongKeChiTieuThang(thang: Int, nam: Int) async -> ThongKeChiTieuDto? {
         await getThongKeThang("chi-tieu-thang", thang: thang, nam: nam)
     }
-    func getThongKeCongNoThang(thang: Int, nam: Int) async -> ThongKeCongNoDto? {
-        await getThongKeThang("cong-no-thang", thang: thang, nam: nam)
-    }
     func getThongKeThanhToanThang(thang: Int, nam: Int) async -> ThongKeThanhToanDto? {
         await getThongKeThang("thanh-toan-thang", thang: thang, nam: nam)
     }
