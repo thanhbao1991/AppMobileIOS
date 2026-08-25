@@ -111,15 +111,17 @@ final class RemoteControlSurfaceView: UIView {
         twoFingerPanRecognizer.delegate = self
         pinchRecognizer.delegate = self
 
-        // require(toFail:) — Tap PHẢI ĐỢI Pan/LongPress thất bại hẳn rồi mới được quyết, loại bỏ
-        // hoàn toàn cuộc đua trong "đấu trường" recognizer mặc định của UIKit (kỹ thuật Apple
-        // documented cho đúng tình huống Tap+Pan/LongPress trên cùng view). Bản trước dùng thêm 1
-        // subclass Pan tự chặn touchesMoved theo ngưỡng khoảng cách CÙNG LÚC với require(toFail:) —
-        // nghi vấn 2 cơ chế xung đột nhau (chặn touchesMoved có thể khiến Pan không bao giờ chuyển
-        // hẳn sang .failed cho 1 chạm đứng yên thật, làm Tap chờ mãi không giải phóng được) — bỏ hẳn
-        // subclass, chỉ giữ require(toFail:) thuần, đơn giản và đúng chuẩn hơn.
-        tapRecognizer.require(toFail: panRecognizer)
-        tapRecognizer.require(toFail: longPressRecognizer)
+        // require(toFail:) đã THỬ và KHÔNG đáng tin: UIPanGestureRecognizer là recognizer LIÊN TỤC
+        // — với 1 chạm đứng yên thật (không di chuyển), nó có thể không bao giờ chuyển tường minh
+        // sang `.failed` (chỉ lặng lẽ về lại `.possible` chờ lượt chạm sau), khiến Tap phụ thuộc
+        // `require(toFail:)` chờ mãi không bao giờ được giải phóng — đây là 1 gotcha đã biết rộng
+        // rãi của UIKit, verify thực tế xác nhận đúng (đổi từ require(toFail:) thuần vẫn không ăn).
+        // Cách chắc chắn hơn: cho TẤT CẢ nhận diện ĐỒNG THỜI (delegate trả true toàn bộ), rồi tự
+        // kiểm tra `panRecognizer.state` ngay trong `handleTap` — nếu Pan ĐANG thật sự kéo (`.began`/
+        // `.changed`) thì bỏ qua tap đó (chắc chắn là kéo, không phải chạm).
+        tapRecognizer.delegate = self
+        panRecognizer.delegate = self
+        longPressRecognizer.delegate = self
 
         [tapRecognizer, longPressRecognizer, panRecognizer, twoFingerPanRecognizer, pinchRecognizer]
             .forEach(addGestureRecognizer)
@@ -129,6 +131,9 @@ final class RemoteControlSurfaceView: UIView {
 
     @objc private func handleTap(_ g: UITapGestureRecognizer) {
         guard g.state == .ended else { return }
+        // Pan đang thật sự kéo (đã vượt ngưỡng di chuyển nội bộ của UIKit) → đây chắc chắn là 1 lượt
+        // kéo, không phải chạm — bỏ qua để tránh vừa pan vừa gửi click nhầm tại điểm bắt đầu kéo.
+        guard panRecognizer.state != .began, panRecognizer.state != .changed else { return }
         onTap?(g.location(in: self))
     }
 
@@ -165,7 +170,15 @@ extension RemoteControlSurfaceView: UIGestureRecognizerDelegate {
         shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool {
         let pair: Set = [ObjectIdentifier(gestureRecognizer), ObjectIdentifier(otherGestureRecognizer)]
-        return pair == [ObjectIdentifier(pinchRecognizer), ObjectIdentifier(twoFingerPanRecognizer)]
+        let allowedPairs: [Set<ObjectIdentifier>] = [
+            // 2 ngón thật luôn lẫn cả xê dịch lẫn co giãn — cần cả pinch lẫn cuộn cùng nhận diện.
+            [ObjectIdentifier(pinchRecognizer), ObjectIdentifier(twoFingerPanRecognizer)],
+            // Tap cần chạy song song Pan/LongPress (không loại trừ mặc định) để tự kiểm tra
+            // `panRecognizer.state` trong handleTap — xem giải thích ở init().
+            [ObjectIdentifier(tapRecognizer), ObjectIdentifier(panRecognizer)],
+            [ObjectIdentifier(tapRecognizer), ObjectIdentifier(longPressRecognizer)],
+        ]
+        return allowedPairs.contains(pair)
     }
 }
 
