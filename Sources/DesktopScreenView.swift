@@ -1,28 +1,20 @@
 import SwiftUI
 import UIKit
-import AVFoundation
 
-/// Xem + ĐIỀU KHIỂN cửa sổ Desktop (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`. Luôn ở
-/// chế độ điều khiển ngay khi vào màn hình. Video VP9 thật (không còn JPEG dirty-rect) — Desktop
-/// (qua sidecar `ScreenAgent`, xem `D:\Code\ScreenAgent`) tự đẩy khung VP9 liên tục qua
-/// `VideoFrameReceived`, `VP9Decoder` (file riêng) giải mã phần mềm (libvpx, không có hardware decode
-/// VP9 trên iOS) rồi đẩy khung thô vào `AVSampleBufferDisplayLayer`.
-///
-/// Điều khiển: TOÀN BỘ gesture xử lý qua 1 view raw-touch duy nhất (`RemoteControlSurface`, xem
-/// `KeyCaptureView.swift`) — không compose nhiều gesture recognizer độc lập, tránh xung đột (1 ngón
-/// và 2 ngón nằm trên các recognizer khác nhau từng gây vừa gửi lệnh chuột vừa cuộn cùng lúc; 2 ngón
-/// cũng tự phân định RÕ 1 trong 2 hành vi cuộn/zoom cho trọn lượt chạm, tránh vừa cuộn vừa zoom giật
-/// do rung tay). Ngữ nghĩa: 1 ngón CHẠM (không đáng kể di chuyển) = click chuột trái thật tại đúng
-/// điểm đó (move+down+up qua Win32 SendInput phía Desktop); GIỮ YÊN đủ lâu (long-press) = click chuột
-/// phải; 1 ngón KÉO thật sự = pan khung nhìn (hoạt động ở mọi mức zoom, kể cả chưa zoom — để xem phần
-/// bị crop do màn hình điện thoại không tỉ lệ khớp màn hình Desktop); 2 ngón kéo = cuộn; pinch 2 ngón
-/// = zoom KHUNG NHÌN (không đổi độ phân giải Desktop thật) — nhỏ nhất tới `minScale()` (thấy TOÀN BỘ
-/// màn hình Desktop, không crop chiều nào) tới lớn nhất `maxScale()` (đúng 1 pixel ảnh Desktop = 1
-/// điểm màn hình điện thoại). Nút bàn phím góc trên bật `KeyCaptureView` để gõ phím thật, nút
-/// clipboard dán text thật (Ctrl+V bên Desktop) qua `SendClipboardTextRequested`. `imagePoint()` quy
-/// đổi toạ độ chạm trên khung nhìn (đã bị scale/offset do zoom) về đúng pixel trong khung hình Desktop
-/// gốc — nguồn kích thước giờ lấy từ `VP9Decoder.frameSize` (kích thước thật decode ra) thay vì
-/// `UIImage.size` như bản JPEG cũ.
+/// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`.
+/// (2026-08-26: quay lại kiến trúc JPEG push đơn giản này sau khi thử VP9 video thật — nhiều lần
+/// sửa vẫn không ổn định phía iOS (video đứng hình, gesture bắn lặp) — quay về đúng bản đã verify
+/// hoạt động thật với chạm tay thật.) Vào màn hình gọi `StartWatchingDesktop` 1 lần, Desktop tự
+/// chụp+gửi 1 khung JPEG FULL-FRAME mỗi 100ms qua `ScreenshotReceived` (không dirty-rect — đơn giản,
+/// dễ đoán, đủ dùng cho nhu cầu "xem app đang chạy gì") tới khi rời màn hình gọi `StopWatchingDesktop`.
+/// 1 watchdog tự gọi lại `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect).
+/// Giữ nguyên chiều dọc (không tự xoay ngang); 2 ngón để zoom (chỉ zoom chiều ngang, chiều dọc luôn
+/// khớp khung xem — không bao giờ hở viền đen), 1 ngón để kéo khung hình đang xem, nút X góc trên để
+/// thoát. Mặc định phóng to lấp đầy khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên
+/// trái/phải bị crop, kéo 1 ngón để xem phần bị crop, zoom ra tối đa đúng lúc hết crop (không cho
+/// nhỏ hơn nữa). Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi `SendClick`
+/// ngay lập tức (không chờ khung hình kế), Desktop quy đổi lại toạ độ màn hình thật rồi click bằng
+/// Win32 SendInput THẬT (di chuyển con trỏ thật, không phải hit-test reflection hack đời trước).
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -30,86 +22,42 @@ struct DesktopScreenView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var currentDesktopId: String = ""
-    @State private var videoContainer = VideoLayerContainerView()
-    @State private var decoder = VP9Decoder()
-    @State private var hasFrame = false
+    @State private var image: UIImage?
     @State private var disconnected = false
     @State private var isReconnecting = false
     @State private var watchdogTask: Task<Void, Never>?
-    // Lớp tham chiếu bọc ngoài THAY VÌ @State Date trực tiếp — @State Date đổi giá trị MỚI mỗi khung
-    // hình VP9 tới (rất thường xuyên, nhiều lần/giây) buộc SwiftUI render lại TOÀN BỘ body kể cả
-    // GeometryReader/ZStack đang gắn `.simultaneousGesture()` — làm gesture recognizer bị dựng lại
-    // giữa lúc đang track 1 lượt chạm, gây bắn lặp nhiều MouseDown/Up cho ĐÚNG 1 lần chạm thật (đúng
-    // triệu chứng quan sát được: nhiều cặp dồn cụm trong <1s, nhanh hơn người thật bấm). Đổi sang
-    // class tham chiếu: @State chỉ theo dõi identity của BIẾN THAM CHIẾU (frameClock chính nó),
-    // không theo dõi mutate bên trong nó — gán `frameClock.lastFrameAt = Date()` KHÔNG kích hoạt
-    // render lại.
-    final class FrameClock { var lastFrameAt: Date = .distantPast }
-    @State private var frameClock = FrameClock()
+    @State private var lastFrameAt: Date = .distantPast
 
-    // Debounce cho tap/long-press — xem giải thích ở debounceGesture().
-    final class GestureClock { var lastFireAt: Date = .distantPast }
-    @State private var gestureClock = GestureClock()
-
-    @State private var isKeyboardActive = false
-
-    // Zoom khung nhìn — KHÔNG đổi độ phân giải capture bên Desktop, chỉ đổi phần ảnh đang hiển
-    // thị/quy đổi toạ độ. scale = 1 (mặc định) = không zoom. onPinch cho ratio tăng dần mỗi lần
-    // move (distance/lastDistance) nên cập nhật nhân dồn trực tiếp, không cần snapshot lastScale.
     @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
     @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            if hasFrame, let size = decoder.frameSize {
+            if let image {
                 GeometryReader { geo in
-                    // View phải native ở đúng `size0` (kích thước sau aspect-fill, LỚN hơn khung ở 1
-                    // chiều) rồi mới scaleEffect/offset — nếu khoá .frame() = geo.size trước, layer
-                    // (videoGravity=.resizeAspectFill) tự crop nội bộ về đúng khung ở scale=1, không
-                    // còn phần ảnh nào "thừa" để offset pan vào, làm lệch hết công thức minScale/
-                    // maxScale/clampOffset/imagePoint vốn tính theo size0.
-                    let size0 = baselineRenderedSize(imageSize: size, frame: geo.size)
                     ZStack {
-                        VideoLayerView(container: videoContainer)
-                            .frame(width: size0.width, height: size0.height)
-                            .scaleEffect(scale)
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            // Chỉ scale theo chiều NGANG — chiều cao giữ nguyên y=1 luôn khớp đúng
+                            // khung xem (aspectFill baseline), không bao giờ hở viền đen trên/dưới.
+                            .scaleEffect(x: scale, y: 1)
                             .offset(offset)
 
-                        RemoteControlSurface(
-                            onPan: { delta in handlePan(delta: delta, frame: geo.size, imageSize: size) },
-                            onScroll: { location, deltaY in handleScroll(at: location, deltaY: deltaY, frame: geo.size, imageSize: size) },
-                            onPinch: { factor in handlePinch(factor: factor, frame: geo.size, imageSize: size) })
+                        // Gesture gắn vào lớp overlay KHÔNG bị scaleEffect/offset — location/translation
+                        // đọc được luôn là toạ độ màn hình thật (viewport), tự quy đổi ngược sang toạ độ
+                        // ảnh gốc bằng scale/offset đang biết, không phụ thuộc SwiftUI tự làm việc đó.
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size))
+                                .simultaneously(with: zoomGesture(image: image, frame: geo.size)))
+                            .simultaneousGesture(tapGesture(image: image, frame: geo.size))
                     }
-                    // BẮT BUỘC khoá ZStack đúng geo.size — nếu không, VideoLayerView (frame=size0,
-                    // LỚN hơn geo.size ở 1 chiều) sẽ làm ZStack tự phình theo size0, kéo theo
-                    // RemoteControlSurface (căn giữa trong ZStack đã phình đó) lệch khỏi đúng vùng
-                    // geo.size hiển thị thật sau .clipped() bên ngoài — đây là nguyên nhân pan/zoom
-                    // lệch hẳn sang 1 bên thay vì dừng đúng mép desktop.
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    // Tap/long-press chuyển sang SwiftUI `.simultaneousGesture()` — kỹ thuật NATIVE
-                    // của SwiftUI cho phép 1 gesture LUÔN được nhận diện song song, không tranh chấp
-                    // với gesture khác trên cùng view (khác hẳn UIKit's gesture arena mặc định loại
-                    // trừ nhau). Đây đúng là kỹ thuật đã verify hoạt động thật với chạm tay thật thời
-                    // kỳ JPEG polling (commit `f6d316c`) — sau 3 lần thử fix trên UIKit
-                    // GestureRecognizer riêng (threshold/require(toFail:)/manual state check) đều
-                    // KHÔNG đáng tin cậy, quay lại đúng kỹ thuật gốc.
-                    .simultaneousGesture(
-                        SpatialTapGesture()
-                            .onEnded { value in
-                                handleTap(at: value.location, frame: geo.size, imageSize: size)
-                            }
-                    )
-                    .simultaneousGesture(
-                        LongPressGesture(minimumDuration: 0.5)
-                            .sequenced(before: DragGesture(minimumDistance: 0))
-                            .onEnded { value in
-                                if case .second(true, let drag) = value, let location = drag?.location {
-                                    handleLongPress(at: location, frame: geo.size, imageSize: size)
-                                }
-                            }
-                    )
                 }
                 .clipped()
             } else if disconnected {
@@ -122,21 +70,6 @@ struct DesktopScreenView: View {
             VStack {
                 HStack {
                     Spacer()
-
-                    // Dán clipboard text thật (Ctrl+V bên Desktop) — nhanh hơn gõ từng ký tự, dùng
-                    // cho paste địa chỉ/số điện thoại dài từ clipboard iOS.
-                    Button { pasteClipboard() } label: {
-                        Image(systemName: "doc.on.clipboard")
-                            .font(.title2)
-                            .foregroundStyle(.white, .black.opacity(0.5))
-                    }
-
-                    Button { isKeyboardActive.toggle() } label: {
-                        Image(systemName: isKeyboardActive ? "keyboard.chevron.compact.down" : "keyboard")
-                            .font(.title2)
-                            .foregroundStyle(.white, .black.opacity(0.5))
-                    }
-
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.title)
@@ -147,18 +80,9 @@ struct DesktopScreenView: View {
                 Spacer()
             }
 
-            KeyCaptureView(isActive: $isKeyboardActive, onText: { text in
-                let targetId = currentDesktopId
-                Task { _ = try? await SignalRClient.shared.invoke("SendKeyText", args: [targetId, text]) }
-            }, onSpecial: { key in
-                let targetId = currentDesktopId
-                Task { _ = try? await SignalRClient.shared.invoke("SendKeySpecial", args: [targetId, key]) }
-            })
-            .frame(width: 0, height: 0)
-
-            // App bị hạ xuống nền một lúc rồi mở lại trong lúc vẫn ở màn hình này — kết nối SignalR
-            // đã treo/rớt trong lúc đó, khung hình cũ vẫn còn hiện nên cần báo rõ đang nối lại, tránh
-            // người dùng tưởng app bị đơ.
+            // App bị hạ xuống nền một lúc rồi mở lại trong lúc vẫn ở màn hình này — poll/kết nối
+            // SignalR đã treo/rớt trong lúc đó, ảnh cũ vẫn còn hiện nên cần báo rõ đang nối lại,
+            // tránh người dùng tưởng app bị đơ.
             if isReconnecting {
                 VStack(spacing: 8) {
                     ProgressView().tint(.white)
@@ -180,7 +104,7 @@ struct DesktopScreenView: View {
             let target = currentDesktopId
             Task {
                 _ = try? await SignalRClient.shared.invoke("StopWatchingDesktop", args: [target])
-                await SignalRClient.shared.setVideoFrameHandler(nil)
+                await SignalRClient.shared.setScreenshotHandler(nil)
             }
         }
         .onChange(of: scenePhase) { newPhase in
@@ -191,145 +115,112 @@ struct DesktopScreenView: View {
         }
     }
 
-    private func pasteClipboard() {
-        guard let text = UIPasteboard.general.string, !text.isEmpty else { return }
-        let targetId = currentDesktopId
-        Task { _ = try? await SignalRClient.shared.invoke(
-            "SendClipboardTextRequested", args: [targetId, text]) }
+    // Mặc định (scale = 1) đã lấp đầy khung xem (aspectFill) — không cho zoom vào thêm (tối đa =
+    // đúng khung xem). Zoom ra tối đa = đúng điểm ảnh vừa khít chiều ngang (hết phần bị crop) —
+    // quá mức đó sẽ hở viền đen 2 bên nên chặn lại, không cho zoom nhỏ hơn nữa.
+    private func zoomGesture(image: UIImage, frame: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                scale = min(1, max(minScale(image: image, frame: frame), lastScale * value))
+                // Offset đã kéo (pan) trước đó có thể vượt quá maxOffsetX mới sau khi scale đổi
+                // (maxOffsetX tỷ lệ theo scale) — không reclamp sẽ hở viền đen 2 bên khi zoom nhỏ
+                // lại sau khi đã pan.
+                let maxX = maxOffsetX(image: image, frame: frame)
+                offset = CGSize(width: min(maxX, max(-maxX, offset.width)), height: 0)
+            }
+            .onEnded { _ in
+                lastScale = scale
+                lastOffset = offset
+            }
     }
 
-    // Chạm (không di chuyển đáng kể) = click chuột trái thật — 1 lượt move+down+up atomic tại đúng
-    // điểm chạm, không có bước "move" rời trước đó (khác kéo-giữ-nút kiểu cũ).
-    private func handleTap(at location: CGPoint, frame: CGSize, imageSize: CGSize) {
-        guard debounceGesture() else { return }
-        guard let point = imagePoint(from: location, frame: frame, imageSize: imageSize) else { return }
-        let targetId = currentDesktopId
-        Task {
-            _ = try? await SignalRClient.shared.invoke(
-                "SendMouseDown", args: [targetId, Double(point.x), Double(point.y)])
-            _ = try? await SignalRClient.shared.invoke(
-                "SendMouseUp", args: [targetId, Double(point.x), Double(point.y)])
-        }
+    // Chỉ cho kéo trái/phải — giữ nguyên chiều dọc. Giới hạn trong đúng phần ảnh bị crop (aspectFill)
+    // đang phình ra ngoài khung xem theo scale hiện tại — không kéo quá để lộ nền đen.
+    private func panGesture(maxOffsetX: CGFloat) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                let newX = lastOffset.width + value.translation.width
+                offset = CGSize(width: min(maxOffsetX, max(-maxOffsetX, newX)), height: 0)
+            }
+            .onEnded { _ in
+                lastOffset = offset
+            }
     }
 
-    // Giữ yên (không di chuyển) đủ lâu = click chuột phải.
-    private func handleLongPress(at location: CGPoint, frame: CGSize, imageSize: CGSize) {
-        guard debounceGesture() else { return }
-        guard let point = imagePoint(from: location, frame: frame, imageSize: imageSize) else { return }
-        let targetId = currentDesktopId
-        Task { _ = try? await SignalRClient.shared.invoke(
-            "SendRightClick", args: [targetId, Double(point.x), Double(point.y)]) }
-    }
-
-    // Verify thực tế 2026-08-26: SwiftUI `.simultaneousGesture()` (SpatialTapGesture) đôi khi bắn
-    // `.onEnded` NHIỀU LẦN cho ĐÚNG 1 lần chạm thật (log cho thấy 4-8 cặp MouseDown/Up dồn cụm trong
-    // <1-2s, nhanh hơn người thật bấm nhiều lần) — chưa xác định được nguyên nhân gốc chính xác (đã
-    // loại trừ giả thuyết render lại do `lastFrameAt`, xem `FrameClock`). Chặn cứng theo thời gian
-    // thay vì tiếp tục dò nguyên nhân SwiftUI nội bộ — không có lý do gì người dùng chạm/giữ 2 lần
-    // thật trong vòng 300ms.
-    private func debounceGesture() -> Bool {
-        let now = Date()
-        guard now.timeIntervalSince(gestureClock.lastFireAt) > 0.3 else { return false }
-        gestureClock.lastFireAt = now
-        return true
-    }
-
-    // 1 ngón kéo thật sự = pan khung nhìn — hoạt động ở MỌI mức scale (kể cả scale=1 mặc định, để
-    // xem phần bị crop do màn hình điện thoại không tỉ lệ khớp màn hình Desktop), không gửi lệnh
-    // chuột gì trong lúc kéo. clampOffset tự trả về 0 ở những chiều/scale không còn gì để pan.
-    private func handlePan(delta: CGSize, frame: CGSize, imageSize: CGSize) {
-        offset = clampOffset(
-            CGSize(width: offset.width + delta.width, height: offset.height + delta.height),
-            scale: scale, frame: frame, imageSize: imageSize)
-    }
-
-    private func handleScroll(at location: CGPoint, deltaY: CGFloat, frame: CGSize, imageSize: CGSize) {
-        guard let point = imagePoint(from: location, frame: frame, imageSize: imageSize) else { return }
-        let targetId = currentDesktopId
-        Task { _ = try? await SignalRClient.shared.invoke(
-            "SendMouseScroll", args: [targetId, Double(point.x), Double(point.y), Double(-deltaY) * 3]) }
-    }
-
-    // factor = tỉ lệ khoảng cách 2 ngón hiện tại / lần trước (RemoteControlSurfaceView đã tính sẵn)
-    // — nhân dồn trực tiếp vào scale. Chặn dưới = minScale (thấy TOÀN BỘ màn hình Desktop, không crop
-    // chiều nào), chặn trên = maxScale (đúng 1 pixel ảnh Desktop = 1 điểm màn hình điện thoại — zoom
-    // quá mức đó chỉ phóng to mờ thêm, không thấy chi tiết gì hơn). KHÔNG đổi độ phân giải capture
-    // Desktop, chỉ đổi khung nhìn.
-    private func handlePinch(factor: CGFloat, frame: CGSize, imageSize: CGSize) {
-        scale = max(minScale(imageSize: imageSize, frame: frame), min(maxScale(imageSize: imageSize, frame: frame), scale * factor))
-        offset = clampOffset(offset, scale: scale, frame: frame, imageSize: imageSize)
-    }
-
-    /// Kích thước ảnh sau `.scaledToFill()` (TRƯỚC `scaleEffect(scale)`) — 1 chiều luôn khớp đúng
-    /// frame (chiều "vừa khít"), chiều còn lại phình ra ngoài (chiều bị crop ở scale=1 mặc định).
-    private func baselineRenderedSize(imageSize: CGSize, frame: CGSize) -> CGSize {
-        guard imageSize.height > 0, frame.height > 0 else { return frame }
-        let imageAspect = imageSize.width / imageSize.height
+    /// Ảnh (aspectFill) phủ hết chiều cao khung xem rồi phình ngang ra ngoài — tính đúng nửa phần
+    /// phình đó (đã nhân theo scale hiện tại) làm giới hạn kéo ngang tối đa mỗi bên.
+    private func maxOffsetX(image: UIImage, frame: CGSize) -> CGFloat {
+        guard image.size.height > 0, frame.height > 0 else { return 0 }
+        let imageAspect = image.size.width / image.size.height
         let frameAspect = frame.width / frame.height
-        if imageAspect > frameAspect {
-            return CGSize(width: frame.height * imageAspect, height: frame.height)
-        } else {
-            return CGSize(width: frame.width, height: frame.width / imageAspect)
-        }
+        guard imageAspect > frameAspect else { return 0 }
+        let renderedWidth = frame.height * imageAspect
+        return max(0, (renderedWidth * scale - frame.width) / 2)
     }
 
-    /// scale nhỏ nhất = khớp đúng CHIỀU NGANG với khung (`frame.width / size0.width`) — không phải cố
-    /// định 1 (khoá cứng = không zoom ra được chút nào, user báo lại là sai) cũng không phải
-    /// shrink-to-fit cả 2 chiều như bản đầu (hở viền đen 2 bên vì chiều ngang bị co nhỏ hơn khung).
-    /// Ở scale này chiều ngang Desktop luôn đúng bằng chiều ngang điện thoại (không bao giờ nhỏ hơn,
-    /// đây là điểm nhỏ nhất còn thoả điều kiện đó), chiều dọc có thể nhỏ hơn khung (hở viền đen
-    /// trên/dưới) — chấp nhận được vì user chỉ yêu cầu ràng buộc ở chiều ngang.
-    private func minScale(imageSize: CGSize, frame: CGSize) -> CGFloat {
-        let size0 = baselineRenderedSize(imageSize: imageSize, frame: frame)
-        guard size0.width > 0 else { return 1 }
-        return min(1, frame.width / size0.width)
+    /// scale nhỏ nhất mà chiều ngang vẫn còn phủ đủ khung xem (renderedWidth * scale == frame.width)
+    /// — nhỏ hơn nữa sẽ hở viền đen 2 bên trái/phải.
+    private func minScale(image: UIImage, frame: CGSize) -> CGFloat {
+        guard image.size.height > 0, frame.height > 0 else { return 1 }
+        let imageAspect = image.size.width / image.size.height
+        let frameAspect = frame.width / frame.height
+        guard imageAspect > frameAspect else { return 1 }
+        let renderedWidth = frame.height * imageAspect
+        return frame.width / renderedWidth
     }
 
-    /// scale lớn nhất còn CÓ Ý NGHĨA — đúng lúc 1 pixel ảnh Desktop chiếm đúng 1 điểm màn hình điện
-    /// thoại (`imageSize` là số pixel thật decode ra, không nhân theo UIScreen.scale). `size0` cùng
-    /// tỉ lệ khung hình với `imageSize` nên chỉ cần 1 phép chia là đủ cho cả 2 chiều. Zoom quá mức
-    /// này chỉ phóng to mờ thêm (upscale), không thấy chi tiết gì hơn.
-    private func maxScale(imageSize: CGSize, frame: CGSize) -> CGFloat {
-        let size0 = baselineRenderedSize(imageSize: imageSize, frame: frame)
-        guard size0.width > 0 else { return 1 }
-        return max(1, imageSize.width / size0.width)
+    // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi ngay lập tức.
+    private func tapGesture(image: UIImage, frame: CGSize) -> some Gesture {
+        SpatialTapGesture()
+            .onEnded { value in
+                guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
+                let targetId = currentDesktopId
+                Task { _ = try? await SignalRClient.shared.invoke(
+                    "SendClick", args: [targetId, Double(point.x), Double(point.y)]) }
+            }
     }
 
-    /// scaleEffect(scale) phóng to/thu nhỏ quanh tâm khung xem một content đã có kích thước baseline
-    /// (`baselineRenderedSize`) — phần phình/hụt so với frame ở scale bất kỳ chỉ đơn giản là
-    /// size0*scale - frame mỗi chiều, đúng cho cả scale<1 (zoom ra) lẫn scale>1 (zoom vào).
-    private func clampOffset(_ o: CGSize, scale: CGFloat, frame: CGSize, imageSize: CGSize) -> CGSize {
-        let size0 = baselineRenderedSize(imageSize: imageSize, frame: frame)
-        let maxX = max(0, (size0.width * scale - frame.width) / 2)
-        let maxY = max(0, (size0.height * scale - frame.height) / 2)
-        return CGSize(width: min(maxX, max(-maxX, o.width)), height: min(maxY, max(-maxY, o.height)))
-    }
+    /// Quy đổi 1 điểm chạm trên viewport (chưa bị scaleEffect/offset) về đúng toạ độ pixel trong
+    /// ảnh cửa sổ Desktop gốc — tự đảo ngược scale/offset (đang biết) rồi đảo ngược phần aspectFill
+    /// phình ra ngoài khung xem.
+    private func imagePoint(from location: CGPoint, frame: CGSize, image: UIImage) -> CGPoint? {
+        guard image.size.width > 0, image.size.height > 0, frame.width > 0, frame.height > 0 else { return nil }
 
-    /// Quy đổi 1 điểm chạm trên khung nhìn (đã bị scaleEffect/offset do zoom) về đúng toạ độ pixel
-    /// trong khung hình Desktop gốc — đảo ngược zoom trước, rồi đảo ngược phần aspectFill phình ra
-    /// ngoài khung xem (baseline, độc lập với zoom).
-    private func imagePoint(from location: CGPoint, frame: CGSize, imageSize: CGSize) -> CGPoint? {
-        guard imageSize.width > 0, imageSize.height > 0, frame.width > 0, frame.height > 0 else { return nil }
-
+        // scaleEffect chỉ áp theo chiều ngang (x: scale, y: 1) — chiều dọc không transform gì cả.
         let center = CGPoint(x: frame.width / 2, y: frame.height / 2)
         let localX = (location.x - offset.width - center.x) / scale + center.x
-        let localY = (location.y - offset.height - center.y) / scale + center.y
+        let localY = location.y
         guard localX >= 0, localX <= frame.width, localY >= 0, localY <= frame.height else { return nil }
 
-        let size0 = baselineRenderedSize(imageSize: imageSize, frame: frame)
-        let contentX = localX + (size0.width - frame.width) / 2
-        let contentY = localY + (size0.height - frame.height) / 2
+        let imageAspect = image.size.width / image.size.height
+        let frameAspect = frame.width / frame.height
 
-        let imageX = contentX * (imageSize.width / size0.width)
-        let imageY = contentY * (imageSize.height / size0.height)
-        guard imageX >= 0, imageX <= imageSize.width, imageY >= 0, imageY <= imageSize.height else { return nil }
+        let renderedWidth: CGFloat
+        let renderedHeight: CGFloat
+        let contentX: CGFloat
+        let contentY: CGFloat
+        if imageAspect > frameAspect {
+            renderedHeight = frame.height
+            renderedWidth = frame.height * imageAspect
+            contentX = localX + (renderedWidth - frame.width) / 2
+            contentY = localY
+        } else {
+            renderedWidth = frame.width
+            renderedHeight = frame.width / imageAspect
+            contentX = localX
+            contentY = localY + (renderedHeight - frame.height) / 2
+        }
+
+        let imageX = contentX * (image.size.width / renderedWidth)
+        let imageY = contentY * (image.size.height / renderedHeight)
+        guard imageX >= 0, imageX <= image.size.width, imageY >= 0, imageY <= image.size.height else { return nil }
         return CGPoint(x: imageX, y: imageY)
     }
 
     private func startWatching() {
         Task {
-            await SignalRClient.shared.setVideoFrameHandler { data, isKeyframe in
-                applyFrame(data, isKeyframe: isKeyframe)
+            await SignalRClient.shared.setScreenshotHandler { data, x, y, w, h in
+                applyFrame(data, x: x, y: y, w: w, h: h)
             }
             _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId])
         }
@@ -337,32 +228,49 @@ struct DesktopScreenView: View {
         // Desktop tự đẩy khung hình — không có gì để "hỏi lại" nếu mạng rớt, nên cần tự kiểm tra
         // độ mới của khung hình cuối cùng và chủ động gọi lại StartWatchingDesktop khi cần (bù cho
         // cả 2 trường hợp: máy Desktop reconnect đổi connectionId, HOẶC chính iOS reconnect khiến
-        // Desktop đang đẩy nhầm về 1 connectionId cũ đã chết).
+        // Desktop đang đẩy nhầm về 1 connectionId cũ đã chết). Ngưỡng "lâu không thấy gì" phải RỘNG
+        // hơn hẳn 1 khung hình đơn lẻ — giờ Desktop chỉ gửi khi có gì đổi (dirty-rect) + 1 khung hình
+        // "chữa lành" định kỳ mỗi ~150 lượt chụp (~6s), nên màn hình đứng yên hoàn toàn cũng có thể
+        // hợp lệ không có khung hình mới suốt vài giây — không phải dấu hiệu mất kết nối.
         watchdogTask = Task {
             var staleTicks = 0
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { return }
 
-                let stale = Date().timeIntervalSince(frameClock.lastFrameAt) > 10
+                let stale = Date().timeIntervalSince(lastFrameAt) > 10
                 if !stale { staleTicks = 0; continue }
 
                 staleTicks += 1
                 _ = await tryResolveNewId()
                 _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId])
 
+                // ~10s (ngưỡng stale) + ~30s thử lại nhiều lần vẫn không có gì — báo mất kết nối thật.
                 if staleTicks >= 15 { disconnected = true }
             }
         }
     }
 
-    /// Đẩy 1 khung VP9 đã encode vào decoder — decoder tự giải mã + enqueue thẳng vào
-    /// `AVSampleBufferDisplayLayer`, không cần vẽ lại canvas thủ công như bản JPEG cũ.
+    /// Vẽ đè khung hình mới (có thể chỉ là 1 dải dirty-rect) lên canvas đang hiển thị. Khung hình
+    /// đầu tiên (chưa có canvas) hoặc khung "chữa lành" định kỳ (kích thước khác canvas hiện có)
+    /// coi như thay hẳn canvas; còn lại vẽ patch đúng vị trí (x, y) lên canvas cũ.
     @MainActor
-    private func applyFrame(_ data: Data, isKeyframe: Bool) {
-        decoder.feed(data, into: videoContainer.videoLayer)
-        if decoder.frameSize != nil { hasFrame = true }
-        frameClock.lastFrameAt = Date()
+    private func applyFrame(_ data: Data, x: Int, y: Int, w: Int, h: Int) {
+        guard let patch = UIImage(data: data) else { return }
+        let isFullReplace = x == 0 && y == 0
+            && (image == nil || CGSize(width: w, height: h) != image!.size)
+        if isFullReplace {
+            image = patch
+        } else if let canvas = image {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            let renderer = UIGraphicsImageRenderer(size: canvas.size, format: format)
+            image = renderer.image { _ in
+                canvas.draw(at: .zero)
+                patch.draw(at: CGPoint(x: x, y: y))
+            }
+        }
+        lastFrameAt = Date()
         disconnected = false
         isReconnecting = false
     }
@@ -374,31 +282,4 @@ struct DesktopScreenView: View {
         currentDesktopId = match.key
         return true
     }
-}
-
-/// UIView chứa `AVSampleBufferDisplayLayer` làm sublayer, tự khớp bounds mỗi lần layout đổi (SwiftUI
-/// đổi kích thước qua `.frame()` không tự đẩy xuống sublayer, phải override `layoutSubviews`).
-final class VideoLayerContainerView: UIView {
-    let videoLayer = AVSampleBufferDisplayLayer()
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        videoLayer.videoGravity = .resizeAspect
-        backgroundColor = .black
-        layer.addSublayer(videoLayer)
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) not implemented") }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        videoLayer.frame = bounds
-    }
-}
-
-struct VideoLayerView: UIViewRepresentable {
-    let container: VideoLayerContainerView
-
-    func makeUIView(context: Context) -> VideoLayerContainerView { container }
-    func updateUIView(_ uiView: VideoLayerContainerView, context: Context) {}
 }
