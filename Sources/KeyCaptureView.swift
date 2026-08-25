@@ -64,16 +64,14 @@ struct KeyCaptureView: UIViewRepresentable {
     }
 }
 
-/// TOÀN BỘ cử chỉ điều khiển (tap=click, 1 ngón kéo=pan khung nhìn, 2 ngón kéo=cuộn, pinch=zoom) xử
-/// lý bằng touchesBegan/Moved/Ended THÔ trong 1 view duy nhất — KHÔNG compose nhiều gesture
-/// recognizer độc lập (SwiftUI DragGesture/MagnificationGesture + UIPanGestureRecognizer riêng),
-/// vì các recognizer độc lập nằm trên các view khác nhau KHÔNG tự loại trừ nhau — thực tế đã gây bug
-/// vừa gửi lệnh chuột vừa cuộn khi chạm 2 ngón. Cùng kiến trúc RustDesk dùng (1 vùng nhận raw touch,
-/// tự phân giải ngữ nghĩa gesture, xem `flutter/lib/mobile/pages/remote_page.dart` —
-/// `RawTouchGestureDetectorRegion`) — chỉ tham khảo Ý TƯỞNG kiến trúc, code bên dưới tự viết lại.
+/// 1 ngón kéo=pan khung nhìn, 2 ngón kéo=cuộn, pinch=zoom — xử lý bằng touchesBegan/Moved/Ended THÔ
+/// trong 1 view duy nhất, ĐỦ DÙNG vì các thao tác này không cần phân biệt với tap/long-press nữa
+/// (2 cái đó đã chuyển sang SwiftUI `.simultaneousGesture()` riêng ở `DesktopScreenView` — xem giải
+/// thích ở đó: SwiftUI's simultaneousGesture cho tap LUÔN được nhận diện song song, không tranh chấp
+/// với gesture khác, đúng kỹ thuật đã verify hoạt động thật thời kỳ JPEG polling — commit `f6d316c`).
+/// Trước đây gộp CẢ tap/long-press vào lớp UIKit này (3 lần thử: threshold, require(toFail:), manual
+/// state check) đều KHÔNG đáng tin cậy trên UIKit gesture arena — bỏ hẳn, tách tap/long-press ra.
 final class RemoteControlSurfaceView: UIView {
-    var onTap: ((CGPoint) -> Void)?
-    var onLongPress: ((CGPoint) -> Void)?
     var onPan: ((CGSize) -> Void)?
     var onScroll: ((CGPoint, CGFloat) -> Void)?
     var onPinch: ((CGFloat) -> Void)?
@@ -83,19 +81,14 @@ final class RemoteControlSurfaceView: UIView {
     private var trackedTouches: [UITouch] = []
 
     // 1 ngón: pan khi di chuyển thật sự vượt ngưỡng (đủ lớn để không nhầm rung tay khi chạm nhẹ
-    // thành kéo). Quyết định tap/long-press CHỈ khi thả tay (KHÔNG dùng Timer — không đáng tin cậy
-    // giữa lúc đang track touch, timer có thể không kịp fire đúng lúc): thả tay mà tổng di chuyển
-    // vẫn nhỏ hơn ngưỡng → giữ đủ lâu (elapsed ≥ longPressDelay) = long-press = chuột phải, ngược
-    // lại = tap thường = chuột trái.
+    // thành kéo).
     private let moveThreshold: CGFloat = 12
-    private let longPressDelay: TimeInterval = 0.5
     private var singleStart: CGPoint = .zero
     private var singleLast: CGPoint = .zero
-    private var singleDownAt: Date = .distantPast
     private var singleMoved = false
 
-    // Đã từng có ≥2 ngón trong lượt chạm hiện tại — chặn hẳn tap/pan cho ngón còn sót lại lúc nhấc
-    // bớt 1 ngón, tới khi TẤT CẢ ngón rời khỏi màn hình (count về 0) mới reset cho lượt chạm kế tiếp.
+    // Đã từng có ≥2 ngón trong lượt chạm hiện tại — chặn hẳn pan cho ngón còn sót lại lúc nhấc bớt 1
+    // ngón, tới khi TẤT CẢ ngón rời khỏi màn hình (count về 0) mới reset cho lượt chạm kế tiếp.
     private var hadMultiTouch = false
 
     private var multiLastMidY: CGFloat = 0
@@ -159,13 +152,6 @@ final class RemoteControlSurfaceView: UIView {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if mode == .single, !singleMoved, !hadMultiTouch {
-            if Date().timeIntervalSince(singleDownAt) >= longPressDelay {
-                onLongPress?(singleStart)
-            } else {
-                onTap?(singleStart)
-            }
-        }
         resyncTrackedTouches(event)
         refreshMode()
     }
@@ -200,7 +186,6 @@ final class RemoteControlSurfaceView: UIView {
                 let loc = trackedTouches[0].location(in: self)
                 singleStart = loc
                 singleLast = loc
-                singleDownAt = Date()
                 singleMoved = false
             }
         default:
@@ -218,8 +203,6 @@ final class RemoteControlSurfaceView: UIView {
 }
 
 struct RemoteControlSurface: UIViewRepresentable {
-    let onTap: (CGPoint) -> Void
-    let onLongPress: (CGPoint) -> Void
     let onPan: (CGSize) -> Void
     let onScroll: (CGPoint, CGFloat) -> Void
     let onPinch: (CGFloat) -> Void
@@ -232,8 +215,6 @@ struct RemoteControlSurface: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: RemoteControlSurfaceView, context: Context) {
-        uiView.onTap = onTap
-        uiView.onLongPress = onLongPress
         uiView.onPan = onPan
         uiView.onScroll = onScroll
         uiView.onPinch = onPinch

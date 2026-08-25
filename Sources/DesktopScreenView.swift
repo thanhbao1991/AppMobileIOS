@@ -65,8 +65,6 @@ struct DesktopScreenView: View {
                             .offset(offset)
 
                         RemoteControlSurface(
-                            onTap: { location in handleTap(at: location, frame: geo.size, imageSize: size) },
-                            onLongPress: { location in handleLongPress(at: location, frame: geo.size, imageSize: size) },
                             onPan: { delta in handlePan(delta: delta, frame: geo.size, imageSize: size) },
                             onScroll: { location, deltaY in handleScroll(at: location, deltaY: deltaY, frame: geo.size, imageSize: size) },
                             onPinch: { factor in handlePinch(factor: factor, frame: geo.size, imageSize: size) })
@@ -77,6 +75,28 @@ struct DesktopScreenView: View {
                     // geo.size hiển thị thật sau .clipped() bên ngoài — đây là nguyên nhân pan/zoom
                     // lệch hẳn sang 1 bên thay vì dừng đúng mép desktop.
                     .frame(width: geo.size.width, height: geo.size.height)
+                    // Tap/long-press chuyển sang SwiftUI `.simultaneousGesture()` — kỹ thuật NATIVE
+                    // của SwiftUI cho phép 1 gesture LUÔN được nhận diện song song, không tranh chấp
+                    // với gesture khác trên cùng view (khác hẳn UIKit's gesture arena mặc định loại
+                    // trừ nhau). Đây đúng là kỹ thuật đã verify hoạt động thật với chạm tay thật thời
+                    // kỳ JPEG polling (commit `f6d316c`) — sau 3 lần thử fix trên UIKit
+                    // GestureRecognizer riêng (threshold/require(toFail:)/manual state check) đều
+                    // KHÔNG đáng tin cậy, quay lại đúng kỹ thuật gốc.
+                    .simultaneousGesture(
+                        SpatialTapGesture()
+                            .onEnded { value in
+                                handleTap(at: value.location, frame: geo.size, imageSize: size)
+                            }
+                    )
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.5)
+                            .sequenced(before: DragGesture(minimumDistance: 0))
+                            .onEnded { value in
+                                if case .second(true, let drag) = value, let location = drag?.location {
+                                    handleLongPress(at: location, frame: geo.size, imageSize: size)
+                                }
+                            }
+                    )
                 }
                 .clipped()
             } else if disconnected {
