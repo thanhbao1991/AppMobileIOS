@@ -1,60 +1,70 @@
 import SwiftUI
 import UIKit
 
-/// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn ở `DesktopPickerView`.
-/// (2026-08-26: quay lại kiến trúc JPEG push đơn giản này sau khi thử VP9 video thật — nhiều lần
-/// sửa vẫn không ổn định phía iOS (video đứng hình, gesture bắn lặp) — quay về đúng bản đã verify
-/// hoạt động thật với chạm tay thật.) Vào màn hình gọi `StartWatchingDesktop` 1 lần, Desktop tự
-/// chụp+gửi 1 khung JPEG FULL-FRAME mỗi 100ms qua `ScreenshotReceived` (không dirty-rect — đơn giản,
-/// dễ đoán, đủ dùng cho nhu cầu "xem app đang chạy gì") tới khi rời màn hình gọi `StopWatchingDesktop`.
-/// 1 watchdog tự gọi lại `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect).
+/// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn — chọn máy VÀ xem cùng 1 màn hình
+/// (2026-08-26: gộp `DesktopPickerView` vào đây, bỏ NavigationLink sang màn hình riêng — chọn máy ở
+/// dải dưới, xem ảnh ở khung trên, đổi máy không cần back/mở lại). Vào watch gọi `StartWatchingDesktop`
+/// 1 lần, Desktop tự chụp+gửi 1 khung JPEG FULL-FRAME mỗi 100ms qua `ScreenshotReceived` (không
+/// dirty-rect) tới khi đổi máy khác/rời màn hình gọi `StopWatchingDesktop`. 1 watchdog tự gọi lại
+/// `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect).
 /// READ-ONLY thuần — bỏ hẳn click (2026-08-26, sau nhiều lần vẫn không chính xác dù đã verify
 /// Desktop+Backend hoàn toàn ổn — không đáng công sức tiếp tục dò lệch toạ độ). Desktop chỉ chụp
 /// đúng vùng `HoaDonGrid` (control luôn Visibility=Visible + RenderTargetBitmap, xem
 /// `SignalRClient.cs`/`DashboardWindow.xaml` phía Desktop) chứ không phải toàn màn hình — GỬI ĐƯỢC
-/// DÙ Desktop đang xem tab khác (2026-08-26), không riêng lúc tab Hoá đơn đang mở. Ảnh nhận về hiển
-/// thị NGUYÊN TỈ LỆ, vừa khít chiều ngang điện thoại (`.scaledToFit`, không crop/pan/zoom gì cả) để
-/// khỏi méo hình, hở viền đen trên/dưới nếu tỉ lệ khác nhau. Nút X góc trên để thoát.
+/// DÙ Desktop đang xem tab khác, không riêng lúc tab Hoá đơn đang mở. Ảnh nhận về hiển thị NGUYÊN
+/// TỈ LỆ (`.scaledToFit`, không crop/pan/zoom) để khỏi méo hình.
 struct DesktopScreenView: View {
-    let desktopId: String
-    let label: String
+    @State private var desktops: [(id: String, label: String)] = []
+    @State private var loadingList = false
+    @State private var listError: String?
 
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var currentDesktopId: String = ""
+    @State private var selectedDesktopId: String?
+    @State private var selectedLabel: String = ""
     @State private var image: UIImage?
     @State private var disconnected = false
     @State private var isReconnecting = false
     @State private var watchdogTask: Task<Void, Never>?
     @State private var lastFrameAt: Date = .distantPast
 
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some View {
+        VStack(spacing: 0) {
+            screenArea
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+
+            pickerStrip
+        }
+        .navigationTitle("Xem màn hình Desktop")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await loadDesktops() }
+        .onDisappear { stopWatching() }
+        .onChange(of: scenePhase) { newPhase in
+            guard let id = selectedDesktopId, newPhase == .active else { return }
+            isReconnecting = true
+            Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [id]) }
+        }
+    }
+
+    @ViewBuilder
+    private var screenArea: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.black
 
             if let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if selectedDesktopId == nil {
+                Text("Chọn máy bên dưới để xem")
+                    .foregroundStyle(.white.opacity(0.7))
             } else if disconnected {
-                Text("\(label) đã ngắt kết nối")
+                Text("\(selectedLabel) đã ngắt kết nối")
                     .foregroundStyle(.white)
             } else {
                 ProgressView().tint(.white)
-            }
-
-            VStack {
-                HStack {
-                    Spacer()
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title)
-                            .foregroundStyle(.white, .black.opacity(0.5))
-                    }
-                    .padding()
-                }
-                Spacer()
             }
 
             // App bị hạ xuống nền một lúc rồi mở lại trong lúc vẫn ở màn hình này — poll/kết nối
@@ -70,34 +80,89 @@ struct DesktopScreenView: View {
                 .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
             }
         }
-        .statusBarHidden(true)
-        .navigationBarHidden(true)
-        .onAppear {
-            currentDesktopId = desktopId
-            startWatching()
-        }
-        .onDisappear {
-            watchdogTask?.cancel()
-            let target = currentDesktopId
-            Task {
-                _ = try? await SignalRClient.shared.invoke("StopWatchingDesktop", args: [target])
-                await SignalRClient.shared.setScreenshotHandler(nil)
+    }
+
+    private var pickerStrip: some View {
+        Group {
+            if loadingList && desktops.isEmpty {
+                ProgressView()
+            } else if desktops.isEmpty {
+                Text(listError ?? "Không có máy nào đang mở app")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(desktops, id: \.id) { desktop in
+                            desktopChip(desktop)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                }
             }
         }
-        .onChange(of: scenePhase) { newPhase in
-            if newPhase == .active {
-                isReconnecting = true
-                Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId]) }
+        .frame(height: 92)
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemBackground))
+    }
+
+    private func desktopChip(_ desktop: (id: String, label: String)) -> some View {
+        let isSelected = desktop.id == selectedDesktopId
+        return Button {
+            select(desktop)
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: "desktopcomputer")
+                    .font(.title2)
+                Text(desktop.label)
+                    .font(.caption)
+                    .lineLimit(1)
             }
+            .frame(minWidth: 72)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: 10)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func loadDesktops() async {
+        loadingList = true
+        defer { loadingList = false }
+        do {
+            let result = try await SignalRClient.shared.fetchConnectedDesktops()
+            desktops = result.map { (id: $0.key, label: $0.value) }
+            listError = nil
+        } catch {
+            listError = "Không tải được danh sách: \(error.localizedDescription)"
         }
     }
 
+    private func select(_ desktop: (id: String, label: String)) {
+        guard desktop.id != selectedDesktopId else { return }
+        stopWatching()
+        selectedDesktopId = desktop.id
+        selectedLabel = desktop.label
+        image = nil
+        disconnected = false
+        startWatching()
+    }
+
     private func startWatching() {
+        guard let id = selectedDesktopId else { return }
         Task {
             await SignalRClient.shared.setScreenshotHandler { data, x, y, w, h in
                 applyFrame(data, x: x, y: y, w: w, h: h)
             }
-            _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId])
+            _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [id])
         }
 
         // Desktop tự đẩy khung hình MỖI 100ms KHÔNG ĐIỀU KIỆN (HoaDonGrid luôn render — xem
@@ -108,19 +173,29 @@ struct DesktopScreenView: View {
             var staleTicks = 0
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, let id = selectedDesktopId else { return }
 
                 let stale = Date().timeIntervalSince(lastFrameAt) > 1
                 if !stale { staleTicks = 0; continue }
 
                 staleTicks += 1
                 _ = await tryResolveNewId()
-                _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId])
+                _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [selectedDesktopId ?? id])
 
                 // ~5s không có khung hình mới nào — báo ngay, không bắt người dùng chờ ~30s như bản
                 // dirty-rect cũ (giờ mỗi khung hình chỉ cách nhau 100ms khi mọi thứ bình thường).
                 if staleTicks >= 5 { disconnected = true }
             }
+        }
+    }
+
+    private func stopWatching() {
+        watchdogTask?.cancel()
+        watchdogTask = nil
+        guard let id = selectedDesktopId else { return }
+        Task {
+            _ = try? await SignalRClient.shared.invoke("StopWatchingDesktop", args: [id])
+            await SignalRClient.shared.setScreenshotHandler(nil)
         }
     }
 
@@ -150,9 +225,9 @@ struct DesktopScreenView: View {
 
     private func tryResolveNewId() async -> Bool {
         guard let desktops = try? await SignalRClient.shared.fetchConnectedDesktops(),
-              let match = desktops.first(where: { $0.value == label }),
-              match.key != currentDesktopId else { return false }
-        currentDesktopId = match.key
+              let match = desktops.first(where: { $0.value == selectedLabel }),
+              match.key != selectedDesktopId else { return false }
+        selectedDesktopId = match.key
         return true
     }
 }

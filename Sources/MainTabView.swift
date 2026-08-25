@@ -117,7 +117,7 @@ private struct MoreMenuView: View {
 
                 Section {
                     NavigationLink {
-                        DesktopPickerView()
+                        DesktopScreenView()
                     } label: {
                         Label("Xem màn hình Desktop", systemImage: "desktopcomputer")
                     }
