@@ -123,6 +123,11 @@ private struct ThanhToanRowView: View {
         item.phuongThucThanhToanId?.lowercased() == PaymentMethod.chuyenKhoanId
     }
 
+    /// SePay webhook tự thu (TuDongLuc có giá trị) vs thu tay (nil) — chỉ có ý nghĩa khi isBank.
+    private var isAutoBank: Bool {
+        isBank && item.tuDongLuc != nil
+    }
+
     /// Chỉ 2 màu theo phương thức thanh toán (tiền mặt/chuyển khoản) — không còn phân biệt theo
     /// loaiThanhToan (Trả nợ qua ngày/trong ngày) như trước.
     private var borderColor: Color {
@@ -155,12 +160,16 @@ private struct ThanhToanRowView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 Text(HoaDonFormatting.money(item.soTien)).font(.subheadline.bold())
-                Text(isBank ? "Chuyển khoản" : "Tiền mặt")
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 8).padding(.vertical, 2)
-                    .background((isBank ? Color.brandPrimary : Color.successColor).opacity(0.15))
-                    .foregroundColor(isBank ? .brandPrimary : .successColor)
-                    .clipShape(Capsule())
+                HStack(spacing: 3) {
+                    if isAutoBank {
+                        Image(systemName: "gearshape.2.fill").font(.caption2)
+                    }
+                    Text(isBank ? "Chuyển khoản" : "Tiền mặt").font(.caption2.bold())
+                }
+                .padding(.horizontal, 8).padding(.vertical, 2)
+                .background((isBank ? Color.brandPrimary : Color.successColor).opacity(0.15))
+                .foregroundColor(isBank ? .brandPrimary : .successColor)
+                .clipShape(Capsule())
             }
         }
         .padding(12)

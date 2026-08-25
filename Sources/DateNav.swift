@@ -85,6 +85,9 @@ struct DaySearchBar: View {
 /// giống hệt nút ngày trong DaySearchBar (tab Hoá đơn) để vị trí khớp nhau giữa các tab.
 struct DayDateBar: View {
     @Binding var date: Date
+    /// Nút phụ (vd link "Thống kê tháng") đặt bên phải cùng — khớp pattern `trailing` của DaySearchBar.
+    /// Khai báo TRƯỚC onChange vì onChange truyền qua trailing-closure ở call site (phải là param cuối).
+    var trailing: AnyView? = nil
     var onChange: () -> Void
     @State private var showPicker = false
 
@@ -102,6 +105,8 @@ struct DayDateBar: View {
             .fixedSize()
 
             Spacer()
+
+            if let trailing { trailing }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -123,3 +128,108 @@ struct DayDateBar: View {
     }
 }
 
+/// Chỉ chọn tháng/năm, không search — dùng cho ThongKeThangView. `DatePicker` chuẩn của iOS không
+/// có chế độ "chỉ tháng/năm" nên tự ghép 2 bánh xe Picker trong sheet riêng (MonthYearPickerSheet),
+/// cộng 2 nút chevron để nhảy nhanh tháng trước/sau mà không cần mở sheet.
+struct MonthDateBar: View {
+    @Binding var date: Date
+    var onChange: () -> Void
+    @State private var showPicker = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button { shift(-1) } label: {
+                Image(systemName: "chevron.left")
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.brandPrimary)
+
+            Button { showPicker = true } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                    Text(DateNavFormat.monthTitle.string(from: date))
+                }
+                .font(.subheadline.bold())
+                .foregroundColor(.brandPrimary)
+            }
+            .buttonStyle(.plain)
+            .fixedSize()
+
+            Button { shift(1) } label: {
+                Image(systemName: "chevron.right")
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.brandPrimary)
+
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .sheet(isPresented: $showPicker) {
+            MonthYearPickerSheet(date: $date) {
+                showPicker = false
+                onChange()
+            }
+            .presentationDetents([.height(260)])
+        }
+    }
+
+    private func shift(_ delta: Int) {
+        if let newDate = Calendar.current.date(byAdding: .month, value: delta, to: date) {
+            date = newDate
+            onChange()
+        }
+    }
+}
+
+private struct MonthYearPickerSheet: View {
+    @Binding var date: Date
+    var onDone: () -> Void
+
+    @State private var month: Int
+    @State private var year: Int
+
+    private static let months = Array(1...12)
+    private let years: [Int]
+
+    init(date: Binding<Date>, onDone: @escaping () -> Void) {
+        self._date = date
+        self.onDone = onDone
+        let cal = Calendar.current
+        _month = State(initialValue: cal.component(.month, from: date.wrappedValue))
+        _year = State(initialValue: cal.component(.year, from: date.wrappedValue))
+        let currentYear = cal.component(.year, from: Date())
+        years = Array((currentYear - 5)...(currentYear + 1))
+    }
+
+    var body: some View {
+        NavigationStack {
+            HStack(spacing: 0) {
+                Picker("Tháng", selection: $month) {
+                    ForEach(Self.months, id: \.self) { m in
+                        Text("Tháng \(m)").tag(m)
+                    }
+                }
+                .pickerStyle(.wheel)
+
+                Picker("Năm", selection: $year) {
+                    ForEach(years, id: \.self) { y in
+                        Text("\(y)").tag(y)
+                    }
+                }
+                .pickerStyle(.wheel)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Xong") {
+                        if let newDate = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1)) {
+                            date = newDate
+                        }
+                        onDone()
+                    }
+                }
+            }
+        }
+    }
+}

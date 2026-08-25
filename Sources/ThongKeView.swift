@@ -32,7 +32,21 @@ struct ThongKeView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                DayDateBar(date: $currentDate) { Task { await load() } }
+                DayDateBar(
+                    date: $currentDate,
+                    trailing: AnyView(
+                        NavigationLink {
+                            ThongKeThangView()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text("Thống kê tháng")
+                                Image(systemName: "chevron.right")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundColor(.brandPrimary)
+                        }
+                    )
+                ) { Task { await load() } }
 
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
@@ -167,8 +181,8 @@ private enum ThongKeCard: Hashable {
 
 /// Màu mỗi card lấy Y HỆT hex dùng trong AddRow() của ThongKeTabControl.xaml.cs (Desktop) — không
 /// dùng warningColor (vàng) cho card nào, tránh Chi tiêu/Chưa thanh toán trùng màu "cảnh báo" gây
-/// hiểu nhầm mức độ nghiêm trọng như nhau.
-private extension Color {
+/// hiểu nhầm mức độ nghiêm trọng như nhau. Không đánh dấu private — ThongKeThangView tái dùng chung.
+extension Color {
     static let thongKeBlue = Color(red: 0x0B / 255, green: 0x61 / 255, blue: 0xD6 / 255)
     static let thongKeGreen = Color(red: 0x0F / 255, green: 0x51 / 255, blue: 0x32 / 255)
     static let thongKeBrown = Color(red: 0x97 / 255, green: 0x4A / 255, blue: 0x05 / 255)
@@ -180,8 +194,9 @@ private extension Color {
 
 /// Card tổng quan mỗi mục — cùng phong cách bo góc 14 + nền màu nhạt như HoaDonRowView/nút "+" của
 /// tab Hoá đơn. Chạm vào header để mở rộng NGAY TẠI CHỖ (accordion) xem danh sách chi tiết, không
-/// mở sheet riêng — chevron xoay theo trạng thái để báo hiệu có thể mở rộng.
-private struct StatCard<Content: View>: View {
+/// mở sheet riêng — chevron xoay theo trạng thái để báo hiệu có thể mở rộng. Không private —
+/// ThongKeThangView tái dùng chung để giao diện khớp y hệt.
+struct StatCard<Content: View>: View {
     let icon: String
     let title: String
     let value: Double
@@ -235,7 +250,7 @@ private struct StatCard<Content: View>: View {
 /// Hàng tổng phụ (vd "Chi tiêu ngày"/"Chi tiêu tháng", "Trả nợ tại quán"/"Trả nợ shipper") — khớp
 /// các dòng bold "CHI TIÊU NGÀY"/"TRẢ NỢ TẠI QUÁN"... trong AddRow() Desktop, đứng trước danh sách
 /// item con của nhóm đó.
-private struct SubTotalRow: View {
+struct SubTotalRow: View {
     let label: String
     let value: Double
     var color: Color = .primary
@@ -253,7 +268,7 @@ private struct SubTotalRow: View {
     }
 }
 
-private struct AmountRow: View {
+struct AmountRow: View {
     let label: String
     var sub: String?
     let value: Double

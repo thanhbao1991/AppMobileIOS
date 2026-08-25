@@ -501,12 +501,16 @@ private struct HoaDonRowView: View {
                 }
                 Text(HoaDonFormatting.money(item.thanhTien)).font(.subheadline.bold())
                 if let statusText {
-                    Text(statusText)
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 8).padding(.vertical, 2)
-                        .background(statusColor.opacity(0.15))
-                        .foregroundColor(statusColor)
-                        .clipShape(Capsule())
+                    HStack(spacing: 3) {
+                        if item.isBank == true, item.isAutoBank == true {
+                            Image(systemName: "gearshape.2.fill").font(.caption2)
+                        }
+                        Text(statusText).font(.caption2.bold())
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(statusColor.opacity(0.15))
+                    .foregroundColor(statusColor)
+                    .clipShape(Capsule())
                 }
             }
         }

@@ -125,6 +125,14 @@ actor APIClient {
         return env.data ?? []
     }
 
+    /// Nguyên liệu NHẬP dùng cho form Thêm chi tiêu — khớp desktop ChiTieuInputPanel (GET /api/NguyenLieu).
+    func getNguyenLieu() async -> [NguyenLieuDto] {
+        let req = makeRequest("/api/NguyenLieu")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[NguyenLieuDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
     func getCongViecList() async -> [CongViecNoiBoDto] {
         let req = makeRequest("/api/CongViecNoiBo")
         let (data, _) = await send(req)
@@ -171,6 +179,32 @@ actor APIClient {
 
     private func getThongKe<T: Decodable>(_ endpoint: String, ngay: Int, thang: Int, nam: Int) async -> T? {
         let req = makeRequest("/api/ThongKe/\(endpoint)?ngay=\(ngay)&thang=\(thang)&nam=\(nam)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<T>.self, from: data), env.isSuccess else { return nil }
+        return env.data
+    }
+
+    func getThongKeChiTieuThang(thang: Int, nam: Int) async -> ThongKeChiTieuDto? {
+        await getThongKeThang("chi-tieu-thang", thang: thang, nam: nam)
+    }
+    func getThongKeCongNoThang(thang: Int, nam: Int) async -> ThongKeCongNoDto? {
+        await getThongKeThang("cong-no-thang", thang: thang, nam: nam)
+    }
+    func getThongKeThanhToanThang(thang: Int, nam: Int) async -> ThongKeThanhToanDto? {
+        await getThongKeThang("thanh-toan-thang", thang: thang, nam: nam)
+    }
+    func getThongKeDoanhThuThang(thang: Int, nam: Int) async -> ThongKeDoanhThuNgayDto? {
+        await getThongKeThang("doanh-thu-thang", thang: thang, nam: nam)
+    }
+    func getThongKeTraNoThang(thang: Int, nam: Int) async -> ThongKeTraNoNgayDto? {
+        await getThongKeThang("tra-no-thang", thang: thang, nam: nam)
+    }
+    func getThongKeDonChuaThanhToanThang(thang: Int, nam: Int) async -> ThongKeDonChuaThanhToanDto? {
+        await getThongKeThang("don-chua-thanh-toan-thang", thang: thang, nam: nam)
+    }
+
+    private func getThongKeThang<T: Decodable>(_ endpoint: String, thang: Int, nam: Int) async -> T? {
+        let req = makeRequest("/api/ThongKe/\(endpoint)?thang=\(thang)&nam=\(nam)")
         let (data, _) = await send(req)
         guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<T>.self, from: data), env.isSuccess else { return nil }
         return env.data

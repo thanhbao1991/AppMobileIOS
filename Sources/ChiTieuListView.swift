@@ -1,9 +1,8 @@
 import SwiftUI
 
 /// Chi tiêu hằng ngày — GET/PUT/DELETE /api/ChiTieuHangNgay. List theo ngày (DayNavBar) + search.
-/// Vuốt trái để sửa ghi chú / xoá — khớp web mobile (OnPostEditAsync/OnPostDeleteAsync). Không còn
-/// thêm chi tiêu trực tiếp trên tab này (footer chỉ hiện tổng); AddExpenseSheet giữ lại cho luồng
-/// "Tạo" (CreatePlus) dùng sau.
+/// Vuốt trái để sửa ghi chú / xoá — khớp web mobile (OnPostEditAsync/OnPostDeleteAsync). Nút "+" thêm
+/// chi tiêu nằm ở footer, khớp bố cục HoaDonListView (nút tròn cạnh tổng tiền, không còn label "Tổng chi").
 struct ChiTieuListView: View {
     @State private var currentDate = Date()
     @State private var items: [ChiTieuHangNgayDto] = []
@@ -34,13 +33,7 @@ struct ChiTieuListView: View {
             VStack(spacing: 0) {
                 DaySearchBar(
                     date: $currentDate, searchText: $searchText,
-                    placeholder: "Tìm nguyên liệu, ghi chú...",
-                    leading: AnyView(
-                        Button { showAdd = true } label: {
-                            Image(systemName: "plus.circle.fill").font(.title2)
-                        }
-                        .foregroundColor(.brandPrimary)
-                    )
+                    placeholder: "Tìm nguyên liệu, ghi chú..."
                 ) { Task { await load() } }
 
                 if !hasLoaded {
@@ -79,19 +72,22 @@ struct ChiTieuListView: View {
                 }
 
                 Divider()
-                VStack(spacing: 2) {
-                    HStack {
-                        Spacer()
-                        Text("Ngày: \(totalNgayText)")
-                            .font(.caption2).foregroundColor(.successColor)
-                        Text("Tháng: \(totalThangText)")
-                            .font(.caption2).foregroundColor(.brandPrimary)
+                HStack(spacing: 12) {
+                    Button { showAdd = true } label: {
+                        Image(systemName: "plus.circle.fill").font(.system(size: 34))
                     }
-                    HStack {
-                        Text("Tổng chi").font(.subheadline).foregroundColor(.textMuted)
-                        Spacer()
+                    .foregroundColor(.brandPrimary)
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Text("Ngày: \(totalNgayText)")
+                                .font(.caption2).foregroundColor(.successColor)
+                            Text("Tháng: \(totalThangText)")
+                                .font(.caption2).foregroundColor(.brandPrimary)
+                        }
                         Text(totalText).font(.headline)
                     }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding()
             }
@@ -231,9 +227,9 @@ struct AddExpenseSheet: View {
     let onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var nguyenLieuList: [NguyenLieuBanHangDto] = []
+    @State private var nguyenLieuList: [NguyenLieuDto] = []
     @State private var searchText = ""
-    @State private var selected: NguyenLieuBanHangDto?
+    @State private var selected: NguyenLieuDto?
     @State private var soLuong: Double = 1
     @State private var donGia: Double = 0
     @State private var ghiChu = ""
@@ -241,9 +237,9 @@ struct AddExpenseSheet: View {
     @State private var saving = false
     @State private var errorMessage: String?
 
-    private var filteredList: [NguyenLieuBanHangDto] {
+    private var filteredList: [NguyenLieuDto] {
         guard !searchText.isEmpty else { return nguyenLieuList }
-        return nguyenLieuList.filter { $0.ten.localizedCaseInsensitiveContains(searchText) }
+        return nguyenLieuList.filter { $0.ten.matchesSearch(searchText) }
     }
 
     private var thanhTien: Double { soLuong * donGia }
@@ -264,6 +260,7 @@ struct AddExpenseSheet: View {
                             Button {
                                 selected = nl
                                 searchText = ""
+                                if nl.giaNhap > 0 { donGia = nl.giaNhap }
                             } label: {
                                 Text(nl.ten)
                             }
@@ -310,7 +307,7 @@ struct AddExpenseSheet: View {
                 }
             }
         }
-        .task { nguyenLieuList = await APIClient.shared.getNguyenLieuBanHang() }
+        .task { nguyenLieuList = await APIClient.shared.getNguyenLieu() }
     }
 
     private func save() async {

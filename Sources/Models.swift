@@ -50,6 +50,9 @@ struct HoaDonListDto: Decodable, Identifiable {
     let diaChiText: String?
     let soDienThoaiText: String?
     let isBank: Bool?
+    /// true = có dòng chuyển khoản do SePay webhook tự thu — hiện icon robot trên badge "Chuyển khoản"
+    /// để phân biệt với thu tay. Xem ChiTietHoaDonThanhToanDto.tuDongLuc.
+    let isAutoBank: Bool?
     let thanhTien: Double
     let conLai: Double
     let tenMonSummary: String?
@@ -146,6 +149,8 @@ struct ChiTietHoaDonThanhToanDto: Decodable, Identifiable {
     let ghiChu: String?
     let tenMonSummary: String?
     let phuongThucThanhToanId: String?
+    /// null = thu tay; có giá trị = SePay webhook tự thu — hiện icon robot phân biệt trên badge.
+    let tuDongLuc: String?
 }
 
 // ---- Chi tiêu hằng ngày ----
@@ -178,6 +183,14 @@ struct NguyenLieuBanHangDto: Decodable, Identifiable {
     let id: String
     let ten: String
     let donViTinh: String?
+}
+
+/// Nguyên liệu NHẬP (mục để chi, vd "Shoppee A ty") — /api/NguyenLieu, khác hẳn NguyenLieuBanHangDto
+/// (nguyên liệu công thức bán hàng). Khớp TraSuaApp.Desktop/Controls/ChiTieuInputPanel dùng NguyenLieuDto.
+struct NguyenLieuDto: Decodable, Identifiable {
+    let id: String
+    let ten: String
+    let giaNhap: Double
 }
 
 // ---- Công việc nội bộ ----
