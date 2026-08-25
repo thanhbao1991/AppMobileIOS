@@ -19,6 +19,16 @@ final class VP9Decoder {
     /// giá trị SAU KHI đã decode được ít nhất 1 khung.
     private(set) var frameSize: CGSize?
 
+    // Hàng đợi sample buffer đã decode + `requestMediaDataWhenReady` — ĐÚNG pattern Apple quy định
+    // cho AVSampleBufferDisplayLayer (xem AVFoundation docs). Bản trước gọi thẳng `layer.enqueue()`
+    // mỗi lần decode xong, KHÔNG qua `isReadyForMoreMediaData` — với timing toàn `.invalid` (không có
+    // PTS thật, dùng DisplayImmediately), điều này khiến khung ĐẦU TIÊN hiện đúng nhưng layer sau đó
+    // kẹt hẳn, không nhận enqueue tiếp (đúng triệu chứng "hiện 1 khung rồi đứng hình" quan sát được
+    // 2026-08-25). `requestMediaDataWhenReady` tự gọi lại callback mỗi khi layer THỰC SỰ sẵn sàng.
+    private var pendingSamples: [CMSampleBuffer] = []
+    private var readyRequested = false
+    private let queueLock = NSLock()
+
     init() {
         codecPtr = UnsafeMutablePointer<vpx_codec_ctx_t>.allocate(capacity: 1)
         memset(codecPtr, 0, MemoryLayout<vpx_codec_ctx_t>.size)
@@ -40,6 +50,14 @@ final class VP9Decoder {
             initialized = true
         }
 
+        if !readyRequested {
+            readyRequested = true
+            layer.requestMediaDataWhenReady(on: .main) { [weak self, weak layer] in
+                guard let self, let layer else { return }
+                self.drainQueue(into: layer)
+            }
+        }
+
         let decodeResult = packet.withUnsafeBytes { buf -> vpx_codec_err_t in
             guard let base = buf.bindMemory(to: UInt8.self).baseAddress else {
                 return VPX_CODEC_ERROR
@@ -52,6 +70,19 @@ final class VP9Decoder {
         guard let imgPtr = vpx_codec_get_frame(codecPtr, &iter) else { return false }
 
         return enqueue(image: imgPtr, layer: layer)
+    }
+
+    /// Chạy trên main thread (callback của `requestMediaDataWhenReady`) — rút dần hàng đợi CHỈ khi
+    /// layer báo thật sự sẵn sàng, thay vì hy vọng `enqueue()` tự lo liệu.
+    private func drainQueue(into layer: AVSampleBufferDisplayLayer) {
+        while layer.isReadyForMoreMediaData {
+            queueLock.lock()
+            let next = pendingSamples.isEmpty ? nil : pendingSamples.removeFirst()
+            queueLock.unlock()
+            guard let next else { return }
+            if layer.status == .failed { layer.flush() }
+            layer.enqueue(next)
+        }
     }
 
     private func enqueue(image imgPtr: UnsafeMutablePointer<vpx_image>, layer: AVSampleBufferDisplayLayer) -> Bool {
@@ -115,8 +146,14 @@ final class VP9Decoder {
                 Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
         }
 
-        if layer.status == .failed { layer.flush() }
-        layer.enqueue(sampleBuffer)
+        // Đưa vào hàng đợi thay vì gọi thẳng layer.enqueue() — drainQueue() (chạy trong callback
+        // requestMediaDataWhenReady) mới là nơi thực sự gọi enqueue(), CHỈ khi layer sẵn sàng thật.
+        queueLock.lock()
+        pendingSamples.append(sampleBuffer)
+        // Chặn hàng đợi phình vô hạn nếu layer kẹt thật sự (lỗi khác) — giữ khung MỚI NHẤT, bỏ khung
+        // cũ (video trực tiếp, khung cũ không còn giá trị xem lại).
+        if pendingSamples.count > 5 { pendingSamples.removeFirst(pendingSamples.count - 5) }
+        queueLock.unlock()
         return formatChanged
     }
 
