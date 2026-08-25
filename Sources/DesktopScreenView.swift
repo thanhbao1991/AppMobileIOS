@@ -8,12 +8,11 @@ import UIKit
 /// chụp+gửi 1 khung JPEG FULL-FRAME mỗi 100ms qua `ScreenshotReceived` (không dirty-rect — đơn giản,
 /// dễ đoán, đủ dùng cho nhu cầu "xem app đang chạy gì") tới khi rời màn hình gọi `StopWatchingDesktop`.
 /// 1 watchdog tự gọi lại `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect).
-/// Giữ nguyên chiều dọc (không tự xoay ngang), KHÔNG zoom (bỏ hẳn theo yêu cầu 2026-08-26) — tỉ lệ
-/// cố định sao cho chiều ngang Desktop hiển thị đúng bằng 2 lần chiều ngang điện thoại
-/// (`fixedScale = 2 × minScale`, xem `minScale()`), 1 ngón để kéo trái/phải xem phần còn lại, nút X
-/// góc trên để thoát. Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi `SendClick`
-/// ngay lập tức (không chờ khung hình kế), Desktop quy đổi lại toạ độ màn hình thật rồi click bằng
-/// Win32 SendInput THẬT (di chuyển con trỏ thật, không phải hit-test reflection hack đời trước).
+/// READ-ONLY thuần — bỏ hẳn click (2026-08-26, sau nhiều lần vẫn không chính xác dù đã verify
+/// Desktop+Backend hoàn toàn ổn — không đáng công sức tiếp tục dò lệch toạ độ). Giữ nguyên chiều dọc
+/// (không tự xoay ngang), KHÔNG zoom — tỉ lệ cố định sao cho chiều ngang Desktop hiển thị đúng bằng
+/// 1.5 lần chiều ngang điện thoại (`fixedScale = 1.5 × minScale`, xem `minScale()`), 1 ngón để kéo
+/// trái/phải xem phần còn lại, nút X góc trên để thoát.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -46,13 +45,9 @@ struct DesktopScreenView: View {
                             .scaleEffect(x: fixedScale(image: image, frame: geo.size), y: 1)
                             .offset(offset)
 
-                        // Gesture gắn vào lớp overlay KHÔNG bị scaleEffect/offset — location/translation
-                        // đọc được luôn là toạ độ màn hình thật (viewport), tự quy đổi ngược sang toạ độ
-                        // ảnh gốc bằng scale/offset đang biết, không phụ thuộc SwiftUI tự làm việc đó.
                         Color.clear
                             .contentShape(Rectangle())
                             .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size)))
-                            .simultaneousGesture(tapGesture(image: image, frame: geo.size))
                     }
                 }
                 .clipped()
@@ -146,60 +141,12 @@ struct DesktopScreenView: View {
         return frame.width / renderedWidth
     }
 
-    /// Tỉ lệ CỐ ĐỊNH (không cho zoom, theo yêu cầu 2026-08-26) — chiều ngang Desktop hiển thị đúng
-    /// bằng 2 lần chiều ngang điện thoại: ở `minScale` toàn bộ chiều ngang Desktop vừa khít 1 màn
-    /// hình điện thoại, nên `2 × minScale` làm nó trải rộng ra đúng 2 màn hình điện thoại (kéo 1
-    /// ngón để xem nửa còn lại). Chặn trên = 1 (không zoom sâu hơn mức lấp đầy khung xem mặc định).
+    /// Tỉ lệ CỐ ĐỊNH (không cho zoom) — chiều ngang Desktop hiển thị đúng bằng 1.5 lần chiều ngang
+    /// điện thoại: ở `minScale` toàn bộ chiều ngang Desktop vừa khít 1 màn hình điện thoại, nên
+    /// `1.5 × minScale` làm nó trải rộng ra đúng 1.5 màn hình điện thoại (kéo 1 ngón để xem phần
+    /// còn lại). Chặn trên = 1 (không zoom sâu hơn mức lấp đầy khung xem mặc định).
     private func fixedScale(image: UIImage, frame: CGSize) -> CGFloat {
-        min(1, 2 * minScale(image: image, frame: frame))
-    }
-
-    // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi ngay lập tức.
-    private func tapGesture(image: UIImage, frame: CGSize) -> some Gesture {
-        SpatialTapGesture()
-            .onEnded { value in
-                guard let point = imagePoint(from: value.location, frame: frame, image: image) else { return }
-                let targetId = currentDesktopId
-                Task { _ = try? await SignalRClient.shared.invoke(
-                    "SendClick", args: [targetId, Double(point.x), Double(point.y)]) }
-            }
-    }
-
-    /// Quy đổi 1 điểm chạm trên viewport (chưa bị scaleEffect/offset) về đúng toạ độ pixel trong
-    /// ảnh cửa sổ Desktop gốc — tự đảo ngược scale/offset (đang biết) rồi đảo ngược phần aspectFill
-    /// phình ra ngoài khung xem.
-    private func imagePoint(from location: CGPoint, frame: CGSize, image: UIImage) -> CGPoint? {
-        guard image.size.width > 0, image.size.height > 0, frame.width > 0, frame.height > 0 else { return nil }
-
-        // scaleEffect chỉ áp theo chiều ngang (x: fixedScale, y: 1) — chiều dọc không transform gì cả.
-        let center = CGPoint(x: frame.width / 2, y: frame.height / 2)
-        let localX = (location.x - offset.width - center.x) / fixedScale(image: image, frame: frame) + center.x
-        let localY = location.y
-        guard localX >= 0, localX <= frame.width, localY >= 0, localY <= frame.height else { return nil }
-
-        let imageAspect = image.size.width / image.size.height
-        let frameAspect = frame.width / frame.height
-
-        let renderedWidth: CGFloat
-        let renderedHeight: CGFloat
-        let contentX: CGFloat
-        let contentY: CGFloat
-        if imageAspect > frameAspect {
-            renderedHeight = frame.height
-            renderedWidth = frame.height * imageAspect
-            contentX = localX + (renderedWidth - frame.width) / 2
-            contentY = localY
-        } else {
-            renderedWidth = frame.width
-            renderedHeight = frame.width / imageAspect
-            contentX = localX
-            contentY = localY + (renderedHeight - frame.height) / 2
-        }
-
-        let imageX = contentX * (image.size.width / renderedWidth)
-        let imageY = contentY * (image.size.height / renderedHeight)
-        guard imageX >= 0, imageX <= image.size.width, imageY >= 0, imageY <= image.size.height else { return nil }
-        return CGPoint(x: imageX, y: imageY)
+        min(1, 1.5 * minScale(image: image, frame: frame))
     }
 
     private func startWatching() {
