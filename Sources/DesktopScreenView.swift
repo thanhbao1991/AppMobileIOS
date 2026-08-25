@@ -36,40 +36,41 @@ struct DesktopScreenView: View {
     /// phải `id` (connection id đổi mỗi lần Desktop reconnect nên không dùng để nhớ được).
     private static let lastLabelKey = "DesktopScreenView.lastDesktopLabel"
 
-    /// Chiều cao đo được của nội dung (ảnh + dải chọn máy), dùng để sheet chỉ cao vừa đủ thay vì bung
-    /// gần hết màn hình — không tính thanh navigation (đo riêng bằng hằng số ước lượng bên dưới vì
-    /// nav bar nằm ngoài VStack này, do `NavigationStack` bọc từ `HoaDonListView` quản lý).
-    @State private var contentHeight: CGFloat = 420
+    /// Chiều cao sheet tính THẲNG từ chiều rộng màn hình (không đo động qua GeometryReader/PreferenceKey
+    /// nữa — bản trước dùng cách đó nhưng `presentationDetents` lại bị đặt bên trong nội dung của
+    /// `NavigationStack` do `HoaDonListView` bọc `NavigationStack { DesktopScreenView() }` từ bên ngoài,
+    /// khiến SwiftUI không áp dụng detent đúng (sheet co về gần kích thước tối thiểu). Giờ
+    /// `DesktopScreenView` tự bọc `NavigationStack` và đặt `presentationDetents` NGOÀI nó — đúng cấp
+    /// theo yêu cầu của SwiftUI.
     private let navBarHeightEstimate: CGFloat = 44
+    private var contentHeight: CGFloat {
+        (screenWidth / screenAspectRatio) + 1 /* divider */ + 92 /* pickerStrip */
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            screenArea
+        NavigationStack {
+            VStack(spacing: 0) {
+                screenArea
 
-            Divider()
+                Divider()
 
-            pickerStrip
-        }
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(key: DesktopSheetHeightKey.self, value: geo.size.height)
+                pickerStrip
             }
-        )
-        .onPreferenceChange(DesktopSheetHeightKey.self) { contentHeight = $0 }
-        .background(Color(.systemBackground))
-        .navigationTitle("Xem màn hình Desktop")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Đóng") { dismiss() }
+            .background(Color(.systemBackground))
+            .navigationTitle("Xem màn hình Desktop")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
+                }
             }
-        }
-        .task { await loadDesktops() }
-        .onDisappear { stopWatching() }
-        .onChange(of: scenePhase) { newPhase in
-            guard let id = selectedDesktopId, newPhase == .active else { return }
-            isReconnecting = true
-            Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [id]) }
+            .task { await loadDesktops() }
+            .onDisappear { stopWatching() }
+            .onChange(of: scenePhase) { newPhase in
+                guard let id = selectedDesktopId, newPhase == .active else { return }
+                isReconnecting = true
+                Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [id]) }
+            }
         }
         .presentationDetents([.height(contentHeight + navBarHeightEstimate)])
         .presentationDragIndicator(.visible)
@@ -280,9 +281,4 @@ struct DesktopScreenView: View {
         selectedDesktopId = match.key
         return true
     }
-}
-
-private struct DesktopSheetHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

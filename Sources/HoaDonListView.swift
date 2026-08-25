@@ -186,9 +186,7 @@ struct HoaDonListView: View {
             }
         }
         .sheet(isPresented: $showDesktopSheet) {
-            NavigationStack {
-                DesktopScreenView()
-            }
+            DesktopScreenView()
         }
         .sheet(isPresented: $showAddSheet) {
             AddHoaDonSheet(
