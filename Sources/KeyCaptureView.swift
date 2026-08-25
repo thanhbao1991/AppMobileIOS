@@ -111,7 +111,7 @@ final class RemoteControlSurfaceView: UIView {
     private let multiDecideThreshold: CGFloat = 8
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        trackedTouches.append(contentsOf: touches)
+        resyncTrackedTouches(event)
         refreshMode()
     }
 
@@ -166,13 +166,24 @@ final class RemoteControlSurfaceView: UIView {
                 onTap?(singleStart)
             }
         }
-        trackedTouches.removeAll { touches.contains($0) }
+        resyncTrackedTouches(event)
         refreshMode()
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        trackedTouches.removeAll { touches.contains($0) }
+        resyncTrackedTouches(event)
         refreshMode()
+    }
+
+    // Đồng bộ lại từ `event` (nguồn sự thật của hệ thống) thay vì tự cộng dồn/gỡ thủ công trên mảng
+    // riêng — nếu 1 lần touchesEnded/Cancelled bị lỡ (vd đổi app iOS giữa lúc đang pinch 2 ngón),
+    // mảng tự quản lý cũ sẽ giữ ngón "ma" mãi mãi, khiến `hadMultiTouch` kẹt true vĩnh viễn và MỌI
+    // tap/long-press sau đó bị chặn câm lặng cho tới khi khởi động lại app (bug nghi ngờ gây ra "tap
+    // không hoạt động" dù mọi thứ khác đều đúng — xem cách RustDesk né hẳn lớp bug này bằng cách
+    // dùng GestureRecognizer chuẩn của framework thay vì tự track touch thủ công).
+    private func resyncTrackedTouches(_ event: UIEvent?) {
+        guard let all = event?.touches(for: self) else { trackedTouches = []; return }
+        trackedTouches = all.filter { $0.phase != .ended && $0.phase != .cancelled }
     }
 
     private func refreshMode() {
