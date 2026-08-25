@@ -35,6 +35,7 @@ struct PhienDangNhapDto: Decodable, Identifiable {
     let id: String
     let thietBi: String?
     let nenTang: String?
+    let tenTaiKhoan: String?
     let ngayTao: String
     let hetHan: String
     let laThietBiHienTai: Bool

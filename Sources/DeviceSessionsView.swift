@@ -92,8 +92,14 @@ private struct SessionRowView: View {
                             .clipShape(Capsule())
                     }
                 }
-                if let platformLabel {
-                    Text(platformLabel).font(.caption2).foregroundColor(.brandPrimary)
+                HStack(spacing: 4) {
+                    if let platformLabel {
+                        Text(platformLabel).font(.caption2).foregroundColor(.brandPrimary)
+                    }
+                    // Chỉ có giá trị khi người xem là "admin" — xem được session của mọi tài khoản.
+                    if let tk = session.tenTaiKhoan, !tk.isEmpty {
+                        Text("· \(tk)").font(.caption2).foregroundColor(.textMuted)
+                    }
                 }
                 Text("Đăng nhập: \(DeviceSessionsView.formatUtc(session.ngayTao))")
                     .font(.caption2).foregroundColor(.textMuted)
