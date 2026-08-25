@@ -12,8 +12,8 @@ struct ApiEnvelope<T: Decodable>: Decodable {
 
 // ---- Auth ----
 
-struct LoginRequest: Encodable { let taiKhoan: String; let matKhau: String; let thietBi: String? }
-struct RefreshRequest: Encodable { let refreshToken: String; let thietBi: String? }
+struct LoginRequest: Encodable { let taiKhoan: String; let matKhau: String; let thietBi: String?; let nenTang: String? }
+struct RefreshRequest: Encodable { let refreshToken: String; let thietBi: String?; let nenTang: String? }
 
 struct LoginResponse: Decodable {
     let thanhCong: Bool?
@@ -34,6 +34,7 @@ enum LoginResult {
 struct PhienDangNhapDto: Decodable, Identifiable {
     let id: String
     let thietBi: String?
+    let nenTang: String?
     let ngayTao: String
     let hetHan: String
     let laThietBiHienTai: Bool

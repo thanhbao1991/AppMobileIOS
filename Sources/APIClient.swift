@@ -45,7 +45,7 @@ actor APIClient {
 
     private func doRefresh(_ refreshToken: String) async -> String? {
         let req = makeRequest("/api/auth/refresh", method: "POST",
-                               body: jsonBody(RefreshRequest(refreshToken: refreshToken, thietBi: deviceName())),
+                               body: jsonBody(RefreshRequest(refreshToken: refreshToken, thietBi: deviceName(), nenTang: "iOS")),
                                authorized: false)
         let (data, http) = await send(req, allowRefresh: false)
         guard let data, http?.statusCode == 200,
@@ -57,7 +57,7 @@ actor APIClient {
 
     func login(taiKhoan: String, matKhau: String) async -> LoginResult {
         let req = makeRequest("/api/auth/login", method: "POST",
-                               body: jsonBody(LoginRequest(taiKhoan: taiKhoan, matKhau: matKhau, thietBi: deviceName())),
+                               body: jsonBody(LoginRequest(taiKhoan: taiKhoan, matKhau: matKhau, thietBi: deviceName(), nenTang: "iOS")),
                                authorized: false)
         let (data, _) = await send(req, allowRefresh: false)
         guard let data else { return .networkError }

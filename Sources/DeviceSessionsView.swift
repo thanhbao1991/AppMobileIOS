@@ -54,10 +54,31 @@ struct DeviceSessionsView: View {
 private struct SessionRowView: View {
     let session: PhienDangNhapDto
 
+    // Icon + nhãn theo nền tảng — phân biệt rõ máy tính/điện thoại, không chỉ dựa vào ThietBi tự do
+    // (dễ trùng/gây nhầm với tên tài khoản, ví dụ user đặt tên máy trùng "ADMIN").
+    private var platformIcon: String {
+        switch session.nenTang {
+        case "Desktop": return "desktopcomputer"
+        case "Android": return "phone.fill"
+        case "iOS": return "iphone"
+        default: return "questionmark.circle"
+        }
+    }
+
+    private var platformLabel: String? {
+        switch session.nenTang {
+        case "Desktop": return "Máy tính"
+        case "Android": return "Android"
+        case "iOS": return "iPhone"
+        default: return nil
+        }
+    }
+
     var body: some View {
         HStack {
-            Image(systemName: "iphone")
+            Image(systemName: platformIcon)
                 .foregroundColor(.brandPrimary)
+                .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(session.thietBi?.isEmpty == false ? session.thietBi! : "Thiết bị không tên")
@@ -71,13 +92,37 @@ private struct SessionRowView: View {
                             .clipShape(Capsule())
                     }
                 }
-                Text("Đăng nhập: \(HoaDonFormatting.congNoTime(session.ngayTao))")
+                if let platformLabel {
+                    Text(platformLabel).font(.caption2).foregroundColor(.brandPrimary)
+                }
+                Text("Đăng nhập: \(DeviceSessionsView.formatUtc(session.ngayTao))")
                     .font(.caption2).foregroundColor(.textMuted)
-                Text("Hết hạn: \(HoaDonFormatting.congNoTime(session.hetHan))")
+                Text("Hết hạn: \(DeviceSessionsView.formatUtc(session.hetHan))")
                     .font(.caption2).foregroundColor(.textMuted)
             }
             Spacer()
         }
         .padding(.vertical, 4)
+    }
+}
+
+extension DeviceSessionsView {
+    // Backend trả DateTime dạng "yyyy-MM-ddTHH:mm:ss.fffffff" (Kind=Unspecified nhưng thực chất là
+    // UTC) — KHÔNG dùng HoaDonFormatting.congNoTime vì formatter đó không set timeZone khi parse,
+    // đọc nhầm giờ UTC thành giờ máy (lệch 7h so với giờ VN thật). Cắt phần fractional-second (thừa
+    // hơn .SSS mà DateFormatter chuẩn hỗ trợ) rồi parse tường minh với timeZone UTC, xuất ra theo
+    // giờ máy hiện tại.
+    static func formatUtc(_ iso: String) -> String {
+        let base = String(iso.prefix(19)) // "yyyy-MM-ddTHH:mm:ss"
+        let inFormatter = DateFormatter()
+        inFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        inFormatter.locale = Locale(identifier: "en_US_POSIX")
+        inFormatter.timeZone = TimeZone(identifier: "UTC")
+        guard let date = inFormatter.date(from: base) else { return "--:-- --/--" }
+
+        let outFormatter = DateFormatter()
+        outFormatter.dateFormat = "HH:mm dd/MM"
+        outFormatter.locale = Locale(identifier: "vi_VN")
+        return outFormatter.string(from: date)
     }
 }
