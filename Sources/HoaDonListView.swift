@@ -39,14 +39,17 @@ struct HoaDonListView: View {
         HoaDonFormatting.money(sortedItems.reduce(0) { $0 + $1.thanhTien })
     }
 
-    /// Tổng tiền theo từng phân loại đơn, gộp trên 1 dòng gọn (vd "Ship 203k, T.chỗ 230k...").
-    private var phanLoaiTotals: [(label: String, color: Color, text: String)] {
-        let order = ["Ship", "Tại Chỗ", "Mv", "Mh", "App"]
-        let shortLabel: [String: String] = ["Ship": "Ship", "Tại Chỗ": "T.chỗ", "Mv": "M.về", "Mh": "M.hộ", "App": "App"]
-        return order.compactMap { phanLoai in
-            let total = sortedItems.filter { $0.phanLoai == phanLoai }.reduce(0) { $0 + $1.thanhTien }
+    /// Tổng tiền theo từng phân loại đơn, gộp trên 1 dòng gọn — icon thay chữ để đỡ tốn ngang, khỏi
+    /// bị xuống 2 dòng như bản text cũ ("Ship 203k, T.chỗ 230k...").
+    private var phanLoaiTotals: [(phanLoai: String, icon: String, color: Color, text: String)] {
+        let order: [(code: String, icon: String)] = [
+            ("Ship", "bicycle"), ("Tại Chỗ", "cup.and.saucer.fill"), ("Mv", "bag.fill"),
+            ("Mh", "hand.raised.fill"), ("App", "app.badge"),
+        ]
+        return order.compactMap { entry in
+            let total = sortedItems.filter { $0.phanLoai == entry.code }.reduce(0) { $0 + $1.thanhTien }
             guard total > 0 else { return nil }
-            return (shortLabel[phanLoai] ?? phanLoai, HoaDonFormatting.phanLoaiColor(phanLoai), HoaDonFormatting.moneyShort(total))
+            return (entry.code, entry.icon, HoaDonFormatting.phanLoaiColor(entry.code), HoaDonFormatting.moneyShort(total))
         }
     }
 
@@ -154,8 +157,8 @@ struct HoaDonListView: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         if !phanLoaiTotals.isEmpty {
                             HStack(spacing: 8) {
-                                ForEach(phanLoaiTotals, id: \.label) { item in
-                                    Text("\(item.label) \(item.text)")
+                                ForEach(phanLoaiTotals, id: \.phanLoai) { item in
+                                    Label(item.text, systemImage: item.icon)
                                         .font(.caption2).foregroundColor(item.color)
                                 }
                             }
