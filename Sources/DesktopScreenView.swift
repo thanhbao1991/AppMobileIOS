@@ -38,13 +38,17 @@ struct DesktopScreenView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            Spacer(minLength: 0)
+
             screenArea
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Spacer(minLength: 0)
 
             Divider()
 
             pickerStrip
         }
+        .background(Color(.systemBackground))
         .navigationTitle("Xem màn hình Desktop")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -61,6 +65,10 @@ struct DesktopScreenView: View {
         }
     }
 
+    /// Khung đen chỉ cao vừa đúng theo tỉ lệ ảnh nhận được (Desktop chụp `HoaDonGrid` — thường lùn,
+    /// rộng hơn nhiều so với màn hình dọc điện thoại) — trước đây ép `maxHeight: .infinity` khiến
+    /// khung cao gần hết màn hình trong khi ảnh chỉ chiếm 1 dải mỏng ở giữa do `scaledToFit`, để lộ
+    /// viền đen thừa rất nhiều phía trên/dưới.
     @ViewBuilder
     private var screenArea: some View {
         ZStack {
@@ -93,6 +101,13 @@ struct DesktopScreenView: View {
                 .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
             }
         }
+        .aspectRatio(screenAspectRatio, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var screenAspectRatio: CGFloat {
+        guard let image, image.size.height > 0 else { return 16.0 / 9.0 }
+        return image.size.width / image.size.height
     }
 
     private var pickerStrip: some View {
