@@ -52,9 +52,15 @@ struct DesktopScreenView: View {
 
             if hasFrame, let size = decoder.frameSize {
                 GeometryReader { geo in
+                    // View phải native ở đúng `size0` (kích thước sau aspect-fill, LỚN hơn khung ở 1
+                    // chiều) rồi mới scaleEffect/offset — nếu khoá .frame() = geo.size trước, layer
+                    // (videoGravity=.resizeAspectFill) tự crop nội bộ về đúng khung ở scale=1, không
+                    // còn phần ảnh nào "thừa" để offset pan vào, làm lệch hết công thức minScale/
+                    // maxScale/clampOffset/imagePoint vốn tính theo size0.
+                    let size0 = baselineRenderedSize(imageSize: size, frame: geo.size)
                     ZStack {
                         VideoLayerView(container: videoContainer)
-                            .frame(width: geo.size.width, height: geo.size.height)
+                            .frame(width: size0.width, height: size0.height)
                             .scaleEffect(scale)
                             .offset(offset)
 
@@ -320,7 +326,7 @@ final class VideoLayerContainerView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        videoLayer.videoGravity = .resizeAspectFill
+        videoLayer.videoGravity = .resizeAspect
         backgroundColor = .black
         layer.addSublayer(videoLayer)
     }
