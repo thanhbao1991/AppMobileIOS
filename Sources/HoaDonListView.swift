@@ -145,6 +145,13 @@ struct HoaDonListView: View {
                     }
                     .foregroundColor(.brandPrimary)
 
+                    NavigationLink {
+                        DesktopScreenView()
+                    } label: {
+                        Image(systemName: "desktopcomputer").font(.system(size: 28))
+                    }
+                    .foregroundColor(.textMuted)
+
                     VStack(alignment: .trailing, spacing: 2) {
                         if !phanLoaiTotals.isEmpty {
                             HStack(spacing: 8) {
