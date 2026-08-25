@@ -9,10 +9,11 @@ import UIKit
 /// dễ đoán, đủ dùng cho nhu cầu "xem app đang chạy gì") tới khi rời màn hình gọi `StopWatchingDesktop`.
 /// 1 watchdog tự gọi lại `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect).
 /// READ-ONLY thuần — bỏ hẳn click (2026-08-26, sau nhiều lần vẫn không chính xác dù đã verify
-/// Desktop+Backend hoàn toàn ổn — không đáng công sức tiếp tục dò lệch toạ độ). Giữ nguyên chiều dọc
-/// (không tự xoay ngang), KHÔNG zoom — tỉ lệ cố định sao cho chiều ngang Desktop hiển thị đúng bằng
-/// 1.5 lần chiều ngang điện thoại (`fixedScale = 1.5 × minScale`, xem `minScale()`), 1 ngón để kéo
-/// trái/phải xem phần còn lại, nút X góc trên để thoát.
+/// Desktop+Backend hoàn toàn ổn — không đáng công sức tiếp tục dò lệch toạ độ). Desktop chỉ chụp
+/// đúng vùng `HoaDonGrid` (tab Hoá đơn, xem `SignalRClient.cs` phía Desktop) chứ không phải toàn màn
+/// hình — ảnh nhận về hiển thị NGUYÊN TỈ LỆ, vừa khít chiều ngang điện thoại (`.scaledToFit`, không
+/// crop/pan/zoom gì cả) để khỏi méo hình, hở viền đen trên/dưới nếu tỉ lệ khác nhau. Nút X góc trên
+/// để thoát.
 struct DesktopScreenView: View {
     let desktopId: String
     let label: String
@@ -26,31 +27,15 @@ struct DesktopScreenView: View {
     @State private var watchdogTask: Task<Void, Never>?
     @State private var lastFrameAt: Date = .distantPast
 
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
             if let image {
-                GeometryReader { geo in
-                    ZStack {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            // Chỉ scale theo chiều NGANG — chiều cao giữ nguyên y=1 luôn khớp đúng
-                            // khung xem (aspectFill baseline), không bao giờ hở viền đen trên/dưới.
-                            .scaleEffect(x: fixedScale(image: image, frame: geo.size), y: 1)
-                            .offset(offset)
-
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size)))
-                    }
-                }
-                .clipped()
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if disconnected {
                 Text("\(label) đã ngắt kết nối")
                     .foregroundStyle(.white)
@@ -104,49 +89,6 @@ struct DesktopScreenView: View {
                 Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId]) }
             }
         }
-    }
-
-    // Chỉ cho kéo trái/phải — giữ nguyên chiều dọc. Giới hạn trong đúng phần ảnh bị crop (aspectFill)
-    // đang phình ra ngoài khung xem theo scale hiện tại — không kéo quá để lộ nền đen.
-    private func panGesture(maxOffsetX: CGFloat) -> some Gesture {
-        DragGesture()
-            .onChanged { value in
-                let newX = lastOffset.width + value.translation.width
-                offset = CGSize(width: min(maxOffsetX, max(-maxOffsetX, newX)), height: 0)
-            }
-            .onEnded { _ in
-                lastOffset = offset
-            }
-    }
-
-    /// Ảnh (aspectFill) phủ hết chiều cao khung xem rồi phình ngang ra ngoài — tính đúng nửa phần
-    /// phình đó (đã nhân theo fixedScale) làm giới hạn kéo ngang tối đa mỗi bên.
-    private func maxOffsetX(image: UIImage, frame: CGSize) -> CGFloat {
-        guard image.size.height > 0, frame.height > 0 else { return 0 }
-        let imageAspect = image.size.width / image.size.height
-        let frameAspect = frame.width / frame.height
-        guard imageAspect > frameAspect else { return 0 }
-        let renderedWidth = frame.height * imageAspect
-        return max(0, (renderedWidth * fixedScale(image: image, frame: frame) - frame.width) / 2)
-    }
-
-    /// scale nhỏ nhất mà chiều ngang vẫn còn phủ đủ khung xem (renderedWidth * scale == frame.width)
-    /// — nhỏ hơn nữa sẽ hở viền đen 2 bên trái/phải. Dùng làm mốc cho fixedScale bên dưới.
-    private func minScale(image: UIImage, frame: CGSize) -> CGFloat {
-        guard image.size.height > 0, frame.height > 0 else { return 1 }
-        let imageAspect = image.size.width / image.size.height
-        let frameAspect = frame.width / frame.height
-        guard imageAspect > frameAspect else { return 1 }
-        let renderedWidth = frame.height * imageAspect
-        return frame.width / renderedWidth
-    }
-
-    /// Tỉ lệ CỐ ĐỊNH (không cho zoom) — chiều ngang Desktop hiển thị đúng bằng 1.5 lần chiều ngang
-    /// điện thoại: ở `minScale` toàn bộ chiều ngang Desktop vừa khít 1 màn hình điện thoại, nên
-    /// `1.5 × minScale` làm nó trải rộng ra đúng 1.5 màn hình điện thoại (kéo 1 ngón để xem phần
-    /// còn lại). Chặn trên = 1 (không zoom sâu hơn mức lấp đầy khung xem mặc định).
-    private func fixedScale(image: UIImage, frame: CGSize) -> CGFloat {
-        min(1, 1.5 * minScale(image: image, frame: frame))
     }
 
     private func startWatching() {
