@@ -162,7 +162,7 @@ private struct ThanhToanRowView: View {
                 Text(HoaDonFormatting.money(item.soTien)).font(.subheadline.bold())
                 HStack(spacing: 3) {
                     if isAutoBank {
-                        Image(systemName: "gearshape.2.fill").font(.caption2)
+                        Text("🤖").font(.caption2)
                     }
                     Text(isBank ? "Chuyển khoản" : "Tiền mặt").font(.caption2.bold())
                 }

@@ -503,7 +503,7 @@ private struct HoaDonRowView: View {
                 if let statusText {
                     HStack(spacing: 3) {
                         if item.isBank == true, item.isAutoBank == true {
-                            Image(systemName: "gearshape.2.fill").font(.caption2)
+                            Text("🤖").font(.caption2)
                         }
                         Text(statusText).font(.caption2.bold())
                     }
