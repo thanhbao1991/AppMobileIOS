@@ -226,6 +226,22 @@ actor APIClient {
         await getThongKeThang("don-chua-thanh-toan-thang", thang: thang, nam: nam)
     }
 
+    func getDoanhThuChiTietThang(thang: Int, nam: Int, ten: String) async -> [HoaDonListDto] {
+        let tenEncoded = ten.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ten
+        let req = makeRequest("/api/ThongKe/doanh-thu-chi-tiet-thang?thang=\(thang)&nam=\(nam)&ten=\(tenEncoded)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[HoaDonListDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func getThanhToanChiTietThang(thang: Int, nam: Int, ten: String) async -> [ThanhToanChiTietItemDto] {
+        let tenEncoded = ten.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ten
+        let req = makeRequest("/api/ThongKe/thanh-toan-chi-tiet-thang?thang=\(thang)&nam=\(nam)&ten=\(tenEncoded)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ThanhToanChiTietItemDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
     private func getThongKeThang<T: Decodable>(_ endpoint: String, thang: Int, nam: Int) async -> T? {
         let req = makeRequest("/api/ThongKe/\(endpoint)?thang=\(thang)&nam=\(nam)")
         let (data, _) = await send(req)

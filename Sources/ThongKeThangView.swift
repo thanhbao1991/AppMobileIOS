@@ -13,11 +13,16 @@ struct ThongKeThangView: View {
     @State private var chiTieu: ThongKeChiTieuDto?
     @State private var thanhToan: ThongKeThanhToanDto?
     @State private var doanhThu: ThongKeDoanhThuNgayDto?
-    @State private var traNo: ThongKeTraNoNgayDto?
     @State private var chuaThanhToan: ThongKeDonChuaThanhToanDto?
     @State private var tongNo: TongNoDto?
+    @State private var chiTieuMonthItems: [ChiTieuHangNgayDto] = []
     @State private var hasLoaded = false
     @State private var expandedCards: Set<ThongKeThangCard> = []
+    @State private var selectedChiTieuTen: String?
+    @State private var selectedHoaDonId: String?
+    @State private var selectedNoKhachHang: TongNoItemDto?
+    @State private var selectedThanhToanTen: String?
+    @State private var selectedDoanhThuTen: String?
 
     var body: some View {
         NavigationStack {
@@ -35,9 +40,13 @@ struct ThongKeThangView: View {
                                 } content: {
                                     ForEach(thanhToan.danhSachTienMat) { item in
                                         AmountRow(label: item.ten, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedThanhToanTen = item.ten }
                                     }
                                     if thanhToan.tongChuyenKhoan > 0 {
                                         AmountRow(label: "Chuyển khoản", value: thanhToan.tongChuyenKhoan)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedThanhToanTen = "Chuyển khoản" }
                                     }
                                 }
                             }
@@ -47,20 +56,8 @@ struct ThongKeThangView: View {
                                 } content: {
                                     ForEach(doanhThu.danhSach) { item in
                                         AmountRow(label: item.ten, value: item.doanhThu)
-                                    }
-                                }
-                            }
-                            if let traNo {
-                                StatCard(icon: "checkmark.circle", title: "Khách trả nợ", value: traNo.tongTraNoTaiQuan + traNo.tongTraNoShipper, color: .thongKePurple, isExpanded: expandedCards.contains(.traNo)) {
-                                    toggle(.traNo)
-                                } content: {
-                                    SubTotalRow(label: "Trả nợ tại quán", value: traNo.tongTraNoTaiQuan, color: .thongKePurple)
-                                    ForEach(traNo.traNoTaiQuan) { item in
-                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
-                                    }
-                                    SubTotalRow(label: "Trả nợ shipper", value: traNo.tongTraNoShipper, color: .thongKePurple)
-                                    ForEach(traNo.traNoShipper) { item in
-                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedDoanhThuTen = item.ten }
                                     }
                                 }
                             }
@@ -68,13 +65,10 @@ struct ThongKeThangView: View {
                                 StatCard(icon: "banknote", title: "Chi tiêu", value: chiTieu.chiTieuNgay + chiTieu.chiTieuThang, color: .thongKeRed, isExpanded: expandedCards.contains(.chiTieu)) {
                                     toggle(.chiTieu)
                                 } content: {
-                                    SubTotalRow(label: "Chi tiêu ngày", value: chiTieu.chiTieuNgay, color: .thongKeRed)
-                                    ForEach(chiTieu.danhSachChiTieuNgay) { item in
+                                    ForEach(mergedChiTieu(chiTieu)) { item in
                                         AmountRow(label: item.ten, value: item.soTien)
-                                    }
-                                    SubTotalRow(label: "Chi tiêu tháng", value: chiTieu.chiTieuThang, color: .thongKeRed)
-                                    ForEach(chiTieu.danhSachChiTieuThang) { item in
-                                        AmountRow(label: item.ten, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedChiTieuTen = item.ten }
                                     }
                                 }
                             }
@@ -84,6 +78,10 @@ struct ThongKeThangView: View {
                                 } content: {
                                     ForEach(chuaThanhToan.danhSach) { item in
                                         AmountRow(label: item.tenKhachHang, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                if let hoaDonId = item.hoaDonId { selectedHoaDonId = hoaDonId }
+                                            }
                                     }
                                 }
                             }
@@ -93,6 +91,8 @@ struct ThongKeThangView: View {
                                 } content: {
                                     ForEach(tongNo.danhSach) { item in
                                         AmountRow(label: item.tenKhachHang, value: item.tongConLai)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedNoKhachHang = item }
                                     }
                                 }
                             }
@@ -105,6 +105,51 @@ struct ThongKeThangView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .task { await load() }
+        .sheet(item: Binding(
+            get: { selectedChiTieuTen.map { ChiTieuTenSelection(ten: $0) } },
+            set: { selectedChiTieuTen = $0?.ten }
+        )) { selection in
+            ChiTieuThangDetailSheet(
+                ten: selection.ten,
+                items: chiTieuMonthItems.filter { $0.ten == selection.ten }
+            )
+        }
+        .sheet(item: Binding(
+            get: { selectedHoaDonId.map { IdentifiableId($0) } },
+            set: { selectedHoaDonId = $0?.value }
+        )) { wrapped in
+            HoaDonDetailView(hoaDonId: wrapped.value) {
+                Task { await load() }
+            }
+        }
+        .sheet(item: $selectedNoKhachHang) { item in
+            KhachHangNoDetailSheet(khachHangId: item.khachHangId, tenKhachHang: item.tenKhachHang)
+        }
+        .sheet(item: Binding(
+            get: { selectedThanhToanTen.map { ChiTieuTenSelection(ten: $0) } },
+            set: { selectedThanhToanTen = $0?.ten }
+        )) { selection in
+            ThanhToanChiTietSheet(ten: selection.ten, currentDate: currentDate)
+        }
+        .sheet(item: Binding(
+            get: { selectedDoanhThuTen.map { ChiTieuTenSelection(ten: $0) } },
+            set: { selectedDoanhThuTen = $0?.ten }
+        )) { selection in
+            DoanhThuChiTietSheet(ten: selection.ten, currentDate: currentDate)
+        }
+    }
+
+    private func mergedChiTieu(_ chiTieu: ThongKeChiTieuDto) -> [NamedAmountDto] {
+        let all = chiTieu.danhSachChiTieuNgay + chiTieu.danhSachChiTieuThang
+        var totalByTen: [String: Double] = [:]
+        var order: [String] = []
+        for item in all {
+            if totalByTen[item.ten] == nil { order.append(item.ten) }
+            totalByTen[item.ten, default: 0] += item.soTien
+        }
+        return order
+            .map { NamedAmountDto(ten: $0, soTien: totalByTen[$0]!) }
+            .sorted { $0.soTien > $1.soTien }
     }
 
     private func toggle(_ card: ThongKeThangCard) {
@@ -125,15 +170,299 @@ struct ThongKeThangView: View {
         async let a = APIClient.shared.getThongKeChiTieuThang(thang: thang, nam: nam)
         async let c = APIClient.shared.getThongKeThanhToanThang(thang: thang, nam: nam)
         async let d = APIClient.shared.getThongKeDoanhThuThang(thang: thang, nam: nam)
-        async let e = APIClient.shared.getThongKeTraNoThang(thang: thang, nam: nam)
         async let f = APIClient.shared.getThongKeDonChuaThanhToanThang(thang: thang, nam: nam)
         async let g = APIClient.shared.getTongNo()
+        async let h = APIClient.shared.getChiTieuByMonth(year: nam, month: thang)
 
-        (chiTieu, thanhToan, doanhThu, traNo, chuaThanhToan, tongNo) = await (a, c, d, e, f, g)
+        (chiTieu, thanhToan, doanhThu, chuaThanhToan, tongNo, chiTieuMonthItems) = await (a, c, d, f, g, h)
         hasLoaded = true
     }
 }
 
+private struct ChiTieuTenSelection: Identifiable {
+    let ten: String
+    var id: String { ten }
+}
+
+private struct ChiTieuThangDetailSheet: View {
+    let ten: String
+    let items: [ChiTieuHangNgayDto]
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var sorted: [ChiTieuHangNgayDto] {
+        items.sorted { ($0.ngay ?? $0.ngayGio ?? "") < ($1.ngay ?? $1.ngayGio ?? "") }
+    }
+
+    private var total: Double { items.reduce(0) { $0 + $1.thanhTien } }
+
+    private func dayLabel(_ item: ChiTieuHangNgayDto) -> String {
+        guard let date = HoaDonFormatting.parseIso(item.ngay ?? item.ngayGio) else { return "?" }
+        return DateNavFormat.dayTitle.string(from: date)
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    HStack {
+                        Text("Tổng cộng").foregroundColor(.textMuted)
+                        Spacer()
+                        Text(HoaDonFormatting.money(total)).font(.headline).monospacedDigit()
+                    }
+                }
+                ForEach(sorted) { item in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(dayLabel(item))
+                                .font(.subheadline.weight(.medium))
+                            Text("\(HoaDonFormatting.money(item.donGia)) × \(item.soLuong.formatted())" + (item.billThang ? " · bill tháng" : ""))
+                                .font(.caption).foregroundColor(.textMuted)
+                            if let ghiChu = item.ghiChu, !ghiChu.isEmpty {
+                                Text(ghiChu).font(.caption).foregroundColor(.textMuted)
+                            }
+                        }
+                        Spacer()
+                        Text(HoaDonFormatting.money(item.thanhTien))
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle(ten)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Xong") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+/// Chi tiết 1 khách trong card "Tổng nợ hiện tại" — TongNoItemDto chỉ có tổng cộng dồn, không có
+/// hoaDonId (có thể gộp nhiều đơn), nên phải gọi lại /api/dashboard/cong-no-list rồi lọc theo
+/// khachHangId (fallback so tên nếu khách lẻ không có id) để liệt kê từng đơn còn nợ.
+private struct KhachHangNoDetailSheet: View {
+    let khachHangId: String?
+    let tenKhachHang: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var items: [HoaDonListDto] = []
+    @State private var hasLoaded = false
+    @State private var selectedHoaDonId: String?
+
+    private var filtered: [HoaDonListDto] {
+        items.filter {
+            if let khachHangId { return $0.khachHangId == khachHangId }
+            return $0.tenKhachHangText == tenKhachHang
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if !hasLoaded {
+                    ProgressView()
+                } else {
+                    List {
+                        ForEach(filtered) { item in
+                            Button {
+                                selectedHoaDonId = item.id
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.tenMonSummary?.isEmpty == false ? item.tenMonSummary! : "Hoá đơn")
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundColor(.primary)
+                                        Text(HoaDonFormatting.congNoTime(item.ngayNo))
+                                            .font(.caption).foregroundColor(.textMuted)
+                                    }
+                                    Spacer()
+                                    Text(HoaDonFormatting.money(item.conLai))
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundColor(.dangerColor)
+                                        .monospacedDigit()
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle(tenKhachHang)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Xong") { dismiss() }
+                }
+            }
+        }
+        .task {
+            items = await APIClient.shared.getCongNoList()
+            hasLoaded = true
+        }
+        .sheet(item: Binding(
+            get: { selectedHoaDonId.map { IdentifiableId($0) } },
+            set: { selectedHoaDonId = $0?.value }
+        )) { wrapped in
+            HoaDonDetailView(hoaDonId: wrapped.value) {}
+        }
+    }
+}
+
+private struct ThanhToanChiTietSheet: View {
+    let ten: String
+    let currentDate: Date
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var items: [ThanhToanChiTietItemDto] = []
+    @State private var hasLoaded = false
+    @State private var selectedHoaDonId: String?
+
+    private var total: Double { items.reduce(0) { $0 + $1.soTien } }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if !hasLoaded {
+                    ProgressView()
+                } else {
+                    List {
+                        Section {
+                            HStack {
+                                Text("Tổng cộng").foregroundColor(.textMuted)
+                                Spacer()
+                                Text(HoaDonFormatting.money(total)).font(.headline).monospacedDigit()
+                            }
+                        }
+                        ForEach(items) { item in
+                            Button {
+                                selectedHoaDonId = item.hoaDonId
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.tenKhachHang)
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundColor(.primary)
+                                        Text(HoaDonFormatting.congNoTime(item.ngayGio))
+                                            .font(.caption).foregroundColor(.textMuted)
+                                    }
+                                    Spacer()
+                                    Text(HoaDonFormatting.money(item.soTien))
+                                        .font(.subheadline.weight(.semibold))
+                                        .monospacedDigit()
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle(ten)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Xong") { dismiss() }
+                }
+            }
+        }
+        .task {
+            let cal = Calendar.current
+            items = await APIClient.shared.getThanhToanChiTietThang(
+                thang: cal.component(.month, from: currentDate),
+                nam: cal.component(.year, from: currentDate),
+                ten: ten
+            )
+            hasLoaded = true
+        }
+        .sheet(item: Binding(
+            get: { selectedHoaDonId.map { IdentifiableId($0) } },
+            set: { selectedHoaDonId = $0?.value }
+        )) { wrapped in
+            HoaDonDetailView(hoaDonId: wrapped.value) {}
+        }
+    }
+}
+
+private struct DoanhThuChiTietSheet: View {
+    let ten: String
+    let currentDate: Date
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var items: [HoaDonListDto] = []
+    @State private var hasLoaded = false
+    @State private var selectedHoaDonId: String?
+
+    private var total: Double { items.reduce(0) { $0 + $1.thanhTien } }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if !hasLoaded {
+                    ProgressView()
+                } else {
+                    List {
+                        Section {
+                            HStack {
+                                Text("Tổng cộng").foregroundColor(.textMuted)
+                                Spacer()
+                                Text(HoaDonFormatting.money(total)).font(.headline).monospacedDigit()
+                            }
+                        }
+                        ForEach(items) { item in
+                            Button {
+                                selectedHoaDonId = item.id
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundColor(.primary)
+                                        if let mon = item.tenMonSummary, !mon.isEmpty {
+                                            Text(mon).font(.caption).foregroundColor(.textMuted).lineLimit(1)
+                                        }
+                                        Text(HoaDonFormatting.congNoTime(item.ngayGio))
+                                            .font(.caption2).foregroundColor(.textMuted)
+                                    }
+                                    Spacer()
+                                    Text(HoaDonFormatting.money(item.thanhTien))
+                                        .font(.subheadline.weight(.semibold))
+                                        .monospacedDigit()
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle(ten)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Xong") { dismiss() }
+                }
+            }
+        }
+        .task {
+            let cal = Calendar.current
+            items = await APIClient.shared.getDoanhThuChiTietThang(
+                thang: cal.component(.month, from: currentDate),
+                nam: cal.component(.year, from: currentDate),
+                ten: ten
+            )
+            hasLoaded = true
+        }
+        .sheet(item: Binding(
+            get: { selectedHoaDonId.map { IdentifiableId($0) } },
+            set: { selectedHoaDonId = $0?.value }
+        )) { wrapped in
+            HoaDonDetailView(hoaDonId: wrapped.value) {}
+        }
+    }
+}
+
 private enum ThongKeThangCard: Hashable {
-    case thanhToan, doanhThu, traNo, chiTieu, chuaThanhToan, tongNo
+    case thanhToan, doanhThu, chiTieu, chuaThanhToan, tongNo
 }

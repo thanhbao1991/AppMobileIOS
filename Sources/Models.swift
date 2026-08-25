@@ -282,6 +282,14 @@ struct ThongKeThanhToanDto: Decodable {
     let danhSachTienMat: [NamedAmountDto]
 }
 
+struct ThanhToanChiTietItemDto: Decodable, Identifiable {
+    let hoaDonId: String
+    let tenKhachHang: String
+    let ngayGio: String
+    let soTien: Double
+    var id: String { hoaDonId + ngayGio }
+}
+
 struct ThongKeDoanhThuNgayDto: Decodable {
     let tongDoanhThu: Double
     let danhSach: [DoanhThuItemDto]
