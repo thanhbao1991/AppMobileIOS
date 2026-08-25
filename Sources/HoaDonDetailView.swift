@@ -277,7 +277,7 @@ struct HoaDonDetailView: View {
             // trước Hoàn tác (3 nút cuối) — Ship/Ghi nợ (nếu có) xếp trước, không đụng vị trí 3 nút này.
             LazyVGrid(columns: twoColumns, spacing: 10) {
                 if d.phanLoai == "Ship" {
-                    ActionButtonView(icon: "bicycle", code: "Esc", caption: "Đi Ship", color: .pinkColor) {
+                    ActionButtonView(icon: "scooter", code: "Esc", caption: "Đi Ship", color: .pinkColor) {
                         showShipperPicker = true
                     }
                 }

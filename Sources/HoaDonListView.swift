@@ -43,7 +43,7 @@ struct HoaDonListView: View {
     /// bị xuống 2 dòng như bản text cũ ("Ship 203k, T.chỗ 230k...").
     private var phanLoaiTotals: [(phanLoai: String, icon: String, color: Color, text: String)] {
         let order: [(code: String, icon: String)] = [
-            ("Ship", "bicycle"), ("Tại Chỗ", "cup.and.saucer.fill"), ("Mv", "bag.fill"),
+            ("Ship", "scooter"), ("Tại Chỗ", "cup.and.saucer.fill"), ("Mv", "bag.fill"),
             ("Mh", "hand.raised.fill"), ("App", "app.badge"),
         ]
         return order.compactMap { entry in
@@ -347,7 +347,7 @@ enum HoaDonQuickFilter: CaseIterable, Hashable {
     var systemIcon: String? {
         switch self {
         case .taiCho: return "cup.and.saucer.fill"
-        case .ship: return "bicycle"
+        case .ship: return "scooter"
         case .muaVe: return "bag.fill"
         case .muaHo: return "hand.raised.fill"
         case .app: return "app.badge"
@@ -548,7 +548,7 @@ private struct AddHoaDonSheet: View {
     @State private var showAppOrder = false
 
     private let categories: [(code: String, icon: String)] = [
-        ("Ship", "bicycle"),
+        ("Ship", "scooter"),
         ("Tại Chỗ", "cup.and.saucer.fill"),
         ("Mv", "bag.fill"),
         ("Mh", "hand.raised.fill"),
