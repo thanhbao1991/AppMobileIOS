@@ -64,39 +64,6 @@ struct KeyCaptureView: UIViewRepresentable {
     }
 }
 
-/// `UIPanGestureRecognizer` mặc định KHÔNG có ngưỡng khoảng cách tối thiểu trước khi nhận diện —
-/// chỉ vài điểm rung tay tự nhiên lúc chạm cũng đủ để nó thắng `UITapGestureRecognizer` trong "đấu
-/// trường" loại trừ mặc định của UIKit (2 recognizer trên cùng view mặc định loại trừ nhau, ai
-/// chuyển sang trạng thái nhận diện trước sẽ huỷ các recognizer còn lại). Vì Pan có thể vào
-/// `.began` NGAY khi đang giữ tay (không cần đợi thả ra như Tap), nó gần như LUÔN thắng, khiến Tap
-/// không bao giờ có cơ hội nhận diện dù người dùng chỉ chạm nhẹ không di chuyển — đúng nguyên nhân
-/// "chạm không hoạt động" dù pan/pinch vẫn ăn bình thường (xác nhận qua test thực tế 2026-08-25).
-/// Subclass thêm ngưỡng khoảng cách tối thiểu (kỹ thuật chuẩn — không gọi `super.touchesMoved` cho
-/// tới khi vượt ngưỡng, ngăn state machine nội bộ của Apple chuyển `.began` quá sớm).
-final class ThresholdPanGestureRecognizer: UIPanGestureRecognizer {
-    var minimumDistance: CGFloat = 10
-    private var initialPoint: CGPoint = .zero
-    private var exceededThreshold = false
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        if let t = touches.first { initialPoint = t.location(in: view) }
-        exceededThreshold = false
-        super.touchesBegan(touches, with: event)
-    }
-
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-        if !exceededThreshold, let t = touches.first {
-            let loc = t.location(in: view)
-            if hypot(loc.x - initialPoint.x, loc.y - initialPoint.y) >= minimumDistance {
-                exceededThreshold = true
-            }
-        }
-        if exceededThreshold {
-            super.touchesMoved(touches, with: event)
-        }
-    }
-}
-
 /// TOÀN BỘ cử chỉ điều khiển (tap=click, long-press=chuột phải, 1 ngón kéo=pan khung nhìn, 2 ngón
 /// kéo=cuộn, pinch=zoom) dùng `UIGestureRecognizer` CHUẨN của UIKit — KHÔNG tự viết state machine
 /// touchesBegan/Moved/Ended thủ công như bản trước (bản đó có bug thật: 1 lần touchesEnded/Cancelled
@@ -114,7 +81,7 @@ final class RemoteControlSurfaceView: UIView {
 
     private let tapRecognizer = UITapGestureRecognizer()
     private let longPressRecognizer = UILongPressGestureRecognizer()
-    private let panRecognizer = ThresholdPanGestureRecognizer()
+    private let panRecognizer = UIPanGestureRecognizer()
     private let twoFingerPanRecognizer = UIPanGestureRecognizer()
     private let pinchRecognizer = UIPinchGestureRecognizer()
 
@@ -144,11 +111,13 @@ final class RemoteControlSurfaceView: UIView {
         twoFingerPanRecognizer.delegate = self
         pinchRecognizer.delegate = self
 
-        // Ngưỡng khoảng cách (ThresholdPanGestureRecognizer) làm Tap ăn ỔN ĐỊNH HƠN nhưng vẫn là 1
-        // "cuộc đua" — rung tay thỉnh thoảng vẫn vượt ngưỡng, verify thực tế cho kết quả LÚC ĂN LÚC
-        // KHÔNG. Fix triệt để: bắt Tap PHẢI ĐỢI Pan/LongPress thất bại hẳn rồi mới được quyết —
-        // loại bỏ hoàn toàn cuộc đua thay vì canh ngưỡng (kỹ thuật chuẩn Apple documented cho đúng
-        // tình huống Tap+Pan/LongPress trên cùng view).
+        // require(toFail:) — Tap PHẢI ĐỢI Pan/LongPress thất bại hẳn rồi mới được quyết, loại bỏ
+        // hoàn toàn cuộc đua trong "đấu trường" recognizer mặc định của UIKit (kỹ thuật Apple
+        // documented cho đúng tình huống Tap+Pan/LongPress trên cùng view). Bản trước dùng thêm 1
+        // subclass Pan tự chặn touchesMoved theo ngưỡng khoảng cách CÙNG LÚC với require(toFail:) —
+        // nghi vấn 2 cơ chế xung đột nhau (chặn touchesMoved có thể khiến Pan không bao giờ chuyển
+        // hẳn sang .failed cho 1 chạm đứng yên thật, làm Tap chờ mãi không giải phóng được) — bỏ hẳn
+        // subclass, chỉ giữ require(toFail:) thuần, đơn giản và đúng chuẩn hơn.
         tapRecognizer.require(toFail: panRecognizer)
         tapRecognizer.require(toFail: longPressRecognizer)
 
