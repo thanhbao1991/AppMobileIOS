@@ -36,7 +36,16 @@ struct DesktopScreenView: View {
     @State private var disconnected = false
     @State private var isReconnecting = false
     @State private var watchdogTask: Task<Void, Never>?
-    @State private var lastFrameAt: Date = .distantPast
+    // Lớp tham chiếu bọc ngoài THAY VÌ @State Date trực tiếp — @State Date đổi giá trị MỚI mỗi khung
+    // hình VP9 tới (rất thường xuyên, nhiều lần/giây) buộc SwiftUI render lại TOÀN BỘ body kể cả
+    // GeometryReader/ZStack đang gắn `.simultaneousGesture()` — làm gesture recognizer bị dựng lại
+    // giữa lúc đang track 1 lượt chạm, gây bắn lặp nhiều MouseDown/Up cho ĐÚNG 1 lần chạm thật (đúng
+    // triệu chứng quan sát được: nhiều cặp dồn cụm trong <1s, nhanh hơn người thật bấm). Đổi sang
+    // class tham chiếu: @State chỉ theo dõi identity của BIẾN THAM CHIẾU (frameClock chính nó),
+    // không theo dõi mutate bên trong nó — gán `frameClock.lastFrameAt = Date()` KHÔNG kích hoạt
+    // render lại.
+    final class FrameClock { var lastFrameAt: Date = .distantPast }
+    @State private var frameClock = FrameClock()
 
     @State private var isKeyboardActive = false
 
@@ -316,7 +325,7 @@ struct DesktopScreenView: View {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { return }
 
-                let stale = Date().timeIntervalSince(lastFrameAt) > 10
+                let stale = Date().timeIntervalSince(frameClock.lastFrameAt) > 10
                 if !stale { staleTicks = 0; continue }
 
                 staleTicks += 1
@@ -334,7 +343,7 @@ struct DesktopScreenView: View {
     private func applyFrame(_ data: Data, isKeyframe: Bool) {
         decoder.feed(data, into: videoContainer.videoLayer)
         if decoder.frameSize != nil { hasFrame = true }
-        lastFrameAt = Date()
+        frameClock.lastFrameAt = Date()
         disconnected = false
         isReconnecting = false
     }
