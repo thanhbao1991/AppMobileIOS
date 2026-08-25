@@ -219,12 +219,17 @@ struct DesktopScreenView: View {
         }
     }
 
-    /// scale nhỏ nhất = luôn đúng 1 (baseline aspect-fill, `size0`) — KHÔNG cho nhỏ hơn nữa. `size0`
-    /// theo định nghĩa đã có 1 chiều khớp đúng frame và chiều kia LỚN hơn frame (không bao giờ nhỏ
-    /// hơn) — nếu cho scale<1 (shrink-to-fit như bản cũ) sẽ làm chiều đang lớn hơn đó co lại nhỏ hơn
-    /// khung, hở viền đen — đúng cái user không muốn (chiều ngang Desktop không được nhỏ hơn chiều
-    /// ngang điện thoại).
-    private func minScale(imageSize: CGSize, frame: CGSize) -> CGFloat { 1 }
+    /// scale nhỏ nhất = khớp đúng CHIỀU NGANG với khung (`frame.width / size0.width`) — không phải cố
+    /// định 1 (khoá cứng = không zoom ra được chút nào, user báo lại là sai) cũng không phải
+    /// shrink-to-fit cả 2 chiều như bản đầu (hở viền đen 2 bên vì chiều ngang bị co nhỏ hơn khung).
+    /// Ở scale này chiều ngang Desktop luôn đúng bằng chiều ngang điện thoại (không bao giờ nhỏ hơn,
+    /// đây là điểm nhỏ nhất còn thoả điều kiện đó), chiều dọc có thể nhỏ hơn khung (hở viền đen
+    /// trên/dưới) — chấp nhận được vì user chỉ yêu cầu ràng buộc ở chiều ngang.
+    private func minScale(imageSize: CGSize, frame: CGSize) -> CGFloat {
+        let size0 = baselineRenderedSize(imageSize: imageSize, frame: frame)
+        guard size0.width > 0 else { return 1 }
+        return min(1, frame.width / size0.width)
+    }
 
     /// scale lớn nhất còn CÓ Ý NGHĨA — đúng lúc 1 pixel ảnh Desktop chiếm đúng 1 điểm màn hình điện
     /// thoại (`imageSize` là số pixel thật decode ra, không nhân theo UIScreen.scale). `size0` cùng
