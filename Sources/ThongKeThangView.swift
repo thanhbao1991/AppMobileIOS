@@ -102,7 +102,6 @@ struct ThongKeThangView: View {
                     .refreshable { await load() }
                 }
             }
-            .navigationTitle("Thống kê tháng")
             .navigationBarTitleDisplayMode(.inline)
         }
         .task { await load() }

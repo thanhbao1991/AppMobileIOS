@@ -129,8 +129,7 @@ struct DayDateBar: View {
 }
 
 /// Chỉ chọn tháng/năm, không search — dùng cho ThongKeThangView. `DatePicker` chuẩn của iOS không
-/// có chế độ "chỉ tháng/năm" nên tự ghép 2 bánh xe Picker trong sheet riêng (MonthYearPickerSheet),
-/// cộng 2 nút chevron để nhảy nhanh tháng trước/sau mà không cần mở sheet.
+/// có chế độ "chỉ tháng/năm" nên tự ghép 2 bánh xe Picker trong sheet riêng (MonthYearPickerSheet).
 struct MonthDateBar: View {
     @Binding var date: Date
     var onChange: () -> Void
@@ -138,12 +137,6 @@ struct MonthDateBar: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Button { shift(-1) } label: {
-                Image(systemName: "chevron.left")
-            }
-            .buttonStyle(.plain)
-            .foregroundColor(.brandPrimary)
-
             Button { showPicker = true } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")
@@ -155,12 +148,6 @@ struct MonthDateBar: View {
             .buttonStyle(.plain)
             .fixedSize()
 
-            Button { shift(1) } label: {
-                Image(systemName: "chevron.right")
-            }
-            .buttonStyle(.plain)
-            .foregroundColor(.brandPrimary)
-
             Spacer()
         }
         .padding(.horizontal)
@@ -171,13 +158,6 @@ struct MonthDateBar: View {
                 onChange()
             }
             .presentationDetents([.height(260)])
-        }
-    }
-
-    private func shift(_ delta: Int) {
-        if let newDate = Calendar.current.date(byAdding: .month, value: delta, to: date) {
-            date = newDate
-            onChange()
         }
     }
 }

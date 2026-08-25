@@ -109,14 +109,6 @@ private struct MoreMenuView: View {
             List {
                 Section {
                     NavigationLink {
-                        ThongKeThangView()
-                    } label: {
-                        Label("Thống kê tháng", systemImage: "calendar")
-                    }
-                }
-
-                Section {
-                    NavigationLink {
                         CongViecListView()
                     } label: {
                         Label("Công việc", systemImage: "checklist")
