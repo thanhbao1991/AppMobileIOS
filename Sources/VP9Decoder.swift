@@ -103,6 +103,18 @@ final class VP9Decoder {
             sampleBufferOut: &sampleBuffer)
         guard let sampleBuffer else { return formatChanged }
 
+        // timing la .invalid (khong co PTS thuc) nen AVSampleBufferDisplayLayer se KHONG tu ve neu
+        // khong danh dau DisplayImmediately - mac dinh no cho mot host-time hop le de dong bo, dan
+        // toi layer nhan enqueue thanh cong (khong loi) nhung man hinh van den thui vinh vien.
+        if let attachmentsArray = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: true),
+           let dict = CFArrayGetValueAtIndex(attachmentsArray, 0) {
+            let attachments = unsafeBitCast(dict, to: CFMutableDictionary.self)
+            CFDictionarySetValue(
+                attachments,
+                Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
+                Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
+        }
+
         if layer.status == .failed { layer.flush() }
         layer.enqueue(sampleBuffer)
         return formatChanged
