@@ -193,11 +193,11 @@ actor SignalRClient {
                   let w = (args[3] as? NSNumber)?.intValue, let h = (args[4] as? NSNumber)?.intValue {
             let callback = onScreenshotReceived
             Task { @MainActor in callback?(imageData, x, y, w, h) }
-        } else if target == "VideoFrameReceived", args.count >= 2,
-                  let base64 = args[0] as? String, let nalData = Data(base64Encoded: base64),
-                  let isKeyframe = args[1] as? Bool {
+        } else if target == "VideoFrameReceived", args.count >= 1,
+                  let base64 = args[0] as? String, let protoBytes = Data(base64Encoded: base64),
+                  let frame = EncodedVideoFrameProto.decode(protoBytes) {
             let callback = onVideoFrameReceived
-            Task { @MainActor in callback?(nalData, isKeyframe) }
+            Task { @MainActor in callback?(frame.data, frame.key) }
         }
     }
 
