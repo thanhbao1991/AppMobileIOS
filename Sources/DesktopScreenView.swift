@@ -71,6 +71,12 @@ struct DesktopScreenView: View {
                             onScroll: { location, deltaY in handleScroll(at: location, deltaY: deltaY, frame: geo.size, imageSize: size) },
                             onPinch: { factor in handlePinch(factor: factor, frame: geo.size, imageSize: size) })
                     }
+                    // BẮT BUỘC khoá ZStack đúng geo.size — nếu không, VideoLayerView (frame=size0,
+                    // LỚN hơn geo.size ở 1 chiều) sẽ làm ZStack tự phình theo size0, kéo theo
+                    // RemoteControlSurface (căn giữa trong ZStack đã phình đó) lệch khỏi đúng vùng
+                    // geo.size hiển thị thật sau .clipped() bên ngoài — đây là nguyên nhân pan/zoom
+                    // lệch hẳn sang 1 bên thay vì dừng đúng mép desktop.
+                    .frame(width: geo.size.width, height: geo.size.height)
                 }
                 .clipped()
             } else if disconnected {
