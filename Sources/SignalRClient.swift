@@ -56,7 +56,17 @@ actor SignalRClient {
         let payload: [String: Any] = ["type": 1, "target": method, "arguments": args, "invocationId": invocationId]
         let data = try JSONSerialization.data(withJSONObject: payload)
         let text = String(data: data, encoding: .utf8)! + "\u{1e}"
-        try await ws.send(.string(text))
+        do {
+            try await ws.send(.string(text))
+        } catch {
+            // send() phát hiện socket chết ngay, nhưng receiveLoop() đang `await ws.receive()` có thể
+            // không tự throw trong trường hợp này (quirk iOS sau khi app bị đưa xuống nền rồi mở lại)
+            // — connectLoop() sẽ treo mãi không reconnect nếu không có ai chủ động cancel task chết
+            // này. Cancel ở đây để receive() đang treo bung lỗi ngay, kích connectLoop() retry thật.
+            if ws === task { task = nil }
+            ws.cancel(with: .abnormalClosure, reason: nil)
+            throw error
+        }
 
         return try await withCheckedThrowingContinuation { continuation in
             pendingInvocations[invocationId] = continuation
