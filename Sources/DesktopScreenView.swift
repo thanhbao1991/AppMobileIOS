@@ -8,11 +8,10 @@ import UIKit
 /// chụp+gửi 1 khung JPEG FULL-FRAME mỗi 100ms qua `ScreenshotReceived` (không dirty-rect — đơn giản,
 /// dễ đoán, đủ dùng cho nhu cầu "xem app đang chạy gì") tới khi rời màn hình gọi `StopWatchingDesktop`.
 /// 1 watchdog tự gọi lại `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect).
-/// Giữ nguyên chiều dọc (không tự xoay ngang); 2 ngón để zoom (chỉ zoom chiều ngang, chiều dọc luôn
-/// khớp khung xem — không bao giờ hở viền đen), 1 ngón để kéo khung hình đang xem, nút X góc trên để
-/// thoát. Mặc định phóng to lấp đầy khung xem (aspectRatio .fill + clip, không phải .fit) — 2 bên
-/// trái/phải bị crop, kéo 1 ngón để xem phần bị crop, zoom ra tối đa đúng lúc hết crop (không cho
-/// nhỏ hơn nữa). Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi `SendClick`
+/// Giữ nguyên chiều dọc (không tự xoay ngang), KHÔNG zoom (bỏ hẳn theo yêu cầu 2026-08-26) — tỉ lệ
+/// cố định sao cho chiều ngang Desktop hiển thị đúng bằng 2 lần chiều ngang điện thoại
+/// (`fixedScale = 2 × minScale`, xem `minScale()`), 1 ngón để kéo trái/phải xem phần còn lại, nút X
+/// góc trên để thoát. Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi `SendClick`
 /// ngay lập tức (không chờ khung hình kế), Desktop quy đổi lại toạ độ màn hình thật rồi click bằng
 /// Win32 SendInput THẬT (di chuyển con trỏ thật, không phải hit-test reflection hack đời trước).
 struct DesktopScreenView: View {
@@ -28,8 +27,6 @@ struct DesktopScreenView: View {
     @State private var watchdogTask: Task<Void, Never>?
     @State private var lastFrameAt: Date = .distantPast
 
-    @State private var scale: CGFloat = 1
-    @State private var lastScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
 
@@ -46,7 +43,7 @@ struct DesktopScreenView: View {
                             .frame(width: geo.size.width, height: geo.size.height)
                             // Chỉ scale theo chiều NGANG — chiều cao giữ nguyên y=1 luôn khớp đúng
                             // khung xem (aspectFill baseline), không bao giờ hở viền đen trên/dưới.
-                            .scaleEffect(x: scale, y: 1)
+                            .scaleEffect(x: fixedScale(image: image, frame: geo.size), y: 1)
                             .offset(offset)
 
                         // Gesture gắn vào lớp overlay KHÔNG bị scaleEffect/offset — location/translation
@@ -54,8 +51,7 @@ struct DesktopScreenView: View {
                         // ảnh gốc bằng scale/offset đang biết, không phụ thuộc SwiftUI tự làm việc đó.
                         Color.clear
                             .contentShape(Rectangle())
-                            .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size))
-                                .simultaneously(with: zoomGesture(image: image, frame: geo.size)))
+                            .gesture(panGesture(maxOffsetX: maxOffsetX(image: image, frame: geo.size)))
                             .simultaneousGesture(tapGesture(image: image, frame: geo.size))
                     }
                 }
@@ -115,25 +111,6 @@ struct DesktopScreenView: View {
         }
     }
 
-    // Mặc định (scale = 1) đã lấp đầy khung xem (aspectFill) — không cho zoom vào thêm (tối đa =
-    // đúng khung xem). Zoom ra tối đa = đúng điểm ảnh vừa khít chiều ngang (hết phần bị crop) —
-    // quá mức đó sẽ hở viền đen 2 bên nên chặn lại, không cho zoom nhỏ hơn nữa.
-    private func zoomGesture(image: UIImage, frame: CGSize) -> some Gesture {
-        MagnificationGesture()
-            .onChanged { value in
-                scale = min(1, max(minScale(image: image, frame: frame), lastScale * value))
-                // Offset đã kéo (pan) trước đó có thể vượt quá maxOffsetX mới sau khi scale đổi
-                // (maxOffsetX tỷ lệ theo scale) — không reclamp sẽ hở viền đen 2 bên khi zoom nhỏ
-                // lại sau khi đã pan.
-                let maxX = maxOffsetX(image: image, frame: frame)
-                offset = CGSize(width: min(maxX, max(-maxX, offset.width)), height: 0)
-            }
-            .onEnded { _ in
-                lastScale = scale
-                lastOffset = offset
-            }
-    }
-
     // Chỉ cho kéo trái/phải — giữ nguyên chiều dọc. Giới hạn trong đúng phần ảnh bị crop (aspectFill)
     // đang phình ra ngoài khung xem theo scale hiện tại — không kéo quá để lộ nền đen.
     private func panGesture(maxOffsetX: CGFloat) -> some Gesture {
@@ -148,18 +125,18 @@ struct DesktopScreenView: View {
     }
 
     /// Ảnh (aspectFill) phủ hết chiều cao khung xem rồi phình ngang ra ngoài — tính đúng nửa phần
-    /// phình đó (đã nhân theo scale hiện tại) làm giới hạn kéo ngang tối đa mỗi bên.
+    /// phình đó (đã nhân theo fixedScale) làm giới hạn kéo ngang tối đa mỗi bên.
     private func maxOffsetX(image: UIImage, frame: CGSize) -> CGFloat {
         guard image.size.height > 0, frame.height > 0 else { return 0 }
         let imageAspect = image.size.width / image.size.height
         let frameAspect = frame.width / frame.height
         guard imageAspect > frameAspect else { return 0 }
         let renderedWidth = frame.height * imageAspect
-        return max(0, (renderedWidth * scale - frame.width) / 2)
+        return max(0, (renderedWidth * fixedScale(image: image, frame: frame) - frame.width) / 2)
     }
 
     /// scale nhỏ nhất mà chiều ngang vẫn còn phủ đủ khung xem (renderedWidth * scale == frame.width)
-    /// — nhỏ hơn nữa sẽ hở viền đen 2 bên trái/phải.
+    /// — nhỏ hơn nữa sẽ hở viền đen 2 bên trái/phải. Dùng làm mốc cho fixedScale bên dưới.
     private func minScale(image: UIImage, frame: CGSize) -> CGFloat {
         guard image.size.height > 0, frame.height > 0 else { return 1 }
         let imageAspect = image.size.width / image.size.height
@@ -167,6 +144,14 @@ struct DesktopScreenView: View {
         guard imageAspect > frameAspect else { return 1 }
         let renderedWidth = frame.height * imageAspect
         return frame.width / renderedWidth
+    }
+
+    /// Tỉ lệ CỐ ĐỊNH (không cho zoom, theo yêu cầu 2026-08-26) — chiều ngang Desktop hiển thị đúng
+    /// bằng 2 lần chiều ngang điện thoại: ở `minScale` toàn bộ chiều ngang Desktop vừa khít 1 màn
+    /// hình điện thoại, nên `2 × minScale` làm nó trải rộng ra đúng 2 màn hình điện thoại (kéo 1
+    /// ngón để xem nửa còn lại). Chặn trên = 1 (không zoom sâu hơn mức lấp đầy khung xem mặc định).
+    private func fixedScale(image: UIImage, frame: CGSize) -> CGFloat {
+        min(1, 2 * minScale(image: image, frame: frame))
     }
 
     // Chạm vào ảnh = click chuột trái tại đúng vị trí đó trên Desktop — gửi ngay lập tức.
@@ -186,9 +171,9 @@ struct DesktopScreenView: View {
     private func imagePoint(from location: CGPoint, frame: CGSize, image: UIImage) -> CGPoint? {
         guard image.size.width > 0, image.size.height > 0, frame.width > 0, frame.height > 0 else { return nil }
 
-        // scaleEffect chỉ áp theo chiều ngang (x: scale, y: 1) — chiều dọc không transform gì cả.
+        // scaleEffect chỉ áp theo chiều ngang (x: fixedScale, y: 1) — chiều dọc không transform gì cả.
         let center = CGPoint(x: frame.width / 2, y: frame.height / 2)
-        let localX = (location.x - offset.width - center.x) / scale + center.x
+        let localX = (location.x - offset.width - center.x) / fixedScale(image: image, frame: frame) + center.x
         let localY = location.y
         guard localX >= 0, localX <= frame.width, localY >= 0, localY <= frame.height else { return nil }
 
