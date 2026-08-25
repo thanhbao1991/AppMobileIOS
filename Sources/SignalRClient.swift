@@ -13,6 +13,7 @@ actor SignalRClient {
     private var retryDelay: UInt64 = 3
     private var invocationCounter = 0
     private var pendingInvocations: [String: CheckedContinuation<Any?, Error>] = [:]
+    private var loopTask: Task<Void, Never>?
 
     /// entityName, action, id — nhận trên MainActor để các View cập nhật @State an toàn.
     private var onEntityChanged: (@MainActor (String, String, String) -> Void)?
@@ -29,13 +30,30 @@ actor SignalRClient {
         guard !shouldRun else { return }
         shouldRun = true
         retryDelay = 3
-        Task { await connectLoop() }
+        loopTask = Task { await connectLoop() }
     }
 
     func stop() {
         shouldRun = false
+        loopTask?.cancel()
+        loopTask = nil
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
+    }
+
+    /// Buộc reconnect NGAY, bỏ qua backoff đang chờ (3-30s) — gọi khi app quay lại foreground
+    /// (`scenePhase == .active`). Không có bước này, sau khi đổi app qua lại, kết nối chết âm thầm
+    /// (`receiveLoop()` có thể không tự throw — xem fix trong `invoke()`) và mọi thao tác (kể cả tap
+    /// click, dùng `try?` nuốt lỗi) sẽ không làm gì cho tới khi backoff tự chạy tới lượt — cảm giác
+    /// như tính năng "không hoạt động" dù thực ra chỉ đang chờ reconnect.
+    func kickReconnect() {
+        guard shouldRun else { return }
+        loopTask?.cancel()
+        task?.cancel(with: .goingAway, reason: nil)
+        task = nil
+        failAllPendingInvocations(URLError(.networkConnectionLost))
+        retryDelay = 3
+        loopTask = Task { await connectLoop() }
     }
 
     func setScreenshotHandler(_ handler: (@MainActor (Data, Int, Int, Int, Int) -> Void)?) {
@@ -74,7 +92,10 @@ actor SignalRClient {
     }
 
     private func connectLoop() async {
-        while shouldRun {
+        // Task.isCancelled bắt buộc phải kiểm — kickReconnect() cancel loopTask cũ rồi spawn loopTask
+        // mới ngay, nếu không check thì vòng lặp CŨ (Task.sleep bị cancel chỉ throw, `try?` nuốt lỗi,
+        // shouldRun vẫn true) tiếp tục chạy song song với vòng MỚI → 2 kết nối cùng lúc.
+        while shouldRun, !Task.isCancelled {
             do {
                 try await connectOnce()
                 retryDelay = 3
@@ -82,7 +103,7 @@ actor SignalRClient {
                 failAllPendingInvocations(error)
                 if !shouldRun { return }
             }
-            guard shouldRun else { return }
+            guard shouldRun, !Task.isCancelled else { return }
             try? await Task.sleep(nanoseconds: retryDelay * 1_000_000_000)
             retryDelay = min(retryDelay * 2, 30)
         }
