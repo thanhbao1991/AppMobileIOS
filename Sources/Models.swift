@@ -12,8 +12,8 @@ struct ApiEnvelope<T: Decodable>: Decodable {
 
 // ---- Auth ----
 
-struct LoginRequest: Encodable { let taiKhoan: String; let matKhau: String }
-struct RefreshRequest: Encodable { let refreshToken: String }
+struct LoginRequest: Encodable { let taiKhoan: String; let matKhau: String; let thietBi: String? }
+struct RefreshRequest: Encodable { let refreshToken: String; let thietBi: String? }
 
 struct LoginResponse: Decodable {
     let thanhCong: Bool?
@@ -28,6 +28,15 @@ enum LoginResult {
     case success(LoginResponse)
     case rejected(String)
     case networkError
+}
+
+// Danh sách thiết bị đang đăng nhập (màn hình "Thiết bị đăng nhập") — giống trang Tài khoản Apple.
+struct PhienDangNhapDto: Decodable, Identifiable {
+    let id: String
+    let thietBi: String?
+    let ngayTao: String
+    let hetHan: String
+    let laThietBiHienTai: Bool
 }
 
 // ---- Hoá đơn ----

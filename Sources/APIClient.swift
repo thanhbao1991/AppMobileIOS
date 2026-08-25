@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Port 1:1 từ AppMobileAndroid/ApiClient.kt (OkHttp+Gson → URLSession+Codable). Bearer token
 /// tự đính kèm, tự refresh 1 lần khi gặp 401 rồi retry đúng request gốc — khớp hành vi
@@ -31,6 +32,10 @@ actor APIClient {
                     retried.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
                     return await send(retried, allowRefresh: false)
                 }
+                // Refresh thất bại thật (token bị thu hồi/hết hạn ở nơi khác) — không có gì tự cứu
+                // được nữa, phải đưa app quay về màn hình login thay vì để lỗi 401 lặng lẽ.
+                Prefs.clear()
+                NotificationCenter.default.post(name: .sessionExpired, object: nil)
             }
             return (data, http)
         } catch {
@@ -39,7 +44,9 @@ actor APIClient {
     }
 
     private func doRefresh(_ refreshToken: String) async -> String? {
-        let req = makeRequest("/api/auth/refresh", method: "POST", body: jsonBody(RefreshRequest(refreshToken: refreshToken)), authorized: false)
+        let req = makeRequest("/api/auth/refresh", method: "POST",
+                               body: jsonBody(RefreshRequest(refreshToken: refreshToken, thietBi: deviceName())),
+                               authorized: false)
         let (data, http) = await send(req, allowRefresh: false)
         guard let data, http?.statusCode == 200,
               let env = try? JSONDecoder().decode(ApiEnvelope<LoginResponse>.self, from: data),
@@ -49,13 +56,32 @@ actor APIClient {
     }
 
     func login(taiKhoan: String, matKhau: String) async -> LoginResult {
-        let req = makeRequest("/api/auth/login", method: "POST", body: jsonBody(LoginRequest(taiKhoan: taiKhoan, matKhau: matKhau)), authorized: false)
+        let req = makeRequest("/api/auth/login", method: "POST",
+                               body: jsonBody(LoginRequest(taiKhoan: taiKhoan, matKhau: matKhau, thietBi: deviceName())),
+                               authorized: false)
         let (data, _) = await send(req, allowRefresh: false)
         guard let data else { return .networkError }
         guard let env = try? JSONDecoder().decode(ApiEnvelope<LoginResponse>.self, from: data) else { return .networkError }
         if !env.isSuccess { return .rejected(env.message ?? "Sai tài khoản hoặc mật khẩu.") }
         guard let resp = env.data else { return .networkError }
         return .success(resp)
+    }
+
+    private func deviceName() -> String {
+        UIDevice.current.name
+    }
+
+    // Danh sách/gỡ thiết bị đăng nhập — màn hình "Thiết bị đăng nhập" trong MoreMenuView.
+    func getSessions() async -> [PhienDangNhapDto] {
+        let req = makeRequest("/api/Auth/sessions")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[PhienDangNhapDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func revokeSession(id: String) async -> ActionResult {
+        let req = makeRequest("/api/Auth/sessions/\(id)", method: "DELETE")
+        return await executeAction(req)
     }
 
     func getHoaDonListByDay(_ dateIso: String) async -> [HoaDonListDto] {

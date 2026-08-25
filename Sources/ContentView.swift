@@ -14,6 +14,9 @@ struct ContentView: View {
                 LoginView(isLoggedIn: $isLoggedIn)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in
+            isLoggedIn = false
+        }
         .onChange(of: isLoggedIn) { loggedIn in
             if loggedIn {
                 Task { await SignalRClient.shared.start { entity, action, id in

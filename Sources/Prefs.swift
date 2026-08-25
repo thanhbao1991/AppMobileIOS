@@ -1,5 +1,11 @@
 import Foundation
 
+// Bắn khi APIClient phát hiện refresh token bị thu hồi/hết hạn thật (không tự cứu được nữa) —
+// ContentView lắng nghe để đưa app quay lại LoginView thay vì để request lỗi âm thầm.
+extension Notification.Name {
+    static let sessionExpired = Notification.Name("sessionExpired")
+}
+
 enum Prefs {
     static let apiBase = "https://api.denncoffee.uk"
     // ĐÃ THỬ 1 domain gốc "denncoffee.uk" riêng (không "api.") cho link SMS 2026-08-22 nhưng

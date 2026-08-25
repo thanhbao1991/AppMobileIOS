@@ -152,6 +152,11 @@ private struct MoreMenuView: View {
                     if let name = Prefs.displayName, !name.isEmpty {
                         Label(name, systemImage: "person.circle")
                     }
+                    NavigationLink {
+                        DeviceSessionsView()
+                    } label: {
+                        Label("Thiết bị đăng nhập", systemImage: "iphone.and.arrow.forward")
+                    }
                     Button(role: .destructive) {
                         Prefs.clear()
                         isLoggedIn = false
