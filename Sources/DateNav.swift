@@ -200,16 +200,15 @@ private struct MonthYearPickerSheet: View {
                 .pickerStyle(.wheel)
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Xong") {
-                        if let newDate = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1)) {
-                            date = newDate
-                        }
-                        onDone()
-                    }
-                }
-            }
+            .onChange(of: month) { _ in commit() }
+            .onChange(of: year) { _ in commit() }
         }
+    }
+
+    private func commit() {
+        if let newDate = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1)) {
+            date = newDate
+        }
+        onDone()
     }
 }
