@@ -47,6 +47,10 @@ struct DesktopScreenView: View {
     final class FrameClock { var lastFrameAt: Date = .distantPast }
     @State private var frameClock = FrameClock()
 
+    // Debounce cho tap/long-press — xem giải thích ở debounceGesture().
+    final class GestureClock { var lastFireAt: Date = .distantPast }
+    @State private var gestureClock = GestureClock()
+
     @State private var isKeyboardActive = false
 
     // Zoom khung nhìn — KHÔNG đổi độ phân giải capture bên Desktop, chỉ đổi phần ảnh đang hiển
@@ -197,6 +201,7 @@ struct DesktopScreenView: View {
     // Chạm (không di chuyển đáng kể) = click chuột trái thật — 1 lượt move+down+up atomic tại đúng
     // điểm chạm, không có bước "move" rời trước đó (khác kéo-giữ-nút kiểu cũ).
     private func handleTap(at location: CGPoint, frame: CGSize, imageSize: CGSize) {
+        guard debounceGesture() else { return }
         guard let point = imagePoint(from: location, frame: frame, imageSize: imageSize) else { return }
         let targetId = currentDesktopId
         Task {
@@ -209,10 +214,24 @@ struct DesktopScreenView: View {
 
     // Giữ yên (không di chuyển) đủ lâu = click chuột phải.
     private func handleLongPress(at location: CGPoint, frame: CGSize, imageSize: CGSize) {
+        guard debounceGesture() else { return }
         guard let point = imagePoint(from: location, frame: frame, imageSize: imageSize) else { return }
         let targetId = currentDesktopId
         Task { _ = try? await SignalRClient.shared.invoke(
             "SendRightClick", args: [targetId, Double(point.x), Double(point.y)]) }
+    }
+
+    // Verify thực tế 2026-08-26: SwiftUI `.simultaneousGesture()` (SpatialTapGesture) đôi khi bắn
+    // `.onEnded` NHIỀU LẦN cho ĐÚNG 1 lần chạm thật (log cho thấy 4-8 cặp MouseDown/Up dồn cụm trong
+    // <1-2s, nhanh hơn người thật bấm nhiều lần) — chưa xác định được nguyên nhân gốc chính xác (đã
+    // loại trừ giả thuyết render lại do `lastFrameAt`, xem `FrameClock`). Chặn cứng theo thời gian
+    // thay vì tiếp tục dò nguyên nhân SwiftUI nội bộ — không có lý do gì người dùng chạm/giữ 2 lần
+    // thật trong vòng 300ms.
+    private func debounceGesture() -> Bool {
+        let now = Date()
+        guard now.timeIntervalSince(gestureClock.lastFireAt) > 0.3 else { return false }
+        gestureClock.lastFireAt = now
+        return true
     }
 
     // 1 ngón kéo thật sự = pan khung nhìn — hoạt động ở MỌI mức scale (kể cả scale=1 mặc định, để
