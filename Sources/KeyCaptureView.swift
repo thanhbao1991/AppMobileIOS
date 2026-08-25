@@ -144,6 +144,14 @@ final class RemoteControlSurfaceView: UIView {
         twoFingerPanRecognizer.delegate = self
         pinchRecognizer.delegate = self
 
+        // Ngưỡng khoảng cách (ThresholdPanGestureRecognizer) làm Tap ăn ỔN ĐỊNH HƠN nhưng vẫn là 1
+        // "cuộc đua" — rung tay thỉnh thoảng vẫn vượt ngưỡng, verify thực tế cho kết quả LÚC ĂN LÚC
+        // KHÔNG. Fix triệt để: bắt Tap PHẢI ĐỢI Pan/LongPress thất bại hẳn rồi mới được quyết —
+        // loại bỏ hoàn toàn cuộc đua thay vì canh ngưỡng (kỹ thuật chuẩn Apple documented cho đúng
+        // tình huống Tap+Pan/LongPress trên cùng view).
+        tapRecognizer.require(toFail: panRecognizer)
+        tapRecognizer.require(toFail: longPressRecognizer)
+
         [tapRecognizer, longPressRecognizer, panRecognizer, twoFingerPanRecognizer, pinchRecognizer]
             .forEach(addGestureRecognizer)
     }
