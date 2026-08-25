@@ -3,7 +3,10 @@ import UIKit
 
 /// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn — chọn máy VÀ xem cùng 1 màn hình
 /// (2026-08-26: gộp `DesktopPickerView` vào đây, bỏ NavigationLink sang màn hình riêng — chọn máy ở
-/// dải dưới, xem ảnh ở khung trên, đổi máy không cần back/mở lại). Vào watch gọi `StartWatchingDesktop`
+/// dải dưới, xem ảnh ở khung trên, đổi máy không cần back/mở lại). Chỉ mở từ icon cạnh nút "+" ở tab
+/// Hoá đơn (`HoaDonListView`, dạng sheet giống form thêm hoá đơn) — đã bỏ khỏi menu chung
+/// (`MainTabView`). Tự chọn lại máy xem lần cuối (lưu theo tên máy trong `UserDefaults`) mỗi lần mở.
+/// Vào watch gọi `StartWatchingDesktop`
 /// 1 lần, Desktop tự chụp+gửi 1 khung JPEG FULL-FRAME mỗi 100ms qua `ScreenshotReceived` (không
 /// dirty-rect) tới khi đổi máy khác/rời màn hình gọi `StopWatchingDesktop`. 1 watchdog tự gọi lại
 /// `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect).
@@ -27,6 +30,11 @@ struct DesktopScreenView: View {
     @State private var lastFrameAt: Date = .distantPast
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
+
+    /// Nhớ tên máy xem lần cuối để tự chọn lại lần mở sau — lưu theo `label` (tên máy) chứ không
+    /// phải `id` (connection id đổi mỗi lần Desktop reconnect nên không dùng để nhớ được).
+    private static let lastLabelKey = "DesktopScreenView.lastDesktopLabel"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,6 +47,11 @@ struct DesktopScreenView: View {
         }
         .navigationTitle("Xem màn hình Desktop")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Đóng") { dismiss() }
+            }
+        }
         .task { await loadDesktops() }
         .onDisappear { stopWatching() }
         .onChange(of: scenePhase) { newPhase in
@@ -144,6 +157,12 @@ struct DesktopScreenView: View {
         } catch {
             listError = "Không tải được danh sách: \(error.localizedDescription)"
         }
+
+        if selectedDesktopId == nil,
+           let lastLabel = UserDefaults.standard.string(forKey: Self.lastLabelKey),
+           let match = desktops.first(where: { $0.label == lastLabel }) {
+            select(match)
+        }
     }
 
     private func select(_ desktop: (id: String, label: String)) {
@@ -151,6 +170,7 @@ struct DesktopScreenView: View {
         stopWatching()
         selectedDesktopId = desktop.id
         selectedLabel = desktop.label
+        UserDefaults.standard.set(desktop.label, forKey: Self.lastLabelKey)
         image = nil
         disconnected = false
         startWatching()

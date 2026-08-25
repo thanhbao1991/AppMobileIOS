@@ -10,6 +10,7 @@ struct HoaDonListView: View {
     @State private var selectedId: String?
     @State private var searchText = ""
     @State private var showAddSheet = false
+    @State private var showDesktopSheet = false
     @State private var creatingPending: PendingCreate?
     /// Tick định kỳ để buộc SwiftUI vẽ lại badge "chờ" trên các card — nếu không có state nào đổi,
     /// waitingMinutes chỉ tính 1 lần lúc load rồi đứng yên mãi (không tự cập nhật theo thời gian thực).
@@ -145,9 +146,7 @@ struct HoaDonListView: View {
                     }
                     .foregroundColor(.brandPrimary)
 
-                    NavigationLink {
-                        DesktopScreenView()
-                    } label: {
+                    Button { showDesktopSheet = true } label: {
                         Image(systemName: "desktopcomputer").font(.system(size: 28))
                     }
                     .foregroundColor(.textMuted)
@@ -181,6 +180,11 @@ struct HoaDonListView: View {
         )) { wrapped in
             HoaDonDetailView(hoaDonId: wrapped.value) {
                 Task { await load() }
+            }
+        }
+        .sheet(isPresented: $showDesktopSheet) {
+            NavigationStack {
+                DesktopScreenView()
             }
         }
         .sheet(isPresented: $showAddSheet) {
