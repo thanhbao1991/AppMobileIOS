@@ -37,8 +37,19 @@ struct DesktopScreenView: View {
                     .scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if disconnected {
-                Text("\(label) đã ngắt kết nối")
-                    .foregroundStyle(.white)
+                // Không phân biệt được "mất kết nối thật" với "Desktop đang mở tab khác, không chụp
+                // được HoaDonGrid" (cả 2 đều biểu hiện giống nhau: không có khung hình mới) — dùng
+                // chung 1 thông báo bao quát cả 2 khả năng, tránh nói sai "đã ngắt kết nối" khi thực
+                // ra vẫn đang kết nối tốt, chỉ là Desktop chưa mở đúng tab (verify thực tế 2026-08-26).
+                VStack(spacing: 8) {
+                    Text("\(label): chưa nhận được hình")
+                        .foregroundStyle(.white)
+                    Text("Kiểm tra Desktop có đang mở tab Hoá đơn không, hoặc có bị mất kết nối không")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
             } else {
                 ProgressView().tint(.white)
             }
@@ -99,28 +110,27 @@ struct DesktopScreenView: View {
             _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId])
         }
 
-        // Desktop tự đẩy khung hình — không có gì để "hỏi lại" nếu mạng rớt, nên cần tự kiểm tra
-        // độ mới của khung hình cuối cùng và chủ động gọi lại StartWatchingDesktop khi cần (bù cho
-        // cả 2 trường hợp: máy Desktop reconnect đổi connectionId, HOẶC chính iOS reconnect khiến
-        // Desktop đang đẩy nhầm về 1 connectionId cũ đã chết). Ngưỡng "lâu không thấy gì" phải RỘNG
-        // hơn hẳn 1 khung hình đơn lẻ — giờ Desktop chỉ gửi khi có gì đổi (dirty-rect) + 1 khung hình
-        // "chữa lành" định kỳ mỗi ~150 lượt chụp (~6s), nên màn hình đứng yên hoàn toàn cũng có thể
-        // hợp lệ không có khung hình mới suốt vài giây — không phải dấu hiệu mất kết nối.
+        // Desktop tự đẩy khung hình MỖI 100ms KHÔNG ĐIỀU KIỆN khi tab Hoá đơn đang mở (không còn
+        // dirty-rect/skip-khi-đứng-yên như bản trước) — nên "lâu không thấy gì" giờ là tín hiệu đáng
+        // tin cậy hơn nhiều (bất kể lý do: mất kết nối THẬT, hoặc Desktop đang mở tab khác không
+        // chụp được HoaDonGrid — cả 2 đều hợp lệ dừng gửi khung hình). Ngưỡng rút ngắn nhiều so với
+        // bản dirty-rect cũ (không cần chờ ~30s nữa, verify thực tế 2026-08-26 user báo chờ quá lâu).
         watchdogTask = Task {
             var staleTicks = 0
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { return }
 
-                let stale = Date().timeIntervalSince(lastFrameAt) > 10
+                let stale = Date().timeIntervalSince(lastFrameAt) > 1
                 if !stale { staleTicks = 0; continue }
 
                 staleTicks += 1
                 _ = await tryResolveNewId()
                 _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [currentDesktopId])
 
-                // ~10s (ngưỡng stale) + ~30s thử lại nhiều lần vẫn không có gì — báo mất kết nối thật.
-                if staleTicks >= 15 { disconnected = true }
+                // ~5s không có khung hình mới nào — báo ngay, không bắt người dùng chờ ~30s như bản
+                // dirty-rect cũ (giờ mỗi khung hình chỉ cách nhau 100ms khi mọi thứ bình thường).
+                if staleTicks >= 5 { disconnected = true }
             }
         }
     }
