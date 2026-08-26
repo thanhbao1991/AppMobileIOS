@@ -182,19 +182,23 @@ struct ThongKeThangView: View {
     }
 }
 
-private struct ChiTieuTenSelection: Identifiable {
+/// Không private — ThongKeView (bản ngày) tái dùng chung để bấm vào món chi tiêu/thanh toán/doanh
+/// thu ra đúng sheet chi tiết này.
+struct ChiTieuTenSelection: Identifiable {
     let ten: String
     var id: String { ten }
 }
 
-private struct ChiTieuThangDetailSheet: View {
+/// Không private — ThongKeView tái dùng, truyền items đã lọc theo ngày thay vì cả tháng.
+struct ChiTieuThangDetailSheet: View {
     let ten: String
     let items: [ChiTieuHangNgayDto]
 
     @Environment(\.dismiss) private var dismiss
 
+    /// Mới trước — khớp thứ tự dùng chung mọi list khác trong app (HoaDonListView, CongNoListView...).
     private var sorted: [ChiTieuHangNgayDto] {
-        items.sorted { ($0.ngay ?? $0.ngayGio ?? "") < ($1.ngay ?? $1.ngayGio ?? "") }
+        items.sorted { ($0.ngay ?? $0.ngayGio ?? "") > ($1.ngay ?? $1.ngayGio ?? "") }
     }
 
     private var total: Double { items.reduce(0) { $0 + $1.thanhTien } }
@@ -298,9 +302,12 @@ struct KhachHangNoDetailSheet: View {
     }
 }
 
-private struct ThanhToanChiTietSheet: View {
+/// Không private — ThongKeView (bản ngày) tái dùng, `ngayFilter` lọc thêm về đúng 1 ngày (API chỉ có
+/// bản theo tháng, không có bản theo ngày riêng).
+struct ThanhToanChiTietSheet: View {
     let ten: String
     let currentDate: Date
+    var ngayFilter: Int? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var items: [ThanhToanChiTietItemDto] = []
@@ -352,11 +359,18 @@ private struct ThanhToanChiTietSheet: View {
         }
         .task {
             let cal = Calendar.current
-            items = await APIClient.shared.getThanhToanChiTietThang(
+            var fetched = await APIClient.shared.getThanhToanChiTietThang(
                 thang: cal.component(.month, from: currentDate),
                 nam: cal.component(.year, from: currentDate),
                 ten: ten
             )
+            if let ngayFilter {
+                fetched = fetched.filter {
+                    guard let date = HoaDonFormatting.parseIso($0.ngayGio) else { return false }
+                    return cal.component(.day, from: date) == ngayFilter
+                }
+            }
+            items = fetched
             hasLoaded = true
         }
         .sheet(item: Binding(
@@ -368,9 +382,12 @@ private struct ThanhToanChiTietSheet: View {
     }
 }
 
-private struct DoanhThuChiTietSheet: View {
+/// Không private — ThongKeView (bản ngày) tái dùng, `ngayFilter` lọc thêm về đúng 1 ngày (API chỉ có
+/// bản theo tháng, không có bản theo ngày riêng).
+struct DoanhThuChiTietSheet: View {
     let ten: String
     let currentDate: Date
+    var ngayFilter: Int? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var items: [HoaDonListDto] = []
@@ -423,11 +440,18 @@ private struct DoanhThuChiTietSheet: View {
         }
         .task {
             let cal = Calendar.current
-            items = await APIClient.shared.getDoanhThuChiTietThang(
+            var fetched = await APIClient.shared.getDoanhThuChiTietThang(
                 thang: cal.component(.month, from: currentDate),
                 nam: cal.component(.year, from: currentDate),
                 ten: ten
             )
+            if let ngayFilter {
+                fetched = fetched.filter {
+                    guard let date = HoaDonFormatting.parseIso($0.ngayGio) else { return false }
+                    return cal.component(.day, from: date) == ngayFilter
+                }
+            }
+            items = fetched
             hasLoaded = true
         }
         .sheet(item: Binding(

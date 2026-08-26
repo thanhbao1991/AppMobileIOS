@@ -22,6 +22,14 @@ struct ThongKeView: View {
     @State private var hasLoaded = false
     @State private var expandedCards: Set<ThongKeCard> = []
     @State private var selectedNoKhachHang: TongNoItemDto?
+    @State private var selectedChiTieuTen: String?
+    @State private var selectedThanhToanTen: String?
+    @State private var selectedDoanhThuTen: String?
+    @State private var selectedHoaDonId: String?
+    /// Dữ liệu thô đúng NGÀY đang xem — dùng để lọc theo `ten` khi bấm vào 1 dòng trong card Chi tiêu
+    /// mở ChiTieuThangDetailSheet (API chi-tieu-by-day trả cả 2 nhóm ngày/tháng cùng lúc, khớp cách
+    /// GetThongKeChiTieuAsync ở Backend cộng dồn theo cùng khoảng NgayGio).
+    @State private var chiTieuDayItems: [ChiTieuHangNgayDto] = []
 
     /// Tiền mặt tại quán trừ chi tiêu ngày — số tiền mặt lẽ ra còn trong ngăn kéo. Port y hệt cách
     /// Desktop tự cộng dồn 2 API (không phải field riêng từ server).
@@ -62,9 +70,13 @@ struct ThongKeView: View {
                                 } content: {
                                     ForEach(thanhToan.danhSachTienMat) { item in
                                         AmountRow(label: item.ten, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedThanhToanTen = item.ten }
                                     }
                                     if thanhToan.tongChuyenKhoan > 0 {
                                         AmountRow(label: "Chuyển khoản", value: thanhToan.tongChuyenKhoan)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedThanhToanTen = "Chuyển khoản" }
                                     }
                                     if let kiemTien {
                                         AmountRow(label: "Kiểm tiền", value: kiemTien, color: .thongKeBlue)
@@ -77,6 +89,8 @@ struct ThongKeView: View {
                                 } content: {
                                     ForEach(doanhThu.danhSach) { item in
                                         AmountRow(label: item.ten, value: item.doanhThu)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedDoanhThuTen = item.ten }
                                     }
                                 }
                             }
@@ -86,6 +100,10 @@ struct ThongKeView: View {
                                 } content: {
                                     ForEach(congNo.danhSachCongNoNgay) { item in
                                         AmountRow(label: item.tenKhachHang, value: item.soTienNo)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                if let hoaDonId = item.hoaDonId { selectedHoaDonId = hoaDonId }
+                                            }
                                     }
                                 }
                             }
@@ -110,10 +128,14 @@ struct ThongKeView: View {
                                     SubTotalRow(label: "Chi tiêu ngày", value: chiTieu.chiTieuNgay, color: .thongKeRed)
                                     ForEach(chiTieu.danhSachChiTieuNgay) { item in
                                         AmountRow(label: item.ten, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedChiTieuTen = item.ten }
                                     }
                                     SubTotalRow(label: "Chi tiêu tháng", value: chiTieu.chiTieuThang, color: .thongKeRed)
                                     ForEach(chiTieu.danhSachChiTieuThang) { item in
                                         AmountRow(label: item.ten, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedChiTieuTen = item.ten }
                                     }
                                 }
                             }
@@ -123,6 +145,10 @@ struct ThongKeView: View {
                                 } content: {
                                     ForEach(chuaThanhToan.danhSach) { item in
                                         AmountRow(label: item.tenKhachHang, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                if let hoaDonId = item.hoaDonId { selectedHoaDonId = hoaDonId }
+                                            }
                                     }
                                 }
                             }
@@ -147,6 +173,43 @@ struct ThongKeView: View {
         .task { await load() }
         .sheet(item: $selectedNoKhachHang) { item in
             KhachHangNoDetailSheet(khachHangId: item.khachHangId, tenKhachHang: item.tenKhachHang)
+        }
+        .sheet(item: Binding(
+            get: { selectedChiTieuTen.map { ChiTieuTenSelection(ten: $0) } },
+            set: { selectedChiTieuTen = $0?.ten }
+        )) { selection in
+            ChiTieuThangDetailSheet(
+                ten: selection.ten,
+                items: chiTieuDayItems.filter { $0.ten == selection.ten }
+            )
+        }
+        .sheet(item: Binding(
+            get: { selectedThanhToanTen.map { ChiTieuTenSelection(ten: $0) } },
+            set: { selectedThanhToanTen = $0?.ten }
+        )) { selection in
+            ThanhToanChiTietSheet(
+                ten: selection.ten,
+                currentDate: currentDate,
+                ngayFilter: Calendar.current.component(.day, from: currentDate)
+            )
+        }
+        .sheet(item: Binding(
+            get: { selectedDoanhThuTen.map { ChiTieuTenSelection(ten: $0) } },
+            set: { selectedDoanhThuTen = $0?.ten }
+        )) { selection in
+            DoanhThuChiTietSheet(
+                ten: selection.ten,
+                currentDate: currentDate,
+                ngayFilter: Calendar.current.component(.day, from: currentDate)
+            )
+        }
+        .sheet(item: Binding(
+            get: { selectedHoaDonId.map { IdentifiableId($0) } },
+            set: { selectedHoaDonId = $0?.value }
+        )) { wrapped in
+            HoaDonDetailView(hoaDonId: wrapped.value) {
+                Task { await load() }
+            }
         }
     }
 
@@ -174,8 +237,9 @@ struct ThongKeView: View {
         async let e = APIClient.shared.getThongKeTraNo(ngay: ngay, thang: thang, nam: nam)
         async let f = APIClient.shared.getThongKeDonChuaThanhToan(ngay: ngay, thang: thang, nam: nam)
         async let g = APIClient.shared.getTongNo()
+        async let h = APIClient.shared.getChiTieuByDay(DateNavFormat.queryDate.string(from: currentDate))
 
-        (chiTieu, congNo, thanhToan, doanhThu, traNo, chuaThanhToan, tongNo) = await (a, b, c, d, e, f, g)
+        (chiTieu, congNo, thanhToan, doanhThu, traNo, chuaThanhToan, tongNo, chiTieuDayItems) = await (a, b, c, d, e, f, g, h)
         loading = false
         hasLoaded = true
     }
