@@ -1,14 +1,13 @@
 import SwiftUI
 import UIKit
 
-/// Xem cửa sổ app Desktop client (POS) đang chạy trên máy đã chọn — chọn máy VÀ xem cùng 1 màn hình
-/// (2026-08-26: gộp `DesktopPickerView` vào đây, bỏ NavigationLink sang màn hình riêng — chọn máy ở
-/// dải dưới, xem ảnh ở khung trên, đổi máy không cần back/mở lại). Chỉ mở từ icon cạnh nút "+" ở tab
-/// Hoá đơn (`HoaDonListView`, dạng sheet giống form thêm hoá đơn) — đã bỏ khỏi menu chung
-/// (`MainTabView`). Tự chọn lại máy xem lần cuối (lưu theo tên máy trong `UserDefaults`) mỗi lần mở.
-/// Vào watch gọi `StartWatchingDesktop`
+/// Xem cửa sổ app Desktop client (POS) đang chạy trên máy `targetLabel` cố định (2026-08-26: bỏ hẳn
+/// bước chọn máy — trước đây cho chọn giữa nhiều máy đang mở app, nhưng thực tế chỉ cần xem đúng 1
+/// máy POS thật (`DESKTOP-118TMVD`) nên vào thẳng, không cần dải chọn máy nữa). Chỉ mở từ icon cạnh
+/// nút "+" ở tab Hoá đơn (`HoaDonListView`, dạng sheet giống form thêm hoá đơn) — đã bỏ khỏi menu
+/// chung (`MainTabView`). Vào watch gọi `StartWatchingDesktop`
 /// 1 lần, Desktop tự chụp+gửi 1 khung JPEG FULL-FRAME mỗi 100ms qua `ScreenshotReceived` (không
-/// dirty-rect) tới khi đổi máy khác/rời màn hình gọi `StopWatchingDesktop`. 1 watchdog tự gọi lại
+/// dirty-rect) tới khi rời màn hình gọi `StopWatchingDesktop`. 1 watchdog tự gọi lại
 /// `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect).
 /// READ-ONLY thuần — bỏ hẳn click (2026-08-26, sau nhiều lần vẫn không chính xác dù đã verify
 /// Desktop+Backend hoàn toàn ổn — không đáng công sức tiếp tục dò lệch toạ độ). Desktop chỉ chụp
@@ -17,12 +16,12 @@ import UIKit
 /// DÙ Desktop đang xem tab khác, không riêng lúc tab Hoá đơn đang mở. Ảnh nhận về hiển thị NGUYÊN
 /// TỈ LỆ (`.scaledToFit`, không crop/pan/zoom) để khỏi méo hình.
 struct DesktopScreenView: View {
-    @State private var desktops: [(id: String, label: String)] = []
-    @State private var loadingList = false
-    @State private var listError: String?
+    /// Tên máy cố định — đúng máy POS thật đang chạy Desktop client (xem memory
+    /// `feedback_138_kill_no_ask`), không còn cho chọn máy khác nữa.
+    private let targetLabel = "DESKTOP-118TMVD"
 
     @State private var selectedDesktopId: String?
-    @State private var selectedLabel: String = ""
+    @State private var notFound = false
     @State private var image: UIImage?
     @State private var disconnected = false
     @State private var isReconnecting = false
@@ -32,10 +31,6 @@ struct DesktopScreenView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
 
-    /// Nhớ tên máy xem lần cuối để tự chọn lại lần mở sau — lưu theo `label` (tên máy) chứ không
-    /// phải `id` (connection id đổi mỗi lần Desktop reconnect nên không dùng để nhớ được).
-    private static let lastLabelKey = "DesktopScreenView.lastDesktopLabel"
-
     /// Chiều cao sheet tính THẲNG từ chiều rộng màn hình (không đo động qua GeometryReader/PreferenceKey
     /// nữa — bản trước dùng cách đó nhưng `presentationDetents` lại bị đặt bên trong nội dung của
     /// `NavigationStack` do `HoaDonListView` bọc `NavigationStack { DesktopScreenView() }` từ bên ngoài,
@@ -43,34 +38,26 @@ struct DesktopScreenView: View {
     /// `DesktopScreenView` tự bọc `NavigationStack` và đặt `presentationDetents` NGOÀI nó — đúng cấp
     /// theo yêu cầu của SwiftUI.
     private let navBarHeightEstimate: CGFloat = 44
-    private var contentHeight: CGFloat {
-        (screenWidth / screenAspectRatio) + 1 /* divider */ + 92 /* pickerStrip */
-    }
+    private var contentHeight: CGFloat { screenWidth / screenAspectRatio }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                screenArea
-
-                Divider()
-
-                pickerStrip
-            }
-            .background(Color(.systemBackground))
-            .navigationTitle("Xem màn hình Desktop")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Đóng") { dismiss() }
+            screenArea
+                .background(Color(.systemBackground))
+                .navigationTitle("Xem màn hình Desktop")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Đóng") { dismiss() }
+                    }
                 }
-            }
-            .task { await loadDesktops() }
-            .onDisappear { stopWatching() }
-            .onChange(of: scenePhase) { newPhase in
-                guard let id = selectedDesktopId, newPhase == .active else { return }
-                isReconnecting = true
-                Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [id]) }
-            }
+                .task { await connect() }
+                .onDisappear { stopWatching() }
+                .onChange(of: scenePhase) { newPhase in
+                    guard let id = selectedDesktopId, newPhase == .active else { return }
+                    isReconnecting = true
+                    Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [id]) }
+                }
         }
         .presentationDetents([.height(contentHeight + navBarHeightEstimate)])
         .presentationDragIndicator(.visible)
@@ -93,11 +80,11 @@ struct DesktopScreenView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-            } else if selectedDesktopId == nil {
-                Text("Chọn máy bên dưới để xem")
+            } else if notFound {
+                Text("\(targetLabel) chưa mở app")
                     .foregroundStyle(.white.opacity(0.7))
             } else if disconnected {
-                Text("\(selectedLabel) đã ngắt kết nối")
+                Text("\(targetLabel) đã ngắt kết nối")
                     .foregroundStyle(.white)
             } else {
                 ProgressView().tint(.white)
@@ -126,84 +113,14 @@ struct DesktopScreenView: View {
         return image.size.width / image.size.height
     }
 
-    private var pickerStrip: some View {
-        Group {
-            if loadingList && desktops.isEmpty {
-                ProgressView()
-            } else if desktops.isEmpty {
-                Text(listError ?? "Không có máy nào đang mở app")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(desktops, id: \.id) { desktop in
-                            desktopChip(desktop)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                }
-            }
+    private func connect() async {
+        guard let desktops = try? await SignalRClient.shared.fetchConnectedDesktops(),
+              let match = desktops.first(where: { $0.value == targetLabel }) else {
+            notFound = true
+            return
         }
-        .frame(height: 92)
-        .frame(maxWidth: .infinity)
-        .background(Color(.systemBackground))
-    }
-
-    private func desktopChip(_ desktop: (id: String, label: String)) -> some View {
-        let isSelected = desktop.id == selectedDesktopId
-        return Button {
-            select(desktop)
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: "desktopcomputer")
-                    .font(.title2)
-                Text(desktop.label)
-                    .font(.caption)
-                    .lineLimit(1)
-            }
-            .frame(minWidth: 72)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                isSelected ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground),
-                in: RoundedRectangle(cornerRadius: 10)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func loadDesktops() async {
-        loadingList = true
-        defer { loadingList = false }
-        do {
-            let result = try await SignalRClient.shared.fetchConnectedDesktops()
-            desktops = result.map { (id: $0.key, label: $0.value) }
-            listError = nil
-        } catch {
-            listError = "Không tải được danh sách: \(error.localizedDescription)"
-        }
-
-        if selectedDesktopId == nil,
-           let lastLabel = UserDefaults.standard.string(forKey: Self.lastLabelKey),
-           let match = desktops.first(where: { $0.label == lastLabel }) {
-            select(match)
-        }
-    }
-
-    private func select(_ desktop: (id: String, label: String)) {
-        guard desktop.id != selectedDesktopId else { return }
-        stopWatching()
-        selectedDesktopId = desktop.id
-        selectedLabel = desktop.label
-        UserDefaults.standard.set(desktop.label, forKey: Self.lastLabelKey)
-        image = nil
-        disconnected = false
+        notFound = false
+        selectedDesktopId = match.key
         startWatching()
     }
 
@@ -276,7 +193,7 @@ struct DesktopScreenView: View {
 
     private func tryResolveNewId() async -> Bool {
         guard let desktops = try? await SignalRClient.shared.fetchConnectedDesktops(),
-              let match = desktops.first(where: { $0.value == selectedLabel }),
+              let match = desktops.first(where: { $0.value == targetLabel }),
               match.key != selectedDesktopId else { return false }
         selectedDesktopId = match.key
         return true
