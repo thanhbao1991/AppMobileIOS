@@ -104,10 +104,12 @@ struct DesktopScreenView: View {
         return image.size.width / image.size.height
     }
 
-    /// Tự thử lại mỗi 2s đến khi tìm thấy máy — không báo "chưa mở app", chỉ hiện loading liên tục,
+    /// Tự thử lại mỗi 1s đến khi tìm thấy máy — không báo "chưa mở app", chỉ hiện loading liên tục,
     /// vì máy POS thật hay khởi động Desktop client trễ hơn lúc người dùng mở form này. `.task` tự
     /// huỷ khi sheet đóng (SwiftUI cancel `.task` lúc view biến mất) nên vòng lặp này tự dừng theo,
-    /// không cần quản lý thủ công như `watchdogTask`.
+    /// không cần quản lý thủ công như `watchdogTask`. (2026-08-26: rút từ 2s xuống 1s — bên Desktop
+    /// đã rút backoff reconnect xuống còn 2s khởi điểm thay vì cố định 10s, poll 2s cũ cộng dồn thêm
+    /// độ trễ không cần thiết vào đúng lúc Desktop vừa kết nối lại xong.)
     private func connectLoop() async {
         while !Task.isCancelled {
             if let desktops = try? await SignalRClient.shared.fetchConnectedDesktops(),
@@ -116,7 +118,7 @@ struct DesktopScreenView: View {
                 startWatching()
                 return
             }
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
     }
 
