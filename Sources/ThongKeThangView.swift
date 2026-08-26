@@ -282,7 +282,7 @@ struct KhachHangNoDetailSheet: View {
                     .listStyle(.plain)
 
                     Divider()
-                    CongNoFooterView(items: filtered, label: tenKhachHang)
+                    CongNoFooterView(items: filtered, label: tenKhachHang, showName: false)
                 }
             }
             .navigationTitle(tenKhachHang)

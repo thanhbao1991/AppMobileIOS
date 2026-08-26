@@ -82,6 +82,9 @@ struct CongNoFooterView: View {
     let items: [HoaDonListDto]
     let label: String
     var showSendButton: Bool = true
+    /// Truyền xuống CongNoRowView khi render ảnh — false ở KhachHangNoDetailSheet (đã lọc 1 khách,
+    /// list trên màn hình cũng đang ẩn tên) để ảnh xuất ra khớp đúng những gì đang thấy.
+    var showName: Bool = true
 
     @State private var copiedFeedback = false
 
@@ -150,7 +153,7 @@ struct CongNoFooterView: View {
         let qrData = await APIClient.shared.getBillQrImage(amount: total, addInfo: addInfo)
         let qrImage = qrData.flatMap { UIImage(data: $0) }
 
-        let content = BillSnapshotView(items: snapshot, totalText: totalText, todayText: todayText, qrImage: qrImage)
+        let content = BillSnapshotView(items: snapshot, totalText: totalText, todayText: todayText, qrImage: qrImage, showName: showName)
             .frame(width: UIScreen.main.bounds.width)
 
         let renderer = ImageRenderer(content: content)
@@ -173,11 +176,12 @@ private struct BillSnapshotView: View {
     let totalText: String
     let todayText: String
     let qrImage: UIImage?
+    var showName: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(items) { item in
-                CongNoRowView(item: item)
+                CongNoRowView(item: item, showName: showName)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                 Divider()
