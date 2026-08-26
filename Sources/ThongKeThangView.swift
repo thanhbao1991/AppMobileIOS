@@ -27,8 +27,6 @@ struct ThongKeThangView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                MonthDateBar(date: $currentDate) { Task { await load() } }
-
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
                 } else {
@@ -103,6 +101,11 @@ struct ThongKeThangView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    MonthDateBar(date: $currentDate) { Task { await load() } }
+                }
+            }
         }
         .task { await load() }
         .sheet(item: Binding(
@@ -268,24 +271,10 @@ private struct KhachHangNoDetailSheet: View {
                 } else {
                     List {
                         ForEach(filtered) { item in
-                            Button {
-                                selectedHoaDonId = item.id
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.tenMonSummary?.isEmpty == false ? item.tenMonSummary! : "Hoá đơn")
-                                            .font(.subheadline.weight(.medium))
-                                            .foregroundColor(.primary)
-                                        Text(HoaDonFormatting.congNoTime(item.ngayNo))
-                                            .font(.caption).foregroundColor(.textMuted)
-                                    }
-                                    Spacer()
-                                    Text(HoaDonFormatting.money(item.conLai))
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundColor(.dangerColor)
-                                        .monospacedDigit()
-                                }
-                            }
+                            CongNoRowView(item: item, onSelect: { selectedHoaDonId = item.id })
+                                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
                         }
                     }
                     .listStyle(.plain)

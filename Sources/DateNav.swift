@@ -128,30 +128,25 @@ struct DayDateBar: View {
     }
 }
 
-/// Chỉ chọn tháng/năm, không search — dùng cho ThongKeThangView. `DatePicker` chuẩn của iOS không
-/// có chế độ "chỉ tháng/năm" nên tự ghép 2 bánh xe Picker trong sheet riêng (MonthYearPickerSheet).
+/// Chỉ chọn tháng/năm, không search — dùng cho ThongKeThangView, đặt trong toolbar `.principal` để
+/// nằm cùng dòng với nút Back (canh giữa tự nhiên theo nav bar), không còn chiếm riêng 1 dòng.
+/// `DatePicker` chuẩn của iOS không có chế độ "chỉ tháng/năm" nên tự ghép 2 bánh xe Picker trong
+/// sheet riêng (MonthYearPickerSheet).
 struct MonthDateBar: View {
     @Binding var date: Date
     var onChange: () -> Void
     @State private var showPicker = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            Button { showPicker = true } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "calendar")
-                    Text(DateNavFormat.monthTitle.string(from: date))
-                }
-                .font(.subheadline.bold())
-                .foregroundColor(.brandPrimary)
+        Button { showPicker = true } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                Text(DateNavFormat.monthTitle.string(from: date))
             }
-            .buttonStyle(.plain)
-            .fixedSize()
-
-            Spacer()
+            .font(.subheadline.bold())
+            .foregroundColor(.brandPrimary)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .buttonStyle(.plain)
         .sheet(isPresented: $showPicker) {
             MonthYearPickerSheet(date: $date) {
                 showPicker = false

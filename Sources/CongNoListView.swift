@@ -194,7 +194,9 @@ private struct BillSnapshotView: View {
     }
 }
 
-private struct CongNoRowView: View {
+/// Không đánh dấu private — ThongKeThangView (card "Tổng nợ hiện tại" → KhachHangNoDetailSheet) tái
+/// dùng để layout khớp y hệt tab Công nợ, không phải sửa 2 nơi.
+struct CongNoRowView: View {
     let item: HoaDonListDto
     /// Nil trong BillSnapshotView (ảnh render tĩnh để gửi bill — không cần tương tác).
     var onSelect: (() -> Void)? = nil
