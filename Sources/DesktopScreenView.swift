@@ -6,7 +6,7 @@ import UIKit
 /// máy POS thật (`DESKTOP-118TMVD`) nên vào thẳng, không cần dải chọn máy nữa). Chỉ mở từ icon cạnh
 /// nút "+" ở tab Hoá đơn (`HoaDonListView`, dạng sheet giống form thêm hoá đơn) — đã bỏ khỏi menu
 /// chung (`MainTabView`). Vào watch gọi `StartWatchingDesktop`
-/// 1 lần, Desktop tự chụp+gửi 1 khung JPEG FULL-FRAME mỗi 100ms qua `ScreenshotReceived` (không
+/// 1 lần, Desktop tự chụp+gửi 1 khung JPEG FULL-FRAME mỗi 250ms qua `ScreenshotReceived` (không
 /// dirty-rect) tới khi rời màn hình gọi `StopWatchingDesktop`. 1 watchdog tự gọi lại
 /// `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect).
 /// READ-ONLY thuần — bỏ hẳn click (2026-08-26, sau nhiều lần vẫn không chính xác dù đã verify
@@ -129,17 +129,17 @@ struct DesktopScreenView: View {
             _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [id])
         }
 
-        // Desktop tự đẩy khung hình MỖI 100ms KHÔNG ĐIỀU KIỆN (HoaDonGrid luôn render — xem
-        // SignalRClient.cs phía Desktop — nên gửi được bất kể đang xem tab nào trên Desktop). Quá 1s
-        // không có khung mới là tín hiệu mất kết nối đáng tin cậy — tự gọi lại StartWatchingDesktop
-        // liên tục cho tới khi có khung mới, không giới hạn số lần thử, không báo lỗi cho người dùng
-        // (chỉ cần spinner loading, xem screenArea).
+        // Desktop tự đẩy khung hình MỖI 250ms KHÔNG ĐIỀU KIỆN (HoaDonGrid luôn render — xem
+        // SignalRClient.cs phía Desktop — nên gửi được bất kể đang xem tab nào trên Desktop). Quá 1.5s
+        // không có khung mới (~6 nhịp) là tín hiệu mất kết nối đáng tin cậy — tự gọi lại
+        // StartWatchingDesktop liên tục cho tới khi có khung mới, không giới hạn số lần thử, không
+        // báo lỗi cho người dùng (chỉ cần spinner loading, xem screenArea).
         watchdogTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled, let id = selectedDesktopId else { return }
 
-                guard Date().timeIntervalSince(lastFrameAt) > 1 else { continue }
+                guard Date().timeIntervalSince(lastFrameAt) > 1.5 else { continue }
 
                 _ = await tryResolveNewId()
                 _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [selectedDesktopId ?? id])
