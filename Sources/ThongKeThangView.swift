@@ -216,15 +216,7 @@ private struct ChiTieuThangDetailSheet: View {
                 }
                 ForEach(sorted) { item in
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(dayLabel(item))
-                                .font(.subheadline.weight(.medium))
-                            Text("\(HoaDonFormatting.money(item.donGia)) × \(item.soLuong.formatted())" + (item.billThang ? " · bill tháng" : ""))
-                                .font(.caption).foregroundColor(.textMuted)
-                            if let ghiChu = item.ghiChu, !ghiChu.isEmpty {
-                                Text(ghiChu).font(.caption).foregroundColor(.textMuted)
-                            }
-                        }
+                        Text(dayLabel(item)).font(.subheadline.weight(.medium))
                         Spacer()
                         Text(HoaDonFormatting.money(item.thanhTien))
                             .font(.subheadline.weight(.semibold))
@@ -336,13 +328,9 @@ private struct ThanhToanChiTietSheet: View {
                                 selectedHoaDonId = item.hoaDonId
                             } label: {
                                 HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.tenKhachHang)
-                                            .font(.subheadline.weight(.medium))
-                                            .foregroundColor(.primary)
-                                        Text(HoaDonFormatting.congNoTime(item.ngayGio))
-                                            .font(.caption).foregroundColor(.textMuted)
-                                    }
+                                    Text(item.tenKhachHang)
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundColor(.primary)
                                     Spacer()
                                     Text(HoaDonFormatting.money(item.soTien))
                                         .font(.subheadline.weight(.semibold))
@@ -410,16 +398,10 @@ private struct DoanhThuChiTietSheet: View {
                                 selectedHoaDonId = item.id
                             } label: {
                                 HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
-                                            .font(.subheadline.weight(.medium))
-                                            .foregroundColor(.primary)
-                                        if let mon = item.tenMonSummary, !mon.isEmpty {
-                                            Text(mon).font(.caption).foregroundColor(.textMuted).lineLimit(1)
-                                        }
-                                        Text(HoaDonFormatting.congNoTime(item.ngayGio))
-                                            .font(.caption2).foregroundColor(.textMuted)
-                                    }
+                                    Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
                                     Spacer()
                                     Text(HoaDonFormatting.money(item.thanhTien))
                                         .font(.subheadline.weight(.semibold))
