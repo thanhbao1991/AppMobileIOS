@@ -51,7 +51,7 @@ struct DesktopScreenView: View {
                         Button("Đóng") { dismiss() }
                     }
                 }
-                .task { await connect() }
+                .task { await connectLoop() }
                 .onDisappear { stopWatching() }
                 .onChange(of: scenePhase) { newPhase in
                     guard let id = selectedDesktopId, newPhase == .active else { return }
@@ -113,15 +113,22 @@ struct DesktopScreenView: View {
         return image.size.width / image.size.height
     }
 
-    private func connect() async {
-        guard let desktops = try? await SignalRClient.shared.fetchConnectedDesktops(),
-              let match = desktops.first(where: { $0.value == targetLabel }) else {
+    /// Tự thử lại mỗi 2s đến khi tìm thấy máy — không dừng lại ở "chưa mở app" như trước, vì máy POS
+    /// thật hay khởi động Desktop client trễ hơn lúc người dùng mở form này. `.task` tự huỷ khi sheet
+    /// đóng (SwiftUI cancel `.task` lúc view biến mất) nên vòng lặp này tự dừng theo, không cần quản lý
+    /// thủ công như `watchdogTask`.
+    private func connectLoop() async {
+        while !Task.isCancelled {
+            if let desktops = try? await SignalRClient.shared.fetchConnectedDesktops(),
+               let match = desktops.first(where: { $0.value == targetLabel }) {
+                notFound = false
+                selectedDesktopId = match.key
+                startWatching()
+                return
+            }
             notFound = true
-            return
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
-        notFound = false
-        selectedDesktopId = match.key
-        startWatching()
     }
 
     private func startWatching() {
