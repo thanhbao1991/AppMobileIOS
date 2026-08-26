@@ -21,9 +21,7 @@ struct DesktopScreenView: View {
     private let targetLabel = "DESKTOP-118TMVD"
 
     @State private var selectedDesktopId: String?
-    @State private var notFound = false
     @State private var image: UIImage?
-    @State private var disconnected = false
     @State private var isReconnecting = false
     @State private var watchdogTask: Task<Void, Never>?
     @State private var lastFrameAt: Date = .distantPast
@@ -79,12 +77,6 @@ struct DesktopScreenView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-            } else if notFound {
-                Text("\(targetLabel) chưa mở app")
-                    .foregroundStyle(.white.opacity(0.7))
-            } else if disconnected {
-                Text("\(targetLabel) đã ngắt kết nối")
-                    .foregroundStyle(.white)
             } else {
                 ProgressView().tint(.white)
             }
@@ -112,20 +104,18 @@ struct DesktopScreenView: View {
         return image.size.width / image.size.height
     }
 
-    /// Tự thử lại mỗi 2s đến khi tìm thấy máy — không dừng lại ở "chưa mở app" như trước, vì máy POS
-    /// thật hay khởi động Desktop client trễ hơn lúc người dùng mở form này. `.task` tự huỷ khi sheet
-    /// đóng (SwiftUI cancel `.task` lúc view biến mất) nên vòng lặp này tự dừng theo, không cần quản lý
-    /// thủ công như `watchdogTask`.
+    /// Tự thử lại mỗi 2s đến khi tìm thấy máy — không báo "chưa mở app", chỉ hiện loading liên tục,
+    /// vì máy POS thật hay khởi động Desktop client trễ hơn lúc người dùng mở form này. `.task` tự
+    /// huỷ khi sheet đóng (SwiftUI cancel `.task` lúc view biến mất) nên vòng lặp này tự dừng theo,
+    /// không cần quản lý thủ công như `watchdogTask`.
     private func connectLoop() async {
         while !Task.isCancelled {
             if let desktops = try? await SignalRClient.shared.fetchConnectedDesktops(),
                let match = desktops.first(where: { $0.value == targetLabel }) {
-                notFound = false
                 selectedDesktopId = match.key
                 startWatching()
                 return
             }
-            notFound = true
             try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
     }
@@ -140,25 +130,19 @@ struct DesktopScreenView: View {
         }
 
         // Desktop tự đẩy khung hình MỖI 100ms KHÔNG ĐIỀU KIỆN (HoaDonGrid luôn render — xem
-        // SignalRClient.cs phía Desktop — nên gửi được bất kể đang xem tab nào trên Desktop), không
-        // còn dirty-rect/skip-khi-đứng-yên như bản trước — "lâu không thấy gì" giờ là tín hiệu mất
-        // kết nối đáng tin cậy, ngưỡng rút ngắn nhiều so với bản dirty-rect cũ.
+        // SignalRClient.cs phía Desktop — nên gửi được bất kể đang xem tab nào trên Desktop). Quá 1s
+        // không có khung mới là tín hiệu mất kết nối đáng tin cậy — tự gọi lại StartWatchingDesktop
+        // liên tục cho tới khi có khung mới, không giới hạn số lần thử, không báo lỗi cho người dùng
+        // (chỉ cần spinner loading, xem screenArea).
         watchdogTask = Task {
-            var staleTicks = 0
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled, let id = selectedDesktopId else { return }
 
-                let stale = Date().timeIntervalSince(lastFrameAt) > 1
-                if !stale { staleTicks = 0; continue }
+                guard Date().timeIntervalSince(lastFrameAt) > 1 else { continue }
 
-                staleTicks += 1
                 _ = await tryResolveNewId()
                 _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [selectedDesktopId ?? id])
-
-                // ~5s không có khung hình mới nào — báo ngay, không bắt người dùng chờ ~30s như bản
-                // dirty-rect cũ (giờ mỗi khung hình chỉ cách nhau 100ms khi mọi thứ bình thường).
-                if staleTicks >= 5 { disconnected = true }
             }
         }
     }
@@ -193,7 +177,6 @@ struct DesktopScreenView: View {
             }
         }
         lastFrameAt = Date()
-        disconnected = false
         isReconnecting = false
     }
 
