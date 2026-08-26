@@ -44,7 +44,7 @@ struct DesktopScreenView: View {
         NavigationStack {
             screenArea
                 .background(Color(.systemBackground))
-                .navigationTitle("Xem màn hình Desktop")
+                .navigationTitle("Danh sách hoá đơn")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -60,7 +60,6 @@ struct DesktopScreenView: View {
                 }
         }
         .presentationDetents([.height(contentHeight + navBarHeightEstimate)])
-        .presentationDragIndicator(.visible)
     }
 
     /// Khung đen chỉ cao vừa đúng theo tỉ lệ ảnh nhận được (Desktop chụp `HoaDonGrid` — thường lùn,

@@ -43,13 +43,14 @@ struct HoaDonListView: View {
     /// bị xuống 2 dòng như bản text cũ ("Ship 203k, T.chỗ 230k...").
     private var phanLoaiTotals: [(phanLoai: String, icon: String, color: Color, text: String)] {
         let order: [(code: String, icon: String)] = [
-            ("Ship", "scooter"), ("Tại Chỗ", "cup.and.saucer.fill"), ("Mv", "bag.fill"),
-            ("Mh", "hand.raised.fill"), ("App", "app.badge"),
+            ("Ship", "scooter"), ("Tại Chỗ", "chair.fill"), ("Mv", "bag.fill"),
+            ("Mh", "hand.raised.fill"), ("App", "iphone"),
         ]
         return order.compactMap { entry in
             let total = sortedItems.filter { $0.phanLoai == entry.code }.reduce(0) { $0 + $1.thanhTien }
             guard total > 0 else { return nil }
-            return (entry.code, entry.icon, HoaDonFormatting.phanLoaiColor(entry.code), HoaDonFormatting.moneyShort(total))
+            let text = "\(Int((total / 1000).rounded()))"
+            return (entry.code, entry.icon, HoaDonFormatting.phanLoaiColor(entry.code), text)
         }
     }
 
@@ -344,11 +345,11 @@ enum HoaDonQuickFilter: CaseIterable, Hashable {
     /// Icon hệ thống cho nhóm PhanLoai — khớp bộ icon AddHoaDonSheet.categories để nhất quán trong app.
     var systemIcon: String? {
         switch self {
-        case .taiCho: return "cup.and.saucer.fill"
+        case .taiCho: return "chair.fill"
         case .ship: return "scooter"
         case .muaVe: return "bag.fill"
         case .muaHo: return "hand.raised.fill"
-        case .app: return "app.badge"
+        case .app: return "iphone"
         default: return nil
         }
     }
@@ -547,10 +548,10 @@ private struct AddHoaDonSheet: View {
 
     private let categories: [(code: String, icon: String)] = [
         ("Ship", "scooter"),
-        ("Tại Chỗ", "cup.and.saucer.fill"),
+        ("Tại Chỗ", "chair.fill"),
         ("Mv", "bag.fill"),
         ("Mh", "hand.raised.fill"),
-        ("App", "app.badge"),
+        ("App", "iphone"),
     ]
     private let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
