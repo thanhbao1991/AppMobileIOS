@@ -10,25 +10,11 @@ struct CongNoListView: View {
     @State private var hasLoaded = false
     @State private var selectedId: String?
     @State private var searchText = ""
-    @State private var copiedFeedback = false
 
     private var sortedItems: [HoaDonListDto] {
         items
             .filter { anyMatchesSearch(searchText, $0.tenKhachHangText, $0.tenBan, $0.ghiChu, $0.tenMonSummary) }
             .sorted { ($0.ngayNo ?? "") > ($1.ngayNo ?? "") }
-    }
-
-    private var totalText: String {
-        HoaDonFormatting.money(sortedItems.reduce(0) { $0 + $1.conLai })
-    }
-
-    /// Nợ phát sinh hôm nay — cùng logic gộp NgayNo với sortedItems, chỉ lọc thêm theo ngày hiện tại.
-    private var todayText: String {
-        let today = DateNavFormat.queryDate.string(from: Date())
-        let total = sortedItems
-            .filter { ($0.ngayNo ?? "").hasPrefix(today) }
-            .reduce(0) { $0 + $1.conLai }
-        return HoaDonFormatting.money(total)
     }
 
     var body: some View {
@@ -66,30 +52,7 @@ struct CongNoListView: View {
                 }
 
                 Divider()
-                VStack(spacing: 2) {
-                    HStack {
-                        Spacer()
-                        Text("Hôm nay: \(todayText)")
-                            .font(.caption2).foregroundColor(.dangerColor)
-                    }
-                    HStack {
-                        Text("Tổng nợ").font(.subheadline).foregroundColor(.textMuted)
-                        Spacer()
-                        if !searchText.isEmpty {
-                            Button {
-                                Task { await copyBillImage() }
-                            } label: {
-                                Label(copiedFeedback ? "Đã copy" : "Gửi Tất Cả Bill Nợ", systemImage: copiedFeedback ? "checkmark" : "doc.on.doc")
-                                    .font(.caption.bold())
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(.brandPrimary)
-                            Spacer()
-                        }
-                        Text(totalText).font(.headline).foregroundColor(.dangerColor)
-                    }
-                }
-                .padding()
+                CongNoFooterView(items: sortedItems, label: searchText, showSendButton: !searchText.isEmpty)
             }
         }
         .task { await load() }
@@ -110,28 +73,79 @@ struct CongNoListView: View {
         loading = false
         hasLoaded = true
     }
+}
 
-    /// Render toàn bộ danh sách đã lọc (kể cả phần cần cuộn) thành 1 ảnh, copy vào clipboard để dán
-    /// thẳng vào khung chat Zalo/Facebook — ImageRenderer (iOS 16+) vẽ ra ngoài màn hình nên không bị
-    /// giới hạn bởi viewport như chụp màn hình thường. Kèm 1 mã QR duy nhất cho TỔNG nợ đang lọc
-    /// (không gắn với 1 hoá đơn cụ thể vì có thể gộp nhiều đơn) — lấy qua Backend /api/HoaDon/bill-qr,
-    /// dùng chung BankQrConfig với Desktop/Mobile (xem [[project_bank_qr_consolidation]]). addInfo
-    /// tính hẳn trên Backend qua /api/HoaDon/gop-addinfo (BankQrConfig.BuildAddInfo là nguồn DUY
-    /// NHẤT, không còn bản build song song bằng Swift nữa — tránh lệch format như vụ thiếu "SEVQR"
-    /// 2026-08-23). Chỉ ghi mã hoá đơn đầu và cuối trong danh sách đang hiển thị (mới nhất DEN cũ
+/// Footer "Hôm nay" + "Tổng nợ" + nút gửi bill ảnh QR — dùng chung giữa CongNoListView (tab Công nợ,
+/// `label` = searchText, chỉ hiện nút khi đã gõ tìm) và KhachHangNoDetailSheet (Thống kê, `label` =
+/// tên khách, luôn hiện vì đã lọc sẵn 1 khách). Không đánh dấu private.
+struct CongNoFooterView: View {
+    let items: [HoaDonListDto]
+    let label: String
+    var showSendButton: Bool = true
+
+    @State private var copiedFeedback = false
+
+    private var totalText: String {
+        HoaDonFormatting.money(items.reduce(0) { $0 + $1.conLai })
+    }
+
+    /// Nợ phát sinh hôm nay — cùng logic gộp NgayNo với items, chỉ lọc thêm theo ngày hiện tại.
+    private var todayText: String {
+        let today = DateNavFormat.queryDate.string(from: Date())
+        let total = items
+            .filter { ($0.ngayNo ?? "").hasPrefix(today) }
+            .reduce(0) { $0 + $1.conLai }
+        return HoaDonFormatting.money(total)
+    }
+
+    var body: some View {
+        VStack(spacing: 2) {
+            HStack {
+                Spacer()
+                Text("Hôm nay: \(todayText)")
+                    .font(.caption2).foregroundColor(.dangerColor)
+            }
+            HStack {
+                Text("Tổng nợ").font(.subheadline).foregroundColor(.textMuted)
+                Spacer()
+                if showSendButton {
+                    Button {
+                        Task { await copyBillImage() }
+                    } label: {
+                        Label(copiedFeedback ? "Đã copy" : "Gửi Tất Cả Bill Nợ", systemImage: copiedFeedback ? "checkmark" : "doc.on.doc")
+                            .font(.caption.bold())
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.brandPrimary)
+                    Spacer()
+                }
+                Text(totalText).font(.headline).foregroundColor(.dangerColor)
+            }
+        }
+        .padding()
+    }
+
+    /// Render toàn bộ danh sách (kể cả phần cần cuộn) thành 1 ảnh, copy vào clipboard để dán thẳng
+    /// vào khung chat Zalo/Facebook — ImageRenderer (iOS 16+) vẽ ra ngoài màn hình nên không bị giới
+    /// hạn bởi viewport như chụp màn hình thường. Kèm 1 mã QR duy nhất cho TỔNG nợ đang lọc (không
+    /// gắn với 1 hoá đơn cụ thể vì có thể gộp nhiều đơn) — lấy qua Backend /api/HoaDon/bill-qr, dùng
+    /// chung BankQrConfig với Desktop/Mobile (xem [[project_bank_qr_consolidation]]). addInfo tính
+    /// hẳn trên Backend qua /api/HoaDon/gop-addinfo (BankQrConfig.BuildAddInfo là nguồn DUY NHẤT,
+    /// không còn bản build song song bằng Swift nữa — tránh lệch format như vụ thiếu "SEVQR"
+    /// 2026-08-23). Chỉ ghi mã hoá đơn đầu và cuối trong danh sách đang hiển thị (mới nhất đến cũ
     /// nhất), không liệt kê hết — tránh vượt giới hạn ký tự nội dung CK ngân hàng. `item.maHoaDon`
     /// (Backend tính sẵn) ưu tiên hơn tự cắt chuỗi id.
     private func copyBillImage() async {
-        let snapshot = sortedItems
+        let snapshot = items
         let total = snapshot.reduce(0.0) { $0 + $1.conLai }
         let codes = snapshot.map { $0.maHoaDon?.isEmpty == false ? $0.maHoaDon! : BillTextBuilder.buildMaHoaDon($0.id) }
         let addInfo: String
         if let maDau = codes.first {
             let maCuoi = codes.last == maDau ? nil : codes.last
-            addInfo = await APIClient.shared.getGopAddInfo(ten: searchText, maDau: maDau, maCuoi: maCuoi)
-                ?? "SEVQR " + BillTextBuilder.toAsciiNoDiacritics("\(searchText) \(maDau)", upper: true)
+            addInfo = await APIClient.shared.getGopAddInfo(ten: label, maDau: maDau, maCuoi: maCuoi)
+                ?? "SEVQR " + BillTextBuilder.toAsciiNoDiacritics("\(label) \(maDau)", upper: true)
         } else {
-            addInfo = "SEVQR " + BillTextBuilder.toAsciiNoDiacritics(searchText, upper: true)
+            addInfo = "SEVQR " + BillTextBuilder.toAsciiNoDiacritics(label, upper: true)
         }
         let qrData = await APIClient.shared.getBillQrImage(amount: total, addInfo: addInfo)
         let qrImage = qrData.flatMap { UIImage(data: $0) }

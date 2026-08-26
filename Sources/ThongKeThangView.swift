@@ -265,10 +265,6 @@ struct KhachHangNoDetailSheet: View {
         }
     }
 
-    private var totalText: String {
-        HoaDonFormatting.money(filtered.reduce(0) { $0 + $1.conLai })
-    }
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -286,12 +282,7 @@ struct KhachHangNoDetailSheet: View {
                     .listStyle(.plain)
 
                     Divider()
-                    HStack {
-                        Text("Tổng nợ").font(.subheadline).foregroundColor(.textMuted)
-                        Spacer()
-                        Text(totalText).font(.headline).foregroundColor(.dangerColor)
-                    }
-                    .padding()
+                    CongNoFooterView(items: filtered, label: tenKhachHang)
                 }
             }
             .navigationTitle(tenKhachHang)
