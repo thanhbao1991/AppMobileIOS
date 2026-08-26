@@ -303,11 +303,14 @@ struct KhachHangNoDetailSheet: View {
 }
 
 /// Không private — ThongKeView (bản ngày) tái dùng, `ngayFilter` lọc thêm về đúng 1 ngày (API chỉ có
-/// bản theo tháng, không có bản theo ngày riêng).
+/// bản theo tháng, không có bản theo ngày riêng). `traNoIsShipper` khác nil khi mở từ card "Khách trả
+/// nợ" (`ten` khi đó là TÊN KHÁCH chứ không phải tên phương thức thanh toán) — gọi endpoint
+/// tra-no-chi-tiet-thang thay vì thanh-toan-chi-tiet-thang.
 struct ThanhToanChiTietSheet: View {
     let ten: String
     let currentDate: Date
     var ngayFilter: Int? = nil
+    var traNoIsShipper: Bool? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var items: [ThanhToanChiTietItemDto] = []
@@ -359,11 +362,21 @@ struct ThanhToanChiTietSheet: View {
         }
         .task {
             let cal = Calendar.current
-            var fetched = await APIClient.shared.getThanhToanChiTietThang(
-                thang: cal.component(.month, from: currentDate),
-                nam: cal.component(.year, from: currentDate),
-                ten: ten
-            )
+            var fetched: [ThanhToanChiTietItemDto]
+            if let traNoIsShipper {
+                fetched = await APIClient.shared.getTraNoChiTietThang(
+                    thang: cal.component(.month, from: currentDate),
+                    nam: cal.component(.year, from: currentDate),
+                    ten: ten,
+                    isShipper: traNoIsShipper
+                )
+            } else {
+                fetched = await APIClient.shared.getThanhToanChiTietThang(
+                    thang: cal.component(.month, from: currentDate),
+                    nam: cal.component(.year, from: currentDate),
+                    ten: ten
+                )
+            }
             if let ngayFilter {
                 fetched = fetched.filter {
                     guard let date = HoaDonFormatting.parseIso($0.ngayGio) else { return false }

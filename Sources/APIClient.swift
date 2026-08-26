@@ -242,6 +242,16 @@ actor APIClient {
         return env.data ?? []
     }
 
+    /// Chi tiết card "Khách trả nợ" (bản ngày) — GetTraNoAsync gộp SUM theo tên khách nên card không
+    /// có hoaDonId để tap; endpoint riêng này giữ nguyên bộ lọc nhưng trả nguyên danh sách.
+    func getTraNoChiTietThang(thang: Int, nam: Int, ten: String, isShipper: Bool) async -> [ThanhToanChiTietItemDto] {
+        let tenEncoded = ten.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ten
+        let req = makeRequest("/api/ThongKe/tra-no-chi-tiet-thang?thang=\(thang)&nam=\(nam)&ten=\(tenEncoded)&isShipper=\(isShipper)")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ThanhToanChiTietItemDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
     private func getThongKeThang<T: Decodable>(_ endpoint: String, thang: Int, nam: Int) async -> T? {
         let req = makeRequest("/api/ThongKe/\(endpoint)?thang=\(thang)&nam=\(nam)")
         let (data, _) = await send(req)

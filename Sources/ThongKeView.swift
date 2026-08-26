@@ -26,6 +26,7 @@ struct ThongKeView: View {
     @State private var selectedThanhToanTen: String?
     @State private var selectedDoanhThuTen: String?
     @State private var selectedHoaDonId: String?
+    @State private var selectedTraNoKhach: TraNoKhachSelection?
     /// Dữ liệu thô đúng NGÀY đang xem — dùng để lọc theo `ten` khi bấm vào 1 dòng trong card Chi tiêu
     /// mở ChiTieuThangDetailSheet (API chi-tieu-by-day trả cả 2 nhóm ngày/tháng cùng lúc, khớp cách
     /// GetThongKeChiTieuAsync ở Backend cộng dồn theo cùng khoảng NgayGio).
@@ -114,10 +115,14 @@ struct ThongKeView: View {
                                     SubTotalRow(label: "Trả nợ tại quán", value: traNo.tongTraNoTaiQuan, color: .thongKePurple)
                                     ForEach(traNo.traNoTaiQuan) { item in
                                         AmountRow(label: item.tenKhachHang, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedTraNoKhach = TraNoKhachSelection(ten: item.tenKhachHang, isShipper: false) }
                                     }
                                     SubTotalRow(label: "Trả nợ shipper", value: traNo.tongTraNoShipper, color: .thongKePurple)
                                     ForEach(traNo.traNoShipper) { item in
                                         AmountRow(label: item.tenKhachHang, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedTraNoKhach = TraNoKhachSelection(ten: item.tenKhachHang, isShipper: true) }
                                     }
                                 }
                             }
@@ -211,6 +216,14 @@ struct ThongKeView: View {
                 Task { await load() }
             }
         }
+        .sheet(item: $selectedTraNoKhach) { selection in
+            ThanhToanChiTietSheet(
+                ten: selection.ten,
+                currentDate: currentDate,
+                ngayFilter: Calendar.current.component(.day, from: currentDate),
+                traNoIsShipper: selection.isShipper
+            )
+        }
     }
 
     private func toggle(_ card: ThongKeCard) {
@@ -243,6 +256,14 @@ struct ThongKeView: View {
         loading = false
         hasLoaded = true
     }
+}
+
+/// Định danh cho sheet(item:) khi bấm vào 1 khách trong card "Khách trả nợ" — cần cả `isShipper` vì
+/// cùng 1 tên khách có thể xuất hiện độc lập ở cả 2 nhóm tại quán/shipper trong cùng ngày.
+private struct TraNoKhachSelection: Identifiable {
+    let ten: String
+    let isShipper: Bool
+    var id: String { ten + (isShipper ? "-ship" : "-taiquan") }
 }
 
 private enum ThongKeCard: Hashable {
