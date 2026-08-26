@@ -21,6 +21,7 @@ struct ThongKeView: View {
     @State private var loading = false
     @State private var hasLoaded = false
     @State private var expandedCards: Set<ThongKeCard> = []
+    @State private var selectedNoKhachHang: TongNoItemDto?
 
     /// Tiền mặt tại quán trừ chi tiêu ngày — số tiền mặt lẽ ra còn trong ngăn kéo. Port y hệt cách
     /// Desktop tự cộng dồn 2 API (không phải field riêng từ server).
@@ -131,6 +132,8 @@ struct ThongKeView: View {
                                 } content: {
                                     ForEach(tongNo.danhSach) { item in
                                         AmountRow(label: item.tenKhachHang, value: item.tongConLai)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedNoKhachHang = item }
                                     }
                                 }
                             }
@@ -142,6 +145,9 @@ struct ThongKeView: View {
             }
         }
         .task { await load() }
+        .sheet(item: $selectedNoKhachHang) { item in
+            KhachHangNoDetailSheet(khachHangId: item.khachHangId, tenKhachHang: item.tenKhachHang)
+        }
     }
 
     private func toggle(_ card: ThongKeCard) {

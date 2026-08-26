@@ -244,10 +244,12 @@ private struct ChiTieuThangDetailSheet: View {
     }
 }
 
-/// Chi tiết 1 khách trong card "Tổng nợ hiện tại" — TongNoItemDto chỉ có tổng cộng dồn, không có
-/// hoaDonId (có thể gộp nhiều đơn), nên phải gọi lại /api/dashboard/cong-no-list rồi lọc theo
-/// khachHangId (fallback so tên nếu khách lẻ không có id) để liệt kê từng đơn còn nợ.
-private struct KhachHangNoDetailSheet: View {
+/// Chi tiết 1 khách trong card "Tổng nợ hiện tại"/"Tổng nợ" — TongNoItemDto chỉ có tổng cộng dồn,
+/// không có hoaDonId (có thể gộp nhiều đơn), nên phải gọi lại /api/dashboard/cong-no-list rồi lọc
+/// theo khachHangId (fallback so tên nếu khách lẻ không có id) để liệt kê từng đơn còn nợ. Không
+/// private — ThongKeView (bản theo ngày) tái dùng chung để bấm vào khách trong card "Tổng nợ" ra
+/// đúng layout này.
+struct KhachHangNoDetailSheet: View {
     let khachHangId: String?
     let tenKhachHang: String
 
@@ -263,21 +265,33 @@ private struct KhachHangNoDetailSheet: View {
         }
     }
 
+    private var totalText: String {
+        HoaDonFormatting.money(filtered.reduce(0) { $0 + $1.conLai })
+    }
+
     var body: some View {
         NavigationStack {
-            Group {
+            VStack(spacing: 0) {
                 if !hasLoaded {
-                    ProgressView()
+                    Spacer(); ProgressView(); Spacer()
                 } else {
                     List {
                         ForEach(filtered) { item in
-                            CongNoRowView(item: item, onSelect: { selectedHoaDonId = item.id })
+                            CongNoRowView(item: item, onSelect: { selectedHoaDonId = item.id }, showName: false)
                                 .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                         }
                     }
                     .listStyle(.plain)
+
+                    Divider()
+                    HStack {
+                        Text("Tổng nợ").font(.subheadline).foregroundColor(.textMuted)
+                        Spacer()
+                        Text(totalText).font(.headline).foregroundColor(.dangerColor)
+                    }
+                    .padding()
                 }
             }
             .navigationTitle(tenKhachHang)

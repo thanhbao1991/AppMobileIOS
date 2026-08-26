@@ -200,16 +200,26 @@ struct CongNoRowView: View {
     let item: HoaDonListDto
     /// Nil trong BillSnapshotView (ảnh render tĩnh để gửi bill — không cần tương tác).
     var onSelect: (() -> Void)? = nil
+    /// false khi list đã lọc theo 1 khách (KhachHangNoDetailSheet) — tên lặp lại y hệt ở mọi dòng
+    /// nên bỏ, nhường chỗ cho tóm tắt món lên làm dòng chính.
+    var showName: Bool = true
 
     var body: some View {
         HStack(spacing: 10) {
             Rectangle().fill(Color.dangerColor).frame(width: 4)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
-                    .font(.subheadline.bold())
+                if showName {
+                    Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
+                        .font(.subheadline.bold())
+                }
                 if let mon = item.tenMonSummary, !mon.isEmpty {
-                    Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
+                    Text(mon)
+                        .font(showName ? .footnote : .subheadline.bold())
+                        .foregroundColor(showName ? .textMuted : .primary)
+                        .lineLimit(1)
+                } else if !showName {
+                    Text("Hoá đơn").font(.subheadline.bold())
                 }
             }
             Spacer()
