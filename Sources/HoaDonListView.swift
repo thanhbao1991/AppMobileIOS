@@ -575,21 +575,19 @@ private struct AddHoaDonSheet: View {
         ("Mh", "hand.raised.fill"),
         ("App", "iphone"),
     ]
-    private let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     var body: some View {
         NavigationStack {
             Group {
                 VStack(spacing: 16) {
-                    LazyVGrid(columns: twoColumns, spacing: 12) {
+                    VStack(spacing: 12) {
                         ForEach(categories, id: \.code) { cat in
                             Button { dismiss(); onPick(cat.code) } label: {
-                                VStack(spacing: 6) {
-                                    Image(systemName: cat.icon).font(.title2)
-                                    Text(HoaDonFormatting.phanLoaiLabel(cat.code)).font(.subheadline.bold())
+                                HStack {
+                                    Image(systemName: cat.icon)
+                                    Text(HoaDonFormatting.phanLoaiLabel(cat.code))
+                                    Spacer()
                                 }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
                             }
                             .buttonStyle(.bordered)
                             .buttonBorderShape(.roundedRectangle(radius: 12))
