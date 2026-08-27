@@ -31,12 +31,18 @@ final class DesktopScreenStore: ObservableObject {
         pollTask = nil
     }
 
+    private let intervalNs: UInt64 = 500_000_000
+
     /// Poll mỗi 500ms tới khi bị stop() — khớp Desktop up mỗi 500ms (xem `DesktopScreenUploader.cs`).
     /// Không tìm thấy khung (Desktop chưa mở app, chưa từng POST lần nào) hay lỗi mạng chỉ giữ
     /// nguyên spinner, không báo lỗi cho người dùng — máy POS thật hay khởi động Desktop client trễ
     /// hơn lúc mở app này.
+    /// Nhịp tự bù (đo elapsed thật, chỉ đợi phần còn thiếu) — trước đây `sleep` 500ms CỐ ĐỊNH sau
+    /// mỗi request khiến khoảng cách thật giữa 2 lần fetch trôi dần lên >1s khi request nào đó chậm
+    /// (mạng chờn), biểu hiện thành đồng hồ "Chờ" hiển thị nhảy 2 giây thay vì 1.
     private func pollLoop() async {
         while !Task.isCancelled {
+            let start = DispatchTime.now()
             if let result = await APIClient.shared.getDesktopScreenFrame(label: targetLabel),
                let decoded = UIImage(data: result.data) {
                 image = decoded
@@ -44,7 +50,11 @@ final class DesktopScreenStore: ObservableObject {
             } else if image != nil {
                 isStale = true
             }
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            let elapsedNs = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
+            let remainingNs = elapsedNs < intervalNs ? intervalNs - elapsedNs : 0
+            if remainingNs > 0 {
+                try? await Task.sleep(nanoseconds: remainingNs)
+            }
         }
     }
 }
