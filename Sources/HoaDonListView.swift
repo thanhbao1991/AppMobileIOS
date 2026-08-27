@@ -648,7 +648,9 @@ private struct AddHoaDonSheet: View {
             }
         }
         .presentationDetents([.medium])
-        .presentationDragIndicator(.hidden)
+        // Pill giữ khoảng đệm trên cùng cho "Đóng"/title — ẩn đi thì title dính sát mép sheet
+        // (đã thử bỏ, bị lỗi dính sát y hệt trước khi thêm padding-top, xem lịch sử commit).
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -728,7 +730,6 @@ private struct AppOrderPickerSheet: View {
             loading = false
         }
         .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.hidden)
     }
 
     private func pick(_ order: AppOrderSummaryDto) async {
@@ -809,7 +810,6 @@ private struct KhachGoiSomSheet: View {
             loading = false
         }
         .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.hidden)
     }
 
     private func row(_ item: KhachHangGoiSomDto) -> some View {
