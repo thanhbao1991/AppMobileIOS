@@ -622,7 +622,9 @@ private struct AddHoaDonSheet: View {
 
                 Spacer()
             }
-            .padding()
+            .padding(.horizontal)
+            .padding(.bottom)
+            .padding(.top, 20)
             .navigationTitle("Thêm hoá đơn")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
