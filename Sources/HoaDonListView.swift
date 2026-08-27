@@ -82,7 +82,11 @@ struct HoaDonListView: View {
                                         if let avatarName = filter.avatarName {
                                             ShipperAvatarView(name: avatarName, size: 20)
                                         } else if let systemIcon = filter.systemIcon {
-                                            Image(systemName: systemIcon)
+                                            // Tô màu khớp icon PhanLoai ở thanh tổng cuối màn hình
+                                            // (phanLoaiTotals) — UIMenu có thể tự ép về 1 tint hệ
+                                            // thống bất kể đặt màu gì (giống việc text bị ép plain ở
+                                            // trên), nên đây là best-effort, không chắc hiện đúng màu.
+                                            Image(systemName: systemIcon).foregroundColor(filter.iconColor)
                                         }
                                     } icon: {
                                         // Menu native iOS (UIMenu) không cho custom màu/font trên text item —
@@ -296,7 +300,7 @@ struct ShipperAvatarView: View {
 enum HoaDonQuickFilter: CaseIterable, Hashable {
     case tiNuaChuyenKhoan, ghiNo, traNo, chuaChon
     case chuaThanhToan, daGhiNo
-    case taiCho, ship, muaVe, muaHo, app
+    case ship, taiCho, muaVe, muaHo, app
 
     /// Nhóm để chèn Divider giữa các cụm filter trong menu — đổi giá trị này thì đổi luôn vị trí
     /// đường phân cách, không cần sửa view.
@@ -352,6 +356,12 @@ enum HoaDonQuickFilter: CaseIterable, Hashable {
         case .app: return "iphone"
         default: return nil
         }
+    }
+
+    /// Khớp màu icon PhanLoai dùng ở thanh tổng cuối màn hình (`phanLoaiTotals`) — cùng nguồn
+    /// `HoaDonFormatting.phanLoaiColor` để không lệch màu giữa 2 nơi.
+    var iconColor: Color {
+        HoaDonFormatting.phanLoaiColor(phanLoaiCode)
     }
 
     private var phanLoaiCode: String? {
