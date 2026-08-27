@@ -261,6 +261,19 @@ actor APIClient {
 
     /// Proxy VietQR qua Backend (bank config chỉ sống ở BankQrConfig phía server — Desktop/Mobile
     /// dùng chung, iOS gọi qua đây nên đổi tài khoản 1 chỗ là mọi client ra cùng 1 mã QR).
+    /// Ảnh HoaDonGrid mới nhất từ máy Desktop `label` (2026-08-27: đổi từ SignalR push sang HTTP
+    /// GET thường, xem DesktopScreenController phía Backend + DesktopScreenView.swift) — trả kèm
+    /// tuổi khung hình (ms) đọc từ header `X-Frame-Age-Ms` để view tự quyết "đã lâu không có khung
+    /// mới" thay vì đo timestamp cục bộ, phòng đồng hồ máy lệch.
+    func getDesktopScreenFrame(label: String) async -> (data: Data, ageMs: Int)? {
+        let encodedLabel = label.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? label
+        let req = makeRequest("/api/desktopscreen/\(encodedLabel)/frame")
+        let (data, http) = await send(req)
+        guard let data, http?.statusCode == 200 else { return nil }
+        let ageMs = Int(http?.value(forHTTPHeaderField: "X-Frame-Age-Ms") ?? "") ?? 0
+        return (data, ageMs)
+    }
+
     func getBillQrImage(amount: Double, addInfo: String) async -> Data? {
         let vnd = Int(amount.rounded())
         let query = "amount=\(vnd)&addInfo=\(addInfo.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"

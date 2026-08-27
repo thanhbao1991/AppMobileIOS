@@ -33,16 +33,16 @@ struct ContentView: View {
             }
         }
         // Đổi app qua lại (background→foreground) khiến kết nối SignalR chết âm thầm — không kick
-        // ngay thì phải chờ backoff (3-30s) tự retry mới nối lại, trong lúc đó MỌI invoke() (kể cả
-        // tap-to-click ở tab Xem màn hình Desktop) fail âm thầm (dùng try?), trông như "không hoạt
-        // động" dù chỉ đang chờ reconnect.
+        // ngay thì phải chờ backoff (3-30s) tự retry mới nối lại (tab Xem màn hình Desktop giờ
+        // không còn phụ thuộc SignalR nữa — HTTP polling thuần — nhưng EntityChanged/tin nhắn vẫn
+        // qua kênh này nên vẫn cần kick sớm).
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .background {
                 // Không có UIBackgroundModes nào khai báo → iOS suspend app gần như ngay khi vào nền,
                 // socket WebSocket chết theo. beginBackgroundTask xin thêm ~30s thực thi (mức Apple
                 // cấp cho tác vụ thường, không cần entitlement) — đủ để việc đổi app NHANH (xem tin
                 // nhắn rồi quay lại ngay, không phải rời hẳn nhiều phút) không làm rớt kết nối, khỏi
-                // phải chờ StartWatchingDesktop nối lại từ đầu ở tab Xem màn hình Desktop.
+                // phải chờ backoff tự retry mới nhận lại EntityChanged/tin nhắn.
                 backgroundTaskId = UIApplication.shared.beginBackgroundTask(withName: "signalr-keep-alive") {
                     UIApplication.shared.endBackgroundTask(backgroundTaskId)
                     backgroundTaskId = .invalid

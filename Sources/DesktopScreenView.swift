@@ -1,40 +1,31 @@
 import SwiftUI
 import UIKit
 
-/// Xem cửa sổ app Desktop client (POS) đang chạy trên máy `targetLabel` cố định (2026-08-26: bỏ hẳn
-/// bước chọn máy — trước đây cho chọn giữa nhiều máy đang mở app, nhưng thực tế chỉ cần xem đúng 1
-/// máy POS thật (`DESKTOP-118TMVD`) nên vào thẳng, không cần dải chọn máy nữa). Chỉ mở từ icon cạnh
-/// nút "+" ở tab Hoá đơn (`HoaDonListView`, dạng sheet giống form thêm hoá đơn) — đã bỏ khỏi menu
-/// chung (`MainTabView`). Vào watch gọi `StartWatchingDesktop`
-/// 1 lần, Desktop tự chụp+gửi 1 khung JPEG FULL-FRAME mỗi 250ms qua `ScreenshotReceived` (không
-/// dirty-rect) tới khi rời màn hình gọi `StopWatchingDesktop`. 1 watchdog tự gọi lại
-/// `StartWatchingDesktop` nếu lâu không có khung hình mới (mạng rớt/reconnect).
-/// READ-ONLY thuần — bỏ hẳn click (2026-08-26, sau nhiều lần vẫn không chính xác dù đã verify
-/// Desktop+Backend hoàn toàn ổn — không đáng công sức tiếp tục dò lệch toạ độ). Desktop chỉ chụp
-/// đúng vùng `HoaDonGrid` (control luôn Visibility=Visible + RenderTargetBitmap, xem
-/// `SignalRClient.cs`/`DashboardWindow.xaml` phía Desktop) chứ không phải toàn màn hình — GỬI ĐƯỢC
-/// DÙ Desktop đang xem tab khác, không riêng lúc tab Hoá đơn đang mở. Ảnh nhận về hiển thị NGUYÊN
-/// TỈ LỆ (`.scaledToFit`, không crop/pan/zoom) để khỏi méo hình.
+/// Xem cửa sổ app Desktop client (POS) đang chạy trên máy `targetLabel` cố định. Chỉ mở từ icon
+/// cạnh nút "+" ở tab Hoá đơn (`HoaDonListView`, dạng sheet giống form thêm hoá đơn).
+/// (2026-08-27: đổi hẳn từ SignalR push sang HTTP GET polling — Desktop tự POST ảnh HoaDonGrid lên
+/// Backend mỗi 1s (xem `DesktopScreenUploader.cs`), view này chỉ GET khung mới nhất mỗi 700ms qua
+/// `APIClient.getDesktopScreenFrame`. Không còn khái niệm "kết nối"/connectionId gì để bị lệch —
+/// mỗi request độc lập, request trước rớt không ảnh hưởng request sau. Trước đây qua SignalR hub
+/// (StartWatchingDesktop/GetConnectedDesktops) đã gặp nhiều bug do phải khớp đúng 1 connectionId
+/// đang sống tại đúng thời điểm — xem lịch sử trong memory `project_desktop_screen_view_ios`.)
+/// READ-ONLY thuần. Desktop chỉ chụp đúng vùng `HoaDonGrid` (control luôn Visibility=Visible +
+/// RenderTargetBitmap) chứ không phải toàn màn hình — nhận được dù Desktop đang xem tab khác. Ảnh
+/// hiển thị NGUYÊN TỈ LỆ (`.scaledToFit`, không crop/pan/zoom) để khỏi méo hình.
 struct DesktopScreenView: View {
     /// Tên máy cố định — đúng máy POS thật đang chạy Desktop client (xem memory
     /// `feedback_138_kill_no_ask`), không còn cho chọn máy khác nữa.
     private let targetLabel = "DESKTOP-118TMVD"
 
-    @State private var selectedDesktopId: String?
     @State private var image: UIImage?
-    @State private var isReconnecting = false
-    @State private var watchdogTask: Task<Void, Never>?
-    @State private var lastFrameAt: Date = .distantPast
+    /// Quá lâu không có khung hình mới (Desktop tắt/mất mạng) — server trả kèm tuổi khung hình qua
+    /// header, không đo timestamp cục bộ để tránh lệch đồng hồ máy.
+    @State private var isStale = false
 
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
 
-    /// Chiều cao sheet tính THẲNG từ chiều rộng màn hình (không đo động qua GeometryReader/PreferenceKey
-    /// nữa — bản trước dùng cách đó nhưng `presentationDetents` lại bị đặt bên trong nội dung của
-    /// `NavigationStack` do `HoaDonListView` bọc `NavigationStack { DesktopScreenView() }` từ bên ngoài,
-    /// khiến SwiftUI không áp dụng detent đúng (sheet co về gần kích thước tối thiểu). Giờ
-    /// `DesktopScreenView` tự bọc `NavigationStack` và đặt `presentationDetents` NGOÀI nó — đúng cấp
-    /// theo yêu cầu của SwiftUI.
+    /// Chiều cao sheet tính THẲNG từ chiều rộng màn hình — xem giải thích trong bản gốc trước đây:
+    /// `presentationDetents` phải đặt NGOÀI `NavigationStack` mới được SwiftUI áp dụng đúng.
     private let navBarHeightEstimate: CGFloat = 44
     private var contentHeight: CGFloat { screenWidth / screenAspectRatio }
 
@@ -49,25 +40,13 @@ struct DesktopScreenView: View {
                         Button("Đóng") { dismiss() }
                     }
                 }
-                .task { await connectLoop() }
-                .onDisappear { stopWatching() }
-                .onChange(of: scenePhase) { newPhase in
-                    guard let id = selectedDesktopId, newPhase == .active else { return }
-                    isReconnecting = true
-                    Task { _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [id]) }
-                }
+                .task { await pollLoop() }
         }
         .presentationDetents([.height(contentHeight + navBarHeightEstimate)])
     }
 
     /// Khung đen chỉ cao vừa đúng theo tỉ lệ ảnh nhận được (Desktop chụp `HoaDonGrid` — thường lùn,
-    /// rộng hơn nhiều so với màn hình dọc điện thoại) — trước đây ép `maxHeight: .infinity` khiến
-    /// khung cao gần hết màn hình trong khi ảnh chỉ chiếm 1 dải mỏng ở giữa do `scaledToFit`, để lộ
-    /// viền đen thừa rất nhiều phía trên/dưới.
-    // Chiều cao tính THẲNG theo chiều rộng màn hình (cố định, không phụ thuộc layout của sheet) —
-    // trước đây dùng .aspectRatio(fit) + .frame(maxWidth: .infinity) khiến chiều cao của khung này
-    // và chiều cao đo được của sheet (qua GeometryReader ở `body`) phụ thuộc vòng tròn lẫn nhau,
-    // SwiftUI xử lý bằng cách co khung này về gần 0 (chỉ còn navbar+picker strip hiện ra được).
+    /// rộng hơn nhiều so với màn hình dọc điện thoại).
     @ViewBuilder
     private var screenArea: some View {
         ZStack {
@@ -81,10 +60,7 @@ struct DesktopScreenView: View {
                 ProgressView().tint(.white)
             }
 
-            // App bị hạ xuống nền một lúc rồi mở lại trong lúc vẫn ở màn hình này — poll/kết nối
-            // SignalR đã treo/rớt trong lúc đó, ảnh cũ vẫn còn hiện nên cần báo rõ đang nối lại,
-            // tránh người dùng tưởng app bị đơ.
-            if isReconnecting {
+            if isStale {
                 VStack(spacing: 8) {
                     ProgressView().tint(.white)
                     Text("Đang kết nối lại...")
@@ -104,89 +80,19 @@ struct DesktopScreenView: View {
         return image.size.width / image.size.height
     }
 
-    /// Tự thử lại mỗi 1s đến khi tìm thấy máy — không báo "chưa mở app", chỉ hiện loading liên tục,
-    /// vì máy POS thật hay khởi động Desktop client trễ hơn lúc người dùng mở form này. `.task` tự
-    /// huỷ khi sheet đóng (SwiftUI cancel `.task` lúc view biến mất) nên vòng lặp này tự dừng theo,
-    /// không cần quản lý thủ công như `watchdogTask`. (2026-08-26: rút từ 2s xuống 1s — bên Desktop
-    /// đã rút backoff reconnect xuống còn 2s khởi điểm thay vì cố định 10s, poll 2s cũ cộng dồn thêm
-    /// độ trễ không cần thiết vào đúng lúc Desktop vừa kết nối lại xong.)
-    private func connectLoop() async {
+    /// Poll mỗi 700ms tới khi sheet đóng (`.task` tự huỷ khi view biến mất). Không tìm thấy khung
+    /// (Desktop chưa mở app, chưa từng POST lần nào) hay lỗi mạng chỉ giữ nguyên spinner, không báo
+    /// lỗi cho người dùng — máy POS thật hay khởi động Desktop client trễ hơn lúc mở form này.
+    private func pollLoop() async {
         while !Task.isCancelled {
-            if let desktops = try? await SignalRClient.shared.fetchConnectedDesktops(),
-               let match = desktops.first(where: { $0.value == targetLabel }) {
-                selectedDesktopId = match.key
-                startWatching()
-                return
+            if let result = await APIClient.shared.getDesktopScreenFrame(label: targetLabel),
+               let decoded = UIImage(data: result.data) {
+                image = decoded
+                isStale = result.ageMs > 2500
+            } else if image != nil {
+                isStale = true
             }
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            try? await Task.sleep(nanoseconds: 700_000_000)
         }
-    }
-
-    private func startWatching() {
-        guard let id = selectedDesktopId else { return }
-        Task {
-            await SignalRClient.shared.setScreenshotHandler { data, x, y, w, h in
-                applyFrame(data, x: x, y: y, w: w, h: h)
-            }
-            _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [id])
-        }
-
-        // Desktop tự đẩy khung hình MỖI 250ms KHÔNG ĐIỀU KIỆN (HoaDonGrid luôn render — xem
-        // SignalRClient.cs phía Desktop — nên gửi được bất kể đang xem tab nào trên Desktop). Quá 1.5s
-        // không có khung mới (~6 nhịp) là tín hiệu mất kết nối đáng tin cậy — tự gọi lại
-        // StartWatchingDesktop liên tục cho tới khi có khung mới, không giới hạn số lần thử, không
-        // báo lỗi cho người dùng (chỉ cần spinner loading, xem screenArea).
-        watchdogTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled, let id = selectedDesktopId else { return }
-
-                guard Date().timeIntervalSince(lastFrameAt) > 1.5 else { continue }
-
-                _ = await tryResolveNewId()
-                _ = try? await SignalRClient.shared.invoke("StartWatchingDesktop", args: [selectedDesktopId ?? id])
-            }
-        }
-    }
-
-    private func stopWatching() {
-        watchdogTask?.cancel()
-        watchdogTask = nil
-        guard let id = selectedDesktopId else { return }
-        Task {
-            _ = try? await SignalRClient.shared.invoke("StopWatchingDesktop", args: [id])
-            await SignalRClient.shared.setScreenshotHandler(nil)
-        }
-    }
-
-    /// Vẽ đè khung hình mới (có thể chỉ là 1 dải dirty-rect) lên canvas đang hiển thị. Khung hình
-    /// đầu tiên (chưa có canvas) hoặc khung "chữa lành" định kỳ (kích thước khác canvas hiện có)
-    /// coi như thay hẳn canvas; còn lại vẽ patch đúng vị trí (x, y) lên canvas cũ.
-    @MainActor
-    private func applyFrame(_ data: Data, x: Int, y: Int, w: Int, h: Int) {
-        guard let patch = UIImage(data: data) else { return }
-        let isFullReplace = x == 0 && y == 0
-            && (image == nil || CGSize(width: w, height: h) != image!.size)
-        if isFullReplace {
-            image = patch
-        } else if let canvas = image {
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            let renderer = UIGraphicsImageRenderer(size: canvas.size, format: format)
-            image = renderer.image { _ in
-                canvas.draw(at: .zero)
-                patch.draw(at: CGPoint(x: x, y: y))
-            }
-        }
-        lastFrameAt = Date()
-        isReconnecting = false
-    }
-
-    private func tryResolveNewId() async -> Bool {
-        guard let desktops = try? await SignalRClient.shared.fetchConnectedDesktops(),
-              let match = desktops.first(where: { $0.value == targetLabel }),
-              match.key != selectedDesktopId else { return false }
-        selectedDesktopId = match.key
-        return true
     }
 }
