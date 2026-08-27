@@ -17,13 +17,16 @@ struct ContentView: View {
                 LoginView(isLoggedIn: $isLoggedIn)
             }
         }
+        // Hiện lý do vừa rung (xem EntityChangeBus.toastText) — đặt ở gốc ContentView để hiện đè lên
+        // MỌI tab, không riêng tab đang xem.
+        .overlay(alignment: .top) { SignalToastBanner() }
         .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in
             isLoggedIn = false
         }
         .onChange(of: isLoggedIn) { loggedIn in
             if loggedIn {
-                Task { await SignalRClient.shared.start { entity, action, id in
-                    EntityChangeBus.shared.post(entity, action, id)
+                Task { await SignalRClient.shared.start { entity, action, id, voice in
+                    EntityChangeBus.shared.post(entity, action, id, voice: voice)
                 } }
             } else {
                 Task { await SignalRClient.shared.stop() }
@@ -65,10 +68,32 @@ struct ContentView: View {
         }
         .task {
             if isLoggedIn {
-                await SignalRClient.shared.start { entity, action, id in
-                    EntityChangeBus.shared.post(entity, action, id)
+                await SignalRClient.shared.start { entity, action, id, voice in
+                    EntityChangeBus.shared.post(entity, action, id, voice: voice)
                 }
             }
+        }
+    }
+}
+
+/// Banner ngắn hiện lý do rung, tự tắt sau vài giây (EntityChangeBus xoá toastText). Không chặn
+/// thao tác — đặt lên trên cùng, cho phép chạm xuyên qua phần trống còn lại của màn hình.
+private struct SignalToastBanner: View {
+    @ObservedObject private var bus = EntityChangeBus.shared
+
+    var body: some View {
+        if let text = bus.toastText {
+            Text(text)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+                .padding(.top, 8)
+                .padding(.horizontal, 16)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: bus.toastText)
+                .allowsHitTesting(false)
         }
     }
 }

@@ -15,14 +15,16 @@ actor SignalRClient {
     private var pendingInvocations: [String: CheckedContinuation<Any?, Error>] = [:]
     private var loopTask: Task<Void, Never>?
 
-    /// entityName, action, id — nhận trên MainActor để các View cập nhật @State an toàn.
-    private var onEntityChanged: (@MainActor (String, String, String) -> Void)?
+    /// entityName, action, id, voice — nhận trên MainActor để các View cập nhật @State an toàn.
+    /// voice là chuỗi "hiển thị||đọc" backend gửi kèm (rỗng nếu signal không có mô tả riêng) — dùng
+    /// để báo lý do rung cho nhân viên (xem EntityChangeBus.notifyReceived).
+    private var onEntityChanged: (@MainActor (String, String, String, String) -> Void)?
     /// Tab "Xem màn hình Desktop" gán khi đang mở, gỡ khi rời view — ảnh JPEG (dirty-rect, không
     /// phải lúc nào cũng full-frame) + toạ độ x/y/w/h cần vẽ đè lên canvas hiện có, trả về từ
     /// Desktop client qua "ScreenshotReceived".
     private var onScreenshotReceived: (@MainActor (Data, Int, Int, Int, Int) -> Void)?
 
-    func start(onEntityChanged: @escaping @MainActor (String, String, String) -> Void) {
+    func start(onEntityChanged: @escaping @MainActor (String, String, String, String) -> Void) {
         self.onEntityChanged = onEntityChanged
         guard !shouldRun else { return }
         shouldRun = true
@@ -184,8 +186,9 @@ actor SignalRClient {
 
         if target == "EntityChanged", args.count >= 3,
            let entityName = args[0] as? String, let action = args[1] as? String, let id = args[2] as? String {
+            let voice = (args.count >= 5 ? args[4] as? String : nil) ?? ""
             let callback = onEntityChanged
-            Task { @MainActor in callback?(entityName, action, id) }
+            Task { @MainActor in callback?(entityName, action, id, voice) }
         } else if target == "ScreenshotReceived", args.count >= 5,
                   let base64 = args[0] as? String, let imageData = Data(base64Encoded: base64),
                   let x = (args[1] as? NSNumber)?.intValue, let y = (args[2] as? NSNumber)?.intValue,
