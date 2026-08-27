@@ -726,7 +726,8 @@ private struct AppOrderPickerSheet: View {
             loadError = result.message
             loading = false
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
     }
 
     private func pick(_ order: AppOrderSummaryDto) async {
@@ -806,7 +807,8 @@ private struct KhachGoiSomSheet: View {
             items = await APIClient.shared.getKhachHangHayGoiSom()
             loading = false
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
     }
 
     private func row(_ item: KhachHangGoiSomDto) -> some View {
