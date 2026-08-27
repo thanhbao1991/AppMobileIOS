@@ -94,6 +94,7 @@ struct DesktopScreenView: View {
                 }
         }
         .presentationDetents([.height(contentHeight + navBarHeightEstimate)])
+        .presentationDragIndicator(.visible)
     }
 
     /// Khung đen chỉ cao vừa đúng theo tỉ lệ ảnh nhận được (Desktop chụp `HoaDonGrid` — thường lùn,

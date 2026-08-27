@@ -646,6 +646,7 @@ private struct AddHoaDonSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -725,7 +726,7 @@ private struct AppOrderPickerSheet: View {
             loading = false
         }
         .presentationDetents([.large])
-        .presentationDragIndicator(.hidden)
+        .presentationDragIndicator(.visible)
     }
 
     private func pick(_ order: AppOrderSummaryDto) async {
@@ -806,7 +807,7 @@ private struct KhachGoiSomSheet: View {
             loading = false
         }
         .presentationDetents([.large])
-        .presentationDragIndicator(.hidden)
+        .presentationDragIndicator(.visible)
     }
 
     private func row(_ item: KhachHangGoiSomDto) -> some View {

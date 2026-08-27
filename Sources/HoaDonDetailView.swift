@@ -368,6 +368,7 @@ struct HoaDonDetailView: View {
             }
         }
         .presentationDetents([.height(220)])
+        .presentationDragIndicator(.visible)
     }
 
     /// SĐT dưới tên khách hàng — nhấp để gọi (thay cho icon SĐT trên card danh sách đã bỏ).

@@ -77,6 +77,7 @@ struct DaySearchBar: View {
                 Spacer()
             }
             .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
     }
 }
@@ -124,6 +125,7 @@ struct DayDateBar: View {
                 Spacer()
             }
             .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
     }
 }
@@ -153,6 +155,7 @@ struct MonthDateBar: View {
                 onChange()
             }
             .presentationDetents([.height(260)])
+        .presentationDragIndicator(.visible)
         }
     }
 }

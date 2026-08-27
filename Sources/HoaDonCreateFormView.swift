@@ -774,6 +774,7 @@ private struct ProductPickerSheet: View {
             }
         }
         .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
         .onAppear { preloadEditing() }
     }
 
