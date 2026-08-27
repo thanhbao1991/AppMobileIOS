@@ -623,6 +623,7 @@ private struct AddHoaDonSheet: View {
                 Spacer()
             }
             .padding()
+            .navigationTitle("Thêm hoá đơn")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
