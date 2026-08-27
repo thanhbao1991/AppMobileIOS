@@ -577,6 +577,12 @@ private struct AddHoaDonSheet: View {
     ]
     private let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
+    /// Chiều cao cố định thay vì `.medium` — copy nguyên layout từ `DesktopScreenView` (sheet DUY
+    /// NHẤT chưa từng bị lỗi "Đóng" dính mép). `.medium` reserve riêng 1 khoảng cho drag-handle mà
+    /// khi ẩn handle sẽ collapse mất, còn `.height(cố định)` không có chuyện đó — không cần đụng gì
+    /// tới `presentationDragIndicator` nữa (mặc định ẩn, không lỗi).
+    private let sheetHeight: CGFloat = 560
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
@@ -622,9 +628,7 @@ private struct AddHoaDonSheet: View {
 
                 Spacer()
             }
-            .padding(.horizontal)
-            .padding(.bottom)
-            .padding(.top, 20)
+            .padding()
             .navigationTitle("Thêm hoá đơn")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -647,10 +651,7 @@ private struct AddHoaDonSheet: View {
                 onPickAppOrder(items, ghiChu, warnings)
             }
         }
-        .presentationDetents([.medium])
-        // Pill giữ khoảng đệm trên cùng cho "Đóng"/title — ẩn đi thì title dính sát mép sheet
-        // (đã thử bỏ, bị lỗi dính sát y hệt trước khi thêm padding-top, xem lịch sử commit).
-        .presentationDragIndicator(.visible)
+        .presentationDetents([.height(sheetHeight)])
     }
 }
 
