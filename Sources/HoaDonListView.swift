@@ -577,58 +577,54 @@ private struct AddHoaDonSheet: View {
     ]
     private let twoColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
-    /// Chiều cao cố định thay vì `.medium` — copy nguyên layout từ `DesktopScreenView` (sheet DUY
-    /// NHẤT chưa từng bị lỗi "Đóng" dính mép). `.medium` reserve riêng 1 khoảng cho drag-handle mà
-    /// khi ẩn handle sẽ collapse mất, còn `.height(cố định)` không có chuyện đó — không cần đụng gì
-    /// tới `presentationDragIndicator` nữa (mặc định ẩn, không lỗi).
-    private let sheetHeight: CGFloat = 560
-
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                LazyVGrid(columns: twoColumns, spacing: 12) {
-                    ForEach(categories, id: \.code) { cat in
-                        Button { dismiss(); onPick(cat.code) } label: {
-                            VStack(spacing: 6) {
-                                Image(systemName: cat.icon).font(.title2)
-                                Text(HoaDonFormatting.phanLoaiLabel(cat.code)).font(.subheadline.bold())
+            Group {
+                VStack(spacing: 16) {
+                    LazyVGrid(columns: twoColumns, spacing: 12) {
+                        ForEach(categories, id: \.code) { cat in
+                            Button { dismiss(); onPick(cat.code) } label: {
+                                VStack(spacing: 6) {
+                                    Image(systemName: cat.icon).font(.title2)
+                                    Text(HoaDonFormatting.phanLoaiLabel(cat.code)).font(.subheadline.bold())
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.roundedRectangle(radius: 12))
+                            .tint(HoaDonFormatting.phanLoaiColor(cat.code))
                         }
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.roundedRectangle(radius: 12))
-                        .tint(HoaDonFormatting.phanLoaiColor(cat.code))
                     }
-                }
 
-                Button { showGoiSom = true } label: {
-                    HStack {
-                        Image(systemName: "clock.fill")
-                        Text("Đơn 7h — khách hay gọi sớm")
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption)
+                    Button { showGoiSom = true } label: {
+                        HStack {
+                            Image(systemName: "clock.fill")
+                            Text("Đơn 7h — khách hay gọi sớm")
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption)
+                        }
                     }
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: 12))
-                .tint(.brandPrimary)
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 12))
+                    .tint(.brandPrimary)
 
-                Button { showAppOrder = true } label: {
-                    HStack {
-                        Image(systemName: "app.badge.checkmark")
-                        Text("Bắt đơn App — lấy đơn từ store")
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption)
+                    Button { showAppOrder = true } label: {
+                        HStack {
+                            Image(systemName: "app.badge.checkmark")
+                            Text("Bắt đơn App — lấy đơn từ store")
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption)
+                        }
                     }
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: 12))
-                .tint(.dangerColor)
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 12))
+                    .tint(.dangerColor)
 
-                Spacer()
+                    Spacer()
+                }
+                .padding()
             }
-            .padding()
             .navigationTitle("Thêm hoá đơn")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -651,7 +647,7 @@ private struct AddHoaDonSheet: View {
                 onPickAppOrder(items, ghiChu, warnings)
             }
         }
-        .presentationDetents([.height(sheetHeight)])
+        .presentationDetents([.medium, .large])
     }
 }
 
