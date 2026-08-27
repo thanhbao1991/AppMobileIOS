@@ -646,6 +646,9 @@ private struct AddHoaDonSheet: View {
             }
         }
         .presentationDetents([.medium])
+        // Chỉ 1 detent nên SwiftUI tự ẩn thanh kéo (grey pill) — ép hiện lại để khoảng cách "Đóng"
+        // xuống đỉnh sheet khớp các sheet nhiều detent khác (KhachGoiSomSheet, AppOrderPickerSheet...).
+        .presentationDragIndicator(.visible)
     }
 }
 
