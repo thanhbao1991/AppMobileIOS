@@ -28,8 +28,10 @@ struct ContentView: View {
                 Task { await SignalRClient.shared.start { entity, action, id, voice in
                     EntityChangeBus.shared.post(entity, action, id, voice: voice)
                 } }
+                DesktopScreenStore.shared.start()
             } else {
                 Task { await SignalRClient.shared.stop() }
+                DesktopScreenStore.shared.stop()
             }
         }
         // Đổi app qua lại (background→foreground) khiến kết nối SignalR chết âm thầm — không kick
@@ -47,6 +49,9 @@ struct ContentView: View {
                     UIApplication.shared.endBackgroundTask(backgroundTaskId)
                     backgroundTaskId = .invalid
                 }
+                // Poll màn hình Desktop dừng luôn lúc vào nền — không có ý nghĩa gì khi user không
+                // nhìn thấy màn hình (khác SignalR, không cần giữ "sống" qua background).
+                DesktopScreenStore.shared.stop()
             } else if newPhase == .active {
                 if backgroundTaskId != .invalid {
                     UIApplication.shared.endBackgroundTask(backgroundTaskId)
@@ -63,6 +68,7 @@ struct ContentView: View {
                             await SignalRClient.shared.kickReconnect()
                         }
                     }
+                    DesktopScreenStore.shared.start()
                 }
             }
         }
@@ -71,6 +77,7 @@ struct ContentView: View {
                 await SignalRClient.shared.start { entity, action, id, voice in
                     EntityChangeBus.shared.post(entity, action, id, voice: voice)
                 }
+                DesktopScreenStore.shared.start()
             }
         }
     }
