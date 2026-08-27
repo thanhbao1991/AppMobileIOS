@@ -237,6 +237,7 @@ struct ChiTieuThangDetailSheet: View {
                 }
             }
         }
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -299,6 +300,7 @@ struct KhachHangNoDetailSheet: View {
         )) { wrapped in
             HoaDonDetailView(hoaDonId: wrapped.value) {}
         }
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -392,6 +394,7 @@ struct ThanhToanChiTietSheet: View {
         )) { wrapped in
             HoaDonDetailView(hoaDonId: wrapped.value) {}
         }
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -473,6 +476,7 @@ struct DoanhThuChiTietSheet: View {
         )) { wrapped in
             HoaDonDetailView(hoaDonId: wrapped.value) {}
         }
+        .presentationDragIndicator(.visible)
     }
 }
 
