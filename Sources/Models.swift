@@ -180,6 +180,7 @@ struct ChiTieuHangNgayDto: Decodable, Identifiable {
 }
 
 struct ChiTieuHangNgayCreateRequest: Encodable {
+    let ten: String
     let soLuong: Double
     let donGia: Double
     let thanhTien: Double

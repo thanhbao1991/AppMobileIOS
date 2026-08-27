@@ -207,7 +207,7 @@ private struct EditExpenseGhiChuSheet: View {
         let ngayIso = (item.ngay ?? item.ngayGio) ?? ""
         let ngayGioIso = item.ngayGio ?? ngayIso
         let body = ChiTieuHangNgayCreateRequest(
-            soLuong: item.soLuong, donGia: item.donGia, thanhTien: item.thanhTien,
+            ten: item.ten, soLuong: item.soLuong, donGia: item.donGia, thanhTien: item.thanhTien,
             ghiChu: ghiChu.isEmpty ? nil : ghiChu, ngay: ngayIso, ngayGio: ngayGioIso,
             nguyenLieuId: item.nguyenLieuId, billThang: item.billThang
         )
@@ -316,7 +316,8 @@ struct AddExpenseSheet: View {
         errorMessage = nil
         let dateIso = DateNavFormat.queryDate.string(from: date) + "T00:00:00"
         let body = ChiTieuHangNgayCreateRequest(
-            soLuong: soLuong, donGia: donGia, thanhTien: thanhTien, ghiChu: ghiChu.isEmpty ? nil : ghiChu,
+            ten: selected.ten, soLuong: soLuong, donGia: donGia, thanhTien: thanhTien,
+            ghiChu: ghiChu.isEmpty ? nil : ghiChu,
             ngay: dateIso, ngayGio: dateIso, nguyenLieuId: selected.id, billThang: billThang
         )
         let result = await APIClient.shared.createChiTieu(body)
