@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import UIKit
 
 struct HoaDonListView: View {
     @ObservedObject private var deepLink = DeepLinkRouter.shared
@@ -54,6 +55,15 @@ struct HoaDonListView: View {
         }
     }
 
+    /// Icon SF Symbol có màu bake sẵn, dùng riêng cho item trong `Menu` — xem giải thích tại chỗ gọi.
+    private func coloredMenuIcon(_ systemName: String, _ color: Color) -> Image {
+        guard let uiImage = UIImage(systemName: systemName)?
+            .withTintColor(UIColor(color), renderingMode: .alwaysOriginal) else {
+            return Image(systemName: systemName)
+        }
+        return Image(uiImage: uiImage)
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -82,11 +92,13 @@ struct HoaDonListView: View {
                                         if let avatarName = filter.avatarName {
                                             ShipperAvatarView(name: avatarName, size: 20)
                                         } else if let systemIcon = filter.systemIcon {
-                                            // Tô màu khớp icon PhanLoai ở thanh tổng cuối màn hình
-                                            // (phanLoaiTotals) — UIMenu có thể tự ép về 1 tint hệ
-                                            // thống bất kể đặt màu gì (giống việc text bị ép plain ở
-                                            // trên), nên đây là best-effort, không chắc hiện đúng màu.
-                                            Image(systemName: systemIcon).foregroundColor(filter.iconColor)
+                                            // .foregroundColor() KHÔNG ăn trong UIMenu — hệ thống tự
+                                            // ép icon SF Symbol về chế độ template rồi tint lại theo
+                                            // 1 màu chung (đã verify thấy sai màu trên máy thật). Né
+                                            // bằng cách bake sẵn màu vào UIImage với renderingMode
+                                            // .alwaysOriginal (giữ nguyên pixel màu, không cho hệ
+                                            // thống tint lại) rồi bọc qua Image(uiImage:).
+                                            coloredMenuIcon(systemIcon, filter.iconColor)
                                         }
                                     } icon: {
                                         // Menu native iOS (UIMenu) không cho custom màu/font trên text item —
