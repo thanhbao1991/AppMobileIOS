@@ -80,7 +80,8 @@ struct DesktopScreenView: View {
         return image.size.width / image.size.height
     }
 
-    /// Poll mỗi 700ms tới khi sheet đóng (`.task` tự huỷ khi view biến mất). Không tìm thấy khung
+    /// Poll mỗi 400ms tới khi sheet đóng (`.task` tự huỷ khi view biến mất) — khớp Desktop up mỗi
+    /// 500ms (2026-08-27: rút từ 700ms/1s sau khi user thấy độ trễ ~2s rõ rệt). Không tìm thấy khung
     /// (Desktop chưa mở app, chưa từng POST lần nào) hay lỗi mạng chỉ giữ nguyên spinner, không báo
     /// lỗi cho người dùng — máy POS thật hay khởi động Desktop client trễ hơn lúc mở form này.
     private func pollLoop() async {
@@ -88,11 +89,11 @@ struct DesktopScreenView: View {
             if let result = await APIClient.shared.getDesktopScreenFrame(label: targetLabel),
                let decoded = UIImage(data: result.data) {
                 image = decoded
-                isStale = result.ageMs > 2500
+                isStale = result.ageMs > 2000
             } else if image != nil {
                 isStale = true
             }
-            try? await Task.sleep(nanoseconds: 700_000_000)
+            try? await Task.sleep(nanoseconds: 400_000_000)
         }
     }
 }
