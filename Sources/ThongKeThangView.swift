@@ -232,8 +232,8 @@ struct ChiTieuThangDetailSheet: View {
             .navigationTitle(ten)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Xong") { dismiss() }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
                 }
             }
         }
@@ -284,8 +284,8 @@ struct KhachHangNoDetailSheet: View {
             .navigationTitle(tenKhachHang)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Xong") { dismiss() }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
                 }
             }
         }
@@ -355,8 +355,8 @@ struct ThanhToanChiTietSheet: View {
             .navigationTitle(ten)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Xong") { dismiss() }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
                 }
             }
         }
@@ -446,8 +446,8 @@ struct DoanhThuChiTietSheet: View {
             .navigationTitle(ten)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Xong") { dismiss() }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
                 }
             }
         }
