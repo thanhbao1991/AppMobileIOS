@@ -85,7 +85,7 @@ struct DesktopScreenView: View {
         NavigationStack {
             screenArea
                 .background(Color(.systemBackground))
-                .navigationTitle("Danh sách hoá đơn")
+                .navigationTitle("Xem màn hình")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {

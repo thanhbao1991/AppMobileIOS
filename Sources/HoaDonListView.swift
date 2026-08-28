@@ -227,11 +227,12 @@ struct HoaDonListView: View {
                         )
                     }
                 },
-                onPickAppOrder: { items, ghiChu, warnings in
+                onPickAppOrder: { items, ghiChu, warnings, khachHangId in
                     Task {
                         try? await Task.sleep(nanoseconds: 400_000_000)
                         creatingPending = PendingCreate(
                             phanLoai: "App",
+                            presetKhachHangId: khachHangId,
                             presetItems: items,
                             presetGhiChu: ghiChu,
                             presetWarnings: warnings
@@ -561,8 +562,8 @@ private struct HoaDonRowView: View {
 private struct AddHoaDonSheet: View {
     let onPick: (String) -> Void
     let onPickGoiSom: (String, String, String) -> Void
-    /// (items, ghiChu, warnings) — đơn đã map sẵn món từ store, xem AppOrderPickerSheet.
-    let onPickAppOrder: ([DraftChiTiet], String, [String]) -> Void
+    /// (items, ghiChu, warnings, khachHangId) — đơn đã map sẵn món từ store, xem AppOrderPickerSheet.
+    let onPickAppOrder: ([DraftChiTiet], String, [String], String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var showGoiSom = false
@@ -639,10 +640,10 @@ private struct AddHoaDonSheet: View {
             }
         }
         .sheet(isPresented: $showAppOrder) {
-            AppOrderPickerSheet { items, ghiChu, warnings in
+            AppOrderPickerSheet { items, ghiChu, warnings, khachHangId in
                 showAppOrder = false
                 dismiss()
-                onPickAppOrder(items, ghiChu, warnings)
+                onPickAppOrder(items, ghiChu, warnings, khachHangId)
             }
         }
         .presentationDetents([.medium, .large])
@@ -654,8 +655,8 @@ private struct AddHoaDonSheet: View {
 /// (món đã map sẵn SanPhamBienTheId thật) rồi mở form tạo đơn App đã điền sẵn. Khớp GetDonAsync
 /// (Desktop, HoaDonTabControl.Board.cs).
 private struct AppOrderPickerSheet: View {
-    /// (items, ghiChu, warnings)
-    let onPick: ([DraftChiTiet], String, [String]) -> Void
+    /// (items, ghiChu, warnings, khachHangId)
+    let onPick: ([DraftChiTiet], String, [String], String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var orders: [AppOrderSummaryDto] = []
@@ -737,7 +738,7 @@ private struct AppOrderPickerSheet: View {
             loadError = result.message ?? "Không lấy được chi tiết đơn."
             return
         }
-        onPick(buildDraftItems(from: detail), detail.ghiChu ?? "", result.warnings)
+        onPick(buildDraftItems(from: detail), detail.ghiChu ?? "", result.warnings, detail.khachHangId)
     }
 
     /// Guid rỗng = server không khớp được topping theo tên (MapBienThe/ToppingDtos phía server) —

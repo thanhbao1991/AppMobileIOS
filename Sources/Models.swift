@@ -409,6 +409,10 @@ struct AppOrderChiTietDto: Decodable {
 struct AppOrderDetailDto: Decodable {
     let ghiChu: String?
     let chiTietHoaDons: [AppOrderChiTietDto]?
+    /// Khách "<Tên> App" nội bộ đã khớp được driver store (MapShipperAsync, Backend) — nil nếu
+    /// server chưa nhận diện được shipper. Thiếu field này khiến đơn bắt qua iOS trống shipper so
+    /// với Desktop (vốn đọc thẳng cả HoaDonDto nên có sẵn).
+    let khachHangId: String?
 }
 
 /// Khớp KhachHangInfoDto (Backend) — thông tin điểm/nợ/ví/voucher/món yêu thích khi chọn khách
