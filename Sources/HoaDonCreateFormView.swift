@@ -234,25 +234,12 @@ struct HoaDonCreateFormView: View {
                 selectedKhachInfo(selectedKhach!)
             }
 
-            // Khi CHƯA chọn khách: luôn hiện 3 ô để gõ tay, gán trực tiếp trên đơn — không bắt buộc
-            // trùng 100% dữ liệu lưu sẵn của khách (khớp Desktop, phần gán SĐT/địa chỉ riêng cho đơn).
-            // Khi ĐÃ chọn khách: ẩn (thông tin hiện gọn trong selectedKhachInfo), bấm "Sửa" mở
-            // editKhachForm — sửa thẳng hồ sơ khách, đủ nhiều SĐT/địa chỉ như Desktop.
-            if selectedKhach == nil {
-                if HoaDonFormatting.needKhachHang(phanLoai) || !sdt.isEmpty || !diaChi.isEmpty {
-                    Divider()
-                    fieldLabel("Tên khách", icon: "person")
-                    TextField("Tên khách (không bắt buộc)", text: $tenKhach)
-                        .textFieldStyle(.roundedBorder)
-                    fieldLabel("Số điện thoại", icon: "phone")
-                    TextField("Số điện thoại", text: $sdt)
-                        .textFieldStyle(.roundedBorder)
-                        .keyboardType(.phonePad)
-                    fieldLabel("Địa chỉ", icon: "location")
-                    TextField("Địa chỉ", text: $diaChi)
-                        .textFieldStyle(.roundedBorder)
-                }
-            } else if showEditKhachHang {
+            // Chưa chọn khách: KHÔNG hiện ô gõ tay tên/SĐT/địa chỉ nữa — khớp Desktop
+            // (PhanLoai.NeedKhachHang chỉ dùng để ép focus ô tìm kiếm, không có đường nhập tay song
+            // song; đơn Ship/Mh/App bắt buộc tìm/chọn khách có sẵn hoặc bấm "Khách mới"). Đã chọn
+            // khách: ẩn (thông tin hiện gọn trong selectedKhachInfo), bấm "Sửa" mở editKhachForm —
+            // sửa thẳng hồ sơ khách, đủ nhiều SĐT/địa chỉ như Desktop.
+            if selectedKhach != nil && showEditKhachHang {
                 Divider()
                 editKhachForm
             }
