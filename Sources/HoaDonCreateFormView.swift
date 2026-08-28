@@ -187,6 +187,7 @@ struct HoaDonCreateFormView: View {
                 Spacer()
                 if selectedKhach != nil && !showEditKhachHang {
                     Button("Sửa") { beginEditKhach() }.font(.caption)
+                    Spacer().frame(width: 20)
                     Button("Bỏ chọn") { clearKhach() }.font(.caption)
                 }
             }
@@ -296,7 +297,7 @@ struct HoaDonCreateFormView: View {
                 Text(editError).font(.caption).foregroundColor(.dangerColor)
             }
 
-            HStack {
+            HStack(spacing: 24) {
                 Button(editSaving ? "Đang lưu..." : "Lưu") { Task { await saveEditKhach() } }
                     .disabled(editSaving)
                 Button("Huỷ") { showEditKhachHang = false }
@@ -477,9 +478,11 @@ struct HoaDonCreateFormView: View {
 
             Button { pickerTarget = PickerTarget(index: nil) } label: {
                 Label("Thêm món", systemImage: "plus.circle.fill")
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
-            .frame(maxWidth: .infinity)
+            .buttonStyle(.plain)
+            .foregroundColor(.brandPrimary)
+            .font(.subheadline.bold())
         }
     }
 
@@ -862,6 +865,20 @@ struct DraftChiTiet: Identifiable {
     }
 }
 
+/// Chuẩn hoá chuỗi tìm món — khớp StringHelper.MyNormalizeText (Desktop/Backend): hạ chữ thường,
+/// bỏ dấu (đ/Đ → d/D riêng vì không tách được qua NFD), bỏ ký tự không phải chữ/số/khoảng trắng,
+/// gộp nhiều khoảng trắng liên tiếp. Dùng chung với TimKiem (SanPhamMatchHelper.Search: Contains
+/// đơn giản trên TimKiem) để "cfk" khớp được "Cà Phê Kem" nếu sản phẩm có VietTat="cfk".
+private enum SanPhamSearch {
+    static func normalize(_ s: String) -> String {
+        let ascii = BillTextBuilder.toAsciiNoDiacritics(s, upper: false)
+        let filtered = ascii.filter { $0.isLetter || $0.isNumber || $0 == " " }
+        return filtered
+            .split(separator: " ", omittingEmptySubsequences: true)
+            .joined(separator: " ")
+    }
+}
+
 // ══════════════════════════════════════════════
 // Sheet chọn/sửa món — chọn sản phẩm → size/topping/số lượng/ghi chú → thêm hoặc lưu.
 // ══════════════════════════════════════════════
@@ -882,6 +899,8 @@ private struct ProductPickerSheet: View {
     @State private var donGia: Double = 0
     @State private var noteText = ""
     @State private var toppingQty: [String: Int] = [:]
+    /// 0 = tab Ghi chú, 1 = tab Topping.
+    @State private var detailTab = 0
 
     private let quickNoteGroups: [(title: String, notes: [String])] = [
         ("Đường", ["Không đường", "Ít ngọt", "Ngọt", "Nhiều ngọt", "Đường riêng", "Đắng"]),
@@ -890,14 +909,20 @@ private struct ProductPickerSheet: View {
         ("Khác", ["Size L", "Sài gòn", "Chỉ TCOL", "Chỉ TCT"]),
     ]
 
+    /// Khớp SanPhamMatchHelper.Search (Desktop): Contains đơn giản trên TimKiem (đã token hoá sẵn ở
+    /// server — tên không dấu, tên liền không cách, viết tắt tự nhận diện, VietTat tự đặt tay), KHÔNG
+    /// so trực tiếp `ten` có dấu (bỏ sót các kiểu gõ tắt như "cfk" cho "Cà Phê Kem" nếu chỉ so `ten`).
     private var filteredProducts: [SanPhamDto] {
-        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return sanPhamList }
-        return sanPhamList.filter { $0.ten.localizedCaseInsensitiveContains(searchText) }
+        let keyword = SanPhamSearch.normalize(searchText)
+        guard !keyword.isEmpty else { return sanPhamList }
+        return sanPhamList.filter { ($0.timKiem ?? "").contains(keyword) }
     }
 
     private var activeNotes: Set<String> {
         Set(noteText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
     }
+
+    private var toppingCount: Int { toppingQty.values.reduce(0) { $0 + $1 } }
 
     var body: some View {
         NavigationStack {
@@ -993,46 +1018,21 @@ private struct ProductPickerSheet: View {
                         .fixedSize()
                 }
 
+                // Ghi chú/Topping đặt ngang hàng qua tab thay vì xếp chồng — đỡ cuộn dài khi có nhiều
+                // topping. Tab "Ghi chú" trước vì hầu như món nào cũng cần chỉnh đường/đá, topping
+                // chỉ áp dụng một số món.
                 if !toppingList.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Topping").font(.subheadline.bold())
-                        ForEach(toppingList) { top in
-                            HStack {
-                                Text(top.ten)
-                                Spacer()
-                                Text(HoaDonFormatting.money(top.gia)).font(.caption).foregroundColor(.textMuted)
-                                Stepper("\(toppingQty[top.id] ?? 0)", value: Binding(
-                                    get: { toppingQty[top.id] ?? 0 },
-                                    set: { toppingQty[top.id] = $0 }
-                                ), in: 0...20)
-                                .fixedSize()
-                            }
-                        }
+                    Picker("", selection: $detailTab) {
+                        Text("Ghi chú").tag(0)
+                        Text("Topping\(toppingCount > 0 ? " (\(toppingCount))" : "")").tag(1)
                     }
+                    .pickerStyle(.segmented)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Ghi chú").font(.subheadline.bold())
-                    TextField("Ghi chú món...", text: $noteText)
-                        .textFieldStyle(.roundedBorder)
-                    ForEach(quickNoteGroups, id: \.title) { group in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(group.title).font(.caption2).foregroundColor(.textMuted)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 6) {
-                                    ForEach(group.notes, id: \.self) { note in
-                                        let active = activeNotes.contains(note)
-                                        Button(note) { toggleNote(note) }
-                                            .font(.caption2.bold())
-                                            .padding(.horizontal, 8).padding(.vertical, 4)
-                                            .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.1))
-                                            .foregroundColor(active ? .white : .textMuted)
-                                            .clipShape(Capsule())
-                                    }
-                                }
-                            }
-                        }
-                    }
+                if detailTab == 1 && !toppingList.isEmpty {
+                    toppingSection
+                } else {
+                    noteSection
                 }
 
                 Button(editingItem != nil ? "Lưu" : "Thêm vào đơn") {
@@ -1042,6 +1042,48 @@ private struct ProductPickerSheet: View {
                 .frame(maxWidth: .infinity)
             }
             .padding()
+        }
+    }
+
+    private var toppingSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(toppingList) { top in
+                HStack {
+                    Text(top.ten)
+                    Spacer()
+                    Text(HoaDonFormatting.money(top.gia)).font(.caption).foregroundColor(.textMuted)
+                    Stepper("\(toppingQty[top.id] ?? 0)", value: Binding(
+                        get: { toppingQty[top.id] ?? 0 },
+                        set: { toppingQty[top.id] = $0 }
+                    ), in: 0...20)
+                    .fixedSize()
+                }
+            }
+        }
+    }
+
+    private var noteSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Ghi chú món...", text: $noteText)
+                .textFieldStyle(.roundedBorder)
+            ForEach(quickNoteGroups, id: \.title) { group in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(group.title).font(.caption2).foregroundColor(.textMuted)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(group.notes, id: \.self) { note in
+                                let active = activeNotes.contains(note)
+                                Button(note) { toggleNote(note) }
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 8).padding(.vertical, 4)
+                                    .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.1))
+                                    .foregroundColor(active ? .white : .textMuted)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1057,6 +1099,7 @@ private struct ProductPickerSheet: View {
         donGia = giaRiengMap[bt.id] ?? bt.giaBan
         noteText = ""
         toppingQty = [:]
+        detailTab = 0
     }
 
     private func preloadEditing() {
@@ -1068,6 +1111,7 @@ private struct ProductPickerSheet: View {
         donGia = editingItem.donGia
         noteText = editingItem.noteText
         toppingQty = Dictionary(uniqueKeysWithValues: editingItem.toppings.map { ($0.toppingId, $0.soLuong) })
+        detailTab = toppingQty.values.contains(where: { $0 > 0 }) ? 1 : 0
     }
 
     private func confirmAdd(_ sp: SanPhamDto, _ bt: SanPhamBienTheDto) {
