@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Danh sách chi tiết thanh toán theo ngày, GET /api/ChiTietHoaDonThanhToan?ngay=. Nhấp vào dòng để
 /// mở sheet chi tiết (giống HoaDonDetailView) thay vì vuốt trái để xoá — vuốt dễ bấm nhầm với data
@@ -10,9 +11,24 @@ struct ThanhToanListView: View {
     @State private var hasLoaded = false
     @State private var searchText = ""
     @State private var selectedId: String?
+    @State private var activeFilter: ThanhToanQuickFilter?
+
+    /// Đã áp search nhưng CHƯA áp activeFilter — dùng để đếm số dòng theo từng filter trong menu,
+    /// khớp cơ chế searchFilteredItems bên HoaDonListView.
+    private var searchFilteredItems: [ChiTietHoaDonThanhToanDto] {
+        items.filter { anyMatchesSearch(searchText, $0.ten, $0.ghiChu, $0.tenMonSummary, $0.loaiThanhToan) }
+    }
 
     private var filteredItems: [ChiTietHoaDonThanhToanDto] {
-        items.filter { anyMatchesSearch(searchText, $0.ten, $0.ghiChu, $0.tenMonSummary, $0.loaiThanhToan) }
+        searchFilteredItems.filter { activeFilter?.matches($0) ?? true }
+    }
+
+    private func coloredMenuIcon(_ systemName: String, _ color: Color) -> Image {
+        guard let uiImage = UIImage(systemName: systemName)?
+            .withTintColor(UIColor(color), renderingMode: .alwaysOriginal) else {
+            return Image(systemName: systemName)
+        }
+        return Image(uiImage: uiImage)
     }
 
     private var totalText: String {
@@ -32,7 +48,55 @@ struct ThanhToanListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                DaySearchBar(date: $currentDate, searchText: $searchText, placeholder: "Tìm khách, món, ghi chú...") { Task { await load() } }
+                DaySearchBar(
+                    date: $currentDate, searchText: $searchText,
+                    placeholder: "Tìm khách, món, ghi chú...",
+                    trailing: AnyView(
+                        Menu {
+                            // Chỉ lọc 1 loại tại 1 thời điểm — khớp cơ chế HoaDonQuickFilter bên tab
+                            // Hoá đơn. 2 filter đầu (avatar Khánh) đọc GhiChu=="Shipper" — đúng cờ
+                            // "Duy Khánh" mà ThongKeService dùng để tách "Tiền mặt/Trả nợ Khánh" khỏi
+                            // phần thu tại quán (xem ThongKeService.GetThanhToanAsync, Backend).
+                            ForEach(ThanhToanQuickFilter.allCases, id: \.self) { filter in
+                                let count = searchFilteredItems.filter { filter.matches($0) }.count
+                                if filter.isFirstInGroup { Divider() }
+                                Button {
+                                    activeFilter = (activeFilter == filter) ? nil : filter
+                                } label: {
+                                    Label {
+                                        if let avatarName = filter.avatarName {
+                                            ShipperAvatarView(name: avatarName, size: 20)
+                                        } else if let systemIcon = filter.systemIcon {
+                                            coloredMenuIcon(systemIcon, filter.iconColor)
+                                        }
+                                    } icon: {
+                                        Text(activeFilter == filter ? "✓ \(count) \(filter.label)" : "\(count) \(filter.label)")
+                                    }
+                                }
+                            }
+                            if activeFilter != nil {
+                                Divider()
+                                Button("Bỏ lọc", role: .destructive) { activeFilter = nil }
+                            }
+                        } label: {
+                            Image(systemName: activeFilter == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(activeFilter == nil ? .textMuted : .brandPrimary)
+                                .overlay(alignment: .topTrailing) {
+                                    if activeFilter != nil {
+                                        Text("\(filteredItems.count)")
+                                            .font(.caption2.bold())
+                                            .foregroundColor(.white)
+                                            .padding(4)
+                                            .frame(minWidth: 18, minHeight: 18)
+                                            .background(Color.brandPrimary)
+                                            .clipShape(Circle())
+                                            .offset(x: 8, y: -8)
+                                    }
+                                }
+                        }
+                    )
+                ) { Task { await load() } }
 
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()
@@ -175,5 +239,78 @@ private struct ThanhToanRowView: View {
         .padding(12)
         .background(borderColor.pastelBackground())
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+/// Lọc nhanh trên tab Thanh toán — chỉ chọn được 1 filter tại 1 thời điểm, nil = không lọc gì.
+/// Khớp đúng cách "Thống kê" tách bạch tiền mặt (xem ThongKeService.GetThanhToanAsync, Backend):
+/// GhiChu=="Shipper" là cờ đánh dấu khoản Duy Khánh thu hộ qua app riêng của shipper, LoaiThanhToan
+/// text lấy thẳng từ bảng lookup LoaiThanhToans (1=Trong ngày, 2=Thanh toán, 3=Trả nợ qua ngày,
+/// 4=Trả nợ trong ngày — xem AppDbContext, Share).
+enum ThanhToanQuickFilter: CaseIterable, Hashable {
+    case tienMatDuyKhanh, traNoDuyKhanh
+    case tienMat, chuyenKhoan
+
+    /// Nhóm để chèn Divider giữa 2 cụm: theo Duy Khánh (avatar) / theo phương thức thanh toán (icon).
+    var group: Int {
+        switch self {
+        case .tienMatDuyKhanh, .traNoDuyKhanh: return 0
+        case .tienMat, .chuyenKhoan: return 1
+        }
+    }
+
+    var isFirstInGroup: Bool {
+        guard group > 0 else { return false }
+        let index = Self.allCases.firstIndex(of: self)!
+        return Self.allCases[Self.allCases.index(before: index)].group != group
+    }
+
+    var label: String {
+        switch self {
+        case .tienMatDuyKhanh: return "Tiền mặt Duy Khánh"
+        case .traNoDuyKhanh: return "Trả nợ Duy Khánh"
+        case .tienMat: return "Tiền mặt"
+        case .chuyenKhoan: return "Chuyển khoản"
+        }
+    }
+
+    var avatarName: String? {
+        switch self {
+        case .tienMatDuyKhanh, .traNoDuyKhanh: return "Khánh"
+        case .tienMat, .chuyenKhoan: return nil
+        }
+    }
+
+    var systemIcon: String? {
+        switch self {
+        case .tienMat: return "banknote.fill"
+        case .chuyenKhoan: return "creditcard.fill"
+        default: return nil
+        }
+    }
+
+    var iconColor: Color {
+        switch self {
+        case .tienMat: return .successColor
+        case .chuyenKhoan: return .brandPrimary
+        default: return .textMuted
+        }
+    }
+
+    func matches(_ item: ChiTietHoaDonThanhToanDto) -> Bool {
+        let isTienMat = item.phuongThucThanhToanId?.lowercased() == PaymentMethod.tienMatId
+        let isBank = item.phuongThucThanhToanId?.lowercased() == PaymentMethod.chuyenKhoanId
+        let isDuyKhanh = item.ghiChu == "Shipper"
+        switch self {
+        case .tienMatDuyKhanh:
+            return isTienMat && isDuyKhanh && item.loaiThanhToan == "Trong ngày"
+        case .traNoDuyKhanh:
+            return isTienMat && isDuyKhanh
+                && (item.loaiThanhToan == "Trả nợ qua ngày" || item.loaiThanhToan == "Trả nợ trong ngày")
+        case .tienMat:
+            return isTienMat
+        case .chuyenKhoan:
+            return isBank
+        }
     }
 }
