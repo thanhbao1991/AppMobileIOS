@@ -920,23 +920,25 @@ private struct ProductPickerSheet: View {
         return donGia * Double(soLuong) + toppingTien
     }
 
-    /// 1 màn hình duy nhất — không push sang màn hình khác khi chọn món: gõ tìm hiện dropdown kết
-    /// quả (KHÔNG liệt kê cả catalog — danh sách món quá dài để cuộn hết), chọn xong dropdown biến
-    /// mất, phần cấu hình số lượng/đơn giá/ghi chú/topping hiện ngay tại chỗ; "Đổi món" quay lại ô
-    /// tìm để chọn món khác.
+    /// 1 màn hình duy nhất — không push sang màn hình/sheet khác ở bất kỳ bước nào: ô tìm luôn hiện
+    /// (kể cả sau khi đã chọn món, để đổi món khác không cần nút riêng), gõ tìm hiện dropdown kết
+    /// quả bên dưới (KHÔNG liệt kê cả catalog — danh sách món quá dài để cuộn hết), chọn 1 món thì
+    /// dropdown ẩn đi còn phần cấu hình số lượng/đơn giá/ghi chú/topping hiện ngay bên dưới, tất cả
+    /// vẫn trong cùng 1 ScrollView/sheet.
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    if editingItem == nil && pickingSanPham == nil {
+                    if editingItem == nil {
                         TextField("Tìm món...", text: $searchText)
                             .textFieldStyle(.roundedBorder)
-                        if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                        if pickingSanPham == nil && !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
                             productListSection
                         }
                     }
 
                     if let pickingSanPham, let picking {
+                        if editingItem == nil { Divider() }
                         configSection(pickingSanPham, picking)
                     }
                 }
