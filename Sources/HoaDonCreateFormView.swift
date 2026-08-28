@@ -464,7 +464,7 @@ struct HoaDonCreateFormView: View {
             }
 
             Button { pickerTarget = PickerTarget(index: nil) } label: {
-                Label("Thêm món", systemImage: "plus.circle.fill")
+                Text("Thêm món")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
@@ -911,24 +911,40 @@ private struct ProductPickerSheet: View {
 
     private var toppingCount: Int { toppingQty.values.reduce(0) { $0 + $1 } }
 
+    /// Thành tiền tạm tính của dòng đang cấu hình (chưa thêm vào đơn) — khớp DraftChiTiet.thanhTien.
+    private var thanhTienDraft: Double {
+        let toppingTien = toppingQty.reduce(0.0) { sum, kv in
+            guard let top = toppingList.first(where: { $0.id == kv.key }) else { return sum }
+            return sum + top.gia * Double(kv.value)
+        }
+        return donGia * Double(soLuong) + toppingTien
+    }
+
+    /// 1 màn hình duy nhất — không push sang màn hình khác khi chọn món: danh sách tìm/chọn món
+    /// và phần tinh chỉnh số lượng/đơn giá/ghi chú/topping cùng nằm trong 1 ScrollView, chọn món
+    /// xong thì phần cấu hình hiện ngay bên dưới, danh sách vẫn còn để đổi món khác nếu cần.
     var body: some View {
         NavigationStack {
-            Group {
-                if let pickingSanPham, let picking {
-                    detailStep(pickingSanPham, picking)
-                } else {
-                    listStep
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if editingItem == nil {
+                        TextField("Tìm món...", text: $searchText)
+                            .textFieldStyle(.roundedBorder)
+                        productListSection
+                    }
+
+                    if let pickingSanPham, let picking {
+                        if editingItem == nil { Divider() }
+                        configSection(pickingSanPham, picking)
+                    }
                 }
+                .padding()
             }
-            .navigationTitle(pickingSanPham?.ten ?? "Chọn món")
+            .navigationTitle("Chọn món")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    if pickingSanPham != nil && editingItem == nil {
-                        Button("Quay lại") { pickingSanPham = nil; picking = nil }
-                    } else {
-                        Button("Đóng") { dismiss() }
-                    }
+                    Button("Đóng") { dismiss() }
                 }
             }
         }
@@ -937,98 +953,106 @@ private struct ProductPickerSheet: View {
         .onAppear { preloadEditing() }
     }
 
-    private var listStep: some View {
-        VStack(spacing: 0) {
-            TextField("Tìm món...", text: $searchText)
-                .textFieldStyle(.roundedBorder)
-                .padding()
-            List(filteredProducts) { sp in
-                Button {
-                    pickingSanPham = sp
-                    let bt = sp.bienThe.first(where: { $0.macDinh }) ?? sp.bienThe.first
-                    picking = bt
-                    resetDetailState(bt)
-                } label: {
+    private var productListSection: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(filteredProducts) { sp in
+                let active = pickingSanPham?.id == sp.id
+                Button { selectProduct(sp) } label: {
                     HStack {
-                        Text(sp.ten)
+                        Text(sp.ten).foregroundColor(active ? .brandPrimary : .primary)
                         Spacer()
                         Text(sp.bienThe.map { HoaDonFormatting.money($0.giaBan) }.first ?? "")
                             .font(.caption).foregroundColor(.textMuted)
                     }
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .disabled(sp.bienThe.isEmpty)
+                Divider()
             }
-            .listStyle(.plain)
         }
     }
 
-    private func detailStep(_ sp: SanPhamDto, _ bt: SanPhamBienTheDto) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if sp.bienThe.count > 1 {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Size").font(.caption).foregroundColor(.textMuted)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(sp.bienThe.sorted(by: { $0.giaBan < $1.giaBan })) { variant in
-                                    let active = variant.id == bt.id
-                                    Button("\(variant.tenBienThe) \(HoaDonFormatting.moneyShort(variant.giaBan))") {
-                                        picking = variant
-                                        donGia = variant.giaBan
-                                    }
-                                    .font(.caption.bold())
-                                    .padding(.horizontal, 10).padding(.vertical, 6)
-                                    .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.12))
-                                    .foregroundColor(active ? .white : .primary)
-                                    .clipShape(Capsule())
+    private func selectProduct(_ sp: SanPhamDto) {
+        pickingSanPham = sp
+        let bt = sp.bienThe.first(where: { $0.macDinh }) ?? sp.bienThe.first
+        picking = bt
+        resetDetailState(bt)
+    }
+
+    private func configSection(_ sp: SanPhamDto, _ bt: SanPhamBienTheDto) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(sp.ten).font(.headline)
+
+            if sp.bienThe.count > 1 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Size").font(.caption).foregroundColor(.textMuted)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(sp.bienThe.sorted(by: { $0.giaBan < $1.giaBan })) { variant in
+                                let active = variant.id == bt.id
+                                Button("\(variant.tenBienThe) \(HoaDonFormatting.moneyShort(variant.giaBan))") {
+                                    picking = variant
+                                    donGia = variant.giaBan
                                 }
+                                .font(.caption.bold())
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.12))
+                                .foregroundColor(active ? .white : .primary)
+                                .clipShape(Capsule())
                             }
                         }
                     }
                 }
+            }
 
-                HStack {
-                    Text("Đơn giá")
-                    Spacer()
+            // Số lượng/đơn giá/thành tiền chung 1 hàng thay vì xếp chồng — nhìn thấy ngay thành tiền
+            // của dòng đang cấu hình mà không cần thêm vào đơn rồi mới biết.
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Số lượng").font(.caption2).foregroundColor(.textMuted)
+                    Stepper("\(soLuong)", value: $soLuong, in: 1...50).fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Đơn giá").font(.caption2).foregroundColor(.textMuted)
                     TextField("0", value: $donGia, format: .number)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
-                        .frame(width: 100)
                         .textFieldStyle(.roundedBorder)
-                    Text("đ")
+                        .frame(width: 84)
                 }
-
-                HStack {
-                    Text("Số lượng")
-                    Spacer()
-                    Stepper("\(soLuong)", value: $soLuong, in: 1...50)
-                        .fixedSize()
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Thành tiền").font(.caption2).foregroundColor(.textMuted)
+                    Text(HoaDonFormatting.money(thanhTienDraft))
+                        .font(.subheadline.bold())
+                        .foregroundColor(.brandPrimary)
                 }
-
-                // Ghi chú/Topping đặt ngang hàng qua tab thay vì xếp chồng — đỡ cuộn dài khi có nhiều
-                // topping. Tab "Ghi chú" trước vì hầu như món nào cũng cần chỉnh đường/đá, topping
-                // chỉ áp dụng một số món.
-                if !toppingList.isEmpty {
-                    Picker("", selection: $detailTab) {
-                        Text("Ghi chú").tag(0)
-                        Text("Topping\(toppingCount > 0 ? " (\(toppingCount))" : "")").tag(1)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                if detailTab == 1 && !toppingList.isEmpty {
-                    toppingSection
-                } else {
-                    noteSection
-                }
-
-                Button(editingItem != nil ? "Lưu" : "Thêm vào đơn") {
-                    confirmAdd(sp, picking ?? bt)
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
             }
-            .padding()
+
+            // Ghi chú/Topping đặt ngang hàng qua tab thay vì xếp chồng — đỡ cuộn dài khi có nhiều
+            // topping. Tab "Ghi chú" trước vì hầu như món nào cũng cần chỉnh đường/đá, topping
+            // chỉ áp dụng một số món.
+            if !toppingList.isEmpty {
+                Picker("", selection: $detailTab) {
+                    Text("Ghi chú").tag(0)
+                    Text("Topping\(toppingCount > 0 ? " (\(toppingCount))" : "")").tag(1)
+                }
+                .pickerStyle(.segmented)
+            }
+
+            if detailTab == 1 && !toppingList.isEmpty {
+                toppingSection
+            } else {
+                noteSection
+            }
+
+            Button(editingItem != nil ? "Lưu" : "Thêm vào đơn") {
+                confirmAdd(sp, picking ?? bt)
+            }
+            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
         }
     }
 
