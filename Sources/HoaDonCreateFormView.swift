@@ -167,7 +167,7 @@ struct HoaDonCreateFormView: View {
     private var khachHangCard: some View {
         DetailCard {
             HStack {
-                Label("Khách hàng", systemImage: "person.crop.circle").font(.headline)
+                Label("Khách hàng", systemImage: "person").font(.headline)
                 Spacer()
                 if selectedKhach != nil {
                     Button(showEditKhachHang ? "Xong" : "Sửa") { showEditKhachHang.toggle() }
@@ -238,7 +238,13 @@ struct HoaDonCreateFormView: View {
 
     private func selectedKhachInfo(_ kh: KhachHangDto) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(kh.ten).font(.subheadline.bold())
+            HStack {
+                Text(kh.ten).font(.subheadline.bold())
+                Spacer()
+                if let info = khachInfo, !info.duocNhanVoucher {
+                    infoBadge("Không tích điểm", color: .textMuted)
+                }
+            }
 
             if kh.phones.count > 1 {
                 chipsRow(kh.phones.map(\.soDienThoai), active: sdt) { sdt = $0 }
@@ -284,13 +290,13 @@ struct HoaDonCreateFormView: View {
             if info.donKhac > 0 {
                 infoBadge("Đơn khác chưa trả \(HoaDonFormatting.money(info.donKhac))", color: .warningColor)
             }
-            if !info.duocNhanVoucher {
-                infoBadge("Không tích điểm", color: .textMuted)
-            } else if info.daNhanVoucher {
-                infoBadge("Đã nhận voucher tháng này", color: .successColor)
-            } else if info.diemThangTruoc >= 3000 {
-                let soVoucher = info.diemThangTruoc / 3000
-                infoBadge("Đủ điều kiện voucher \(HoaDonFormatting.money(Double(soVoucher) * 10000))", color: .pinkColor)
+            if info.duocNhanVoucher {
+                if info.daNhanVoucher {
+                    infoBadge("Đã nhận voucher tháng này", color: .successColor)
+                } else if info.diemThangTruoc >= 3000 {
+                    let soVoucher = info.diemThangTruoc / 3000
+                    infoBadge("Đủ điều kiện voucher \(HoaDonFormatting.money(Double(soVoucher) * 10000))", color: .pinkColor)
+                }
             }
             if info.diemThangNay > 0 || info.diemThangTruoc > 0 {
                 Text("Điểm: \(HoaDonFormatting.diemDisplay(info.diemThangNay)) tháng này · \(HoaDonFormatting.diemDisplay(info.diemThangTruoc)) tháng trước")
@@ -313,14 +319,13 @@ struct HoaDonCreateFormView: View {
             if !acc.contains(where: { $0.id == item.id }) { acc.append(item) }
         }
         return VStack(alignment: .leading, spacing: 4) {
-            Text("Món hay mua — bấm để thêm nhanh").font(.caption).foregroundColor(.textMuted)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(all) { fav in
                         Button {
                             quickAddFavorite(fav)
                         } label: {
-                            Text(fav.tenBienThe.isEmpty ? fav.tenSanPham : "\(fav.tenSanPham) (\(fav.tenBienThe))")
+                            Text(["", "Mặc định", "Size Chuẩn", "Chuẩn"].contains(fav.tenBienThe) ? fav.tenSanPham : "\(fav.tenSanPham) (\(fav.tenBienThe))")
                                 .font(.caption.bold())
                                 .padding(.horizontal, 10).padding(.vertical, 6)
                                 .background(Color.successColor.opacity(0.12))
@@ -399,7 +404,7 @@ struct HoaDonCreateFormView: View {
                 .frame(width: 22, height: 22)
                 .background(Circle().fill(Color.brandPrimary))
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.tenBienThe.isEmpty || item.tenBienThe == "Mặc định"
+                Text(["", "Mặc định", "Size Chuẩn", "Chuẩn"].contains(item.tenBienThe)
                      ? item.tenSanPham : "\(item.tenSanPham) (\(item.tenBienThe))")
                     .font(.subheadline.bold())
                 if !item.toppingText.isEmpty {
