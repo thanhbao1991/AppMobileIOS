@@ -167,7 +167,7 @@ struct HoaDonCreateFormView: View {
     private var khachHangCard: some View {
         DetailCard {
             HStack {
-                Label("Khách hàng", systemImage: "person").font(.headline)
+                Label("Khách hàng", systemImage: "person.fill").font(.headline)
                 Spacer()
                 if selectedKhach != nil {
                     Button(showEditKhachHang ? "Xong" : "Sửa") { showEditKhachHang.toggle() }
@@ -415,8 +415,9 @@ struct HoaDonCreateFormView: View {
                 }
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(HoaDonFormatting.money(item.thanhTien)).font(.subheadline.bold())
+            HStack(spacing: 8) {
+                Text(HoaDonFormatting.moneyFormatter.string(from: NSNumber(value: item.thanhTien)) ?? "\(Int(item.thanhTien))")
+                    .font(.subheadline.bold())
                 Button {
                     items.remove(at: index)
                     recalcGiamGia()
