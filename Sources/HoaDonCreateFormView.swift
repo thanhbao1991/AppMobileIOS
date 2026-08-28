@@ -53,6 +53,14 @@ struct HoaDonCreateFormView: View {
     @State private var newKhachVoucher = false
     @State private var newKhachSaving = false
     @State private var newKhachError: String?
+    // Sửa hồ sơ khách đã chọn (nhiều SĐT/địa chỉ) — khớp EditKhachPanel (Desktop,
+    // HoaDonEditWindow.KhachHang.cs)
+    @State private var editTen = ""
+    @State private var editPhoneRows: [EditContactRow] = []
+    @State private var editAddressRows: [EditContactRow] = []
+    @State private var editVoucher = false
+    @State private var editSaving = false
+    @State private var editError: String?
 
     // Giảm giá
     @State private var giamGia: Double = 0
@@ -66,6 +74,14 @@ struct HoaDonCreateFormView: View {
     private struct PickerTarget: Identifiable {
         let index: Int?  // nil = thêm mới, có giá trị = sửa items[index]
         var id: String { index.map(String.init) ?? "new" }
+    }
+
+    /// Dòng SĐT/địa chỉ đang sửa trong editKhachForm — id giữ nguyên của KhachHangPhone/AddressDto
+    /// gốc để server nhận diện sửa-tại-chỗ; dòng vừa "Thêm" có id mới nên server sẽ INSERT
+    /// (khớp KhachHangCrudService.UpdateAsync: so Id trùng thì sửa, không có thì thêm mới).
+    private struct EditContactRow: Identifiable {
+        var id: String
+        var value: String
     }
 
     private var tongTien: Double { items.reduce(0) { $0 + $1.thanhTien } }
@@ -169,9 +185,8 @@ struct HoaDonCreateFormView: View {
             HStack {
                 Label("Khách hàng", systemImage: "person.fill").font(.headline)
                 Spacer()
-                if selectedKhach != nil {
-                    Button(showEditKhachHang ? "Xong" : "Sửa") { showEditKhachHang.toggle() }
-                        .font(.caption)
+                if selectedKhach != nil && !showEditKhachHang {
+                    Button("Sửa") { beginEditKhach() }.font(.caption)
                     Button("Bỏ chọn") { clearKhach() }.font(.caption)
                 }
             }
@@ -218,20 +233,91 @@ struct HoaDonCreateFormView: View {
                 selectedKhachInfo(selectedKhach!)
             }
 
-            // Khi CHƯA chọn khách: luôn hiện 3 ô để gõ tay/tạo mới. Khi ĐÃ chọn khách: ẩn bớt (thông
-            // tin đã hiện gọn trong selectedKhachInfo), chỉ hiện lại khi bấm "Sửa" — gán trực tiếp
-            // trên đơn, không bắt buộc trùng 100% dữ liệu lưu sẵn của khách (khớp Desktop).
-            if selectedKhach == nil
-                ? (HoaDonFormatting.needKhachHang(phanLoai) || !sdt.isEmpty || !diaChi.isEmpty)
-                : showEditKhachHang {
+            // Khi CHƯA chọn khách: luôn hiện 3 ô để gõ tay, gán trực tiếp trên đơn — không bắt buộc
+            // trùng 100% dữ liệu lưu sẵn của khách (khớp Desktop, phần gán SĐT/địa chỉ riêng cho đơn).
+            // Khi ĐÃ chọn khách: ẩn (thông tin hiện gọn trong selectedKhachInfo), bấm "Sửa" mở
+            // editKhachForm — sửa thẳng hồ sơ khách, đủ nhiều SĐT/địa chỉ như Desktop.
+            if selectedKhach == nil {
+                if HoaDonFormatting.needKhachHang(phanLoai) || !sdt.isEmpty || !diaChi.isEmpty {
+                    Divider()
+                    fieldLabel("Tên khách", icon: "person")
+                    TextField("Tên khách (không bắt buộc)", text: $tenKhach)
+                        .textFieldStyle(.roundedBorder)
+                    fieldLabel("Số điện thoại", icon: "phone")
+                    TextField("Số điện thoại", text: $sdt)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.phonePad)
+                    fieldLabel("Địa chỉ", icon: "location")
+                    TextField("Địa chỉ", text: $diaChi)
+                        .textFieldStyle(.roundedBorder)
+                }
+            } else if showEditKhachHang {
                 Divider()
-                TextField("Tên khách (không bắt buộc)", text: $tenKhach)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Số điện thoại", text: $sdt)
-                    .textFieldStyle(.roundedBorder)
-                    .keyboardType(.phonePad)
-                TextField("Địa chỉ", text: $diaChi)
-                    .textFieldStyle(.roundedBorder)
+                editKhachForm
+            }
+        }
+    }
+
+    private func fieldLabel(_ text: String, icon: String) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption.bold())
+            .foregroundColor(.textMuted)
+    }
+
+    /// Form sửa hồ sơ khách — khớp EditKhachPanel (Desktop): tên + nhiều SĐT/địa chỉ (thêm/xoá dòng),
+    /// voucher, Lưu (PUT /api/KhachHang/{id}) / Huỷ. Dòng đầu mỗi danh sách tự thành mặc định
+    /// (IsDefault = i == 0), khớp SaveKhachContactBtn_Click.
+    private var editKhachForm: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            fieldLabel("Tên khách", icon: "person")
+            TextField("Tên khách", text: $editTen)
+                .textFieldStyle(.roundedBorder)
+
+            fieldLabel("Số điện thoại", icon: "phone")
+            contactRowsEditor($editPhoneRows, placeholder: "Số điện thoại", keyboard: .phonePad)
+            Button {
+                editPhoneRows.append(EditContactRow(id: UUID().uuidString, value: ""))
+            } label: {
+                Label("Thêm SĐT", systemImage: "plus")
+            }.font(.caption)
+
+            fieldLabel("Địa chỉ", icon: "location")
+            contactRowsEditor($editAddressRows, placeholder: "Địa chỉ", keyboard: .default)
+            Button {
+                editAddressRows.append(EditContactRow(id: UUID().uuidString, value: ""))
+            } label: {
+                Label("Thêm địa chỉ", systemImage: "plus")
+            }.font(.caption)
+
+            Toggle("Được nhận voucher", isOn: $editVoucher)
+                .font(.subheadline)
+
+            if let editError {
+                Text(editError).font(.caption).foregroundColor(.dangerColor)
+            }
+
+            HStack {
+                Button(editSaving ? "Đang lưu..." : "Lưu") { Task { await saveEditKhach() } }
+                    .disabled(editSaving)
+                Button("Huỷ") { showEditKhachHang = false }
+                    .foregroundColor(.textMuted)
+                    .disabled(editSaving)
+            }
+            .font(.subheadline.bold())
+        }
+    }
+
+    private func contactRowsEditor(_ rows: Binding<[EditContactRow]>, placeholder: String, keyboard: UIKeyboardType) -> some View {
+        VStack(spacing: 6) {
+            ForEach(rows.wrappedValue.indices, id: \.self) { i in
+                HStack {
+                    TextField(placeholder, text: rows[i].value)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(keyboard)
+                    Button { rows.wrappedValue.remove(at: i) } label: {
+                        Image(systemName: "trash").foregroundColor(.dangerColor)
+                    }
+                }
             }
         }
     }
@@ -581,6 +667,60 @@ struct HoaDonCreateFormView: View {
         tenKhach = ""
         sdt = ""
         diaChi = ""
+    }
+
+    private func beginEditKhach() {
+        guard let kh = selectedKhach else { return }
+        editTen = kh.ten
+        editVoucher = kh.duocNhanVoucher
+        editPhoneRows = kh.phones.map { EditContactRow(id: $0.id, value: $0.soDienThoai) }
+        editAddressRows = kh.addresses.map { EditContactRow(id: $0.id, value: $0.diaChi) }
+        editError = nil
+        showEditKhachHang = true
+    }
+
+    private func saveEditKhach() async {
+        guard let kh = selectedKhach else { return }
+        let tenMoi = editTen.trimmingCharacters(in: .whitespaces)
+        guard !tenMoi.isEmpty else { editError = "Tên khách không được để trống."; return }
+
+        editSaving = true
+        editError = nil
+
+        let phones = editPhoneRows.enumerated().compactMap { i, row -> KhachHangPhoneDto? in
+            let v = row.value.trimmingCharacters(in: .whitespaces)
+            guard !v.isEmpty else { return nil }
+            return KhachHangPhoneDto(id: row.id, soDienThoai: v, isDefault: i == 0)
+        }
+        let addresses = editAddressRows.enumerated().compactMap { i, row -> KhachHangAddressDto? in
+            let v = row.value.trimmingCharacters(in: .whitespaces)
+            guard !v.isEmpty else { return nil }
+            return KhachHangAddressDto(id: row.id, diaChi: v, isDefault: i == 0)
+        }
+
+        // Giữ nguyên SĐT/địa chỉ đang gán cho đơn nếu dòng đó (theo Id) vẫn còn sau khi sửa — khớp
+        // SaveKhachContactBtn_Click (Desktop): so previousPhoneId/previousAddrId theo Id, không theo text.
+        let previousPhoneId = kh.phones.first(where: { $0.soDienThoai == sdt })?.id
+        let previousAddrId  = kh.addresses.first(where: { $0.diaChi == diaChi })?.id
+
+        let payload = KhachHangDto(
+            id: kh.id, ten: tenMoi, soDu: kh.soDu, duocNhanVoucher: editVoucher,
+            phones: phones, addresses: addresses, facebookThreadId: kh.facebookThreadId
+        )
+        let result = await APIClient.shared.updateKhachHang(payload)
+        editSaving = false
+        if result.success, let updated = result.khach {
+            selectedKhach = updated
+            tenKhach = updated.ten
+            sdt = updated.phones.first(where: { $0.id == previousPhoneId })?.soDienThoai
+                ?? updated.phones.first?.soDienThoai ?? ""
+            diaChi = updated.addresses.first(where: { $0.id == previousAddrId })?.diaChi
+                ?? updated.addresses.first?.diaChi ?? ""
+            showEditKhachHang = false
+            applyGiaRiengToExistingItems()
+        } else {
+            editError = result.message ?? "Lưu thất bại."
+        }
     }
 
     private func applyGiaRiengToExistingItems() {

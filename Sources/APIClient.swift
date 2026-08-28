@@ -463,6 +463,19 @@ actor APIClient {
         return (env.isSuccess, env.message, env.data)
     }
 
+    /// Sửa tên/SĐT/địa chỉ (nhiều dòng)/voucher của khách đã có — khớp SaveKhachContactBtn_Click
+    /// (Desktop): PUT full KhachHangDto, server tự thêm/xoá KhachHangPhones/Addresses theo Id khớp
+    /// (KhachHangCrudService.UpdateAsync) — dòng có Id trùng thì sửa tại chỗ, không có thì thêm mới,
+    /// bị thiếu trong payload thì xoá. KHÔNG đụng SoDu (server không đọc field này khi Update).
+    func updateKhachHang(_ body: KhachHangDto) async -> (success: Bool, message: String?, khach: KhachHangDto?) {
+        let req = makeRequest("/api/KhachHang/\(body.id)", method: "PUT", body: jsonBody(body))
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<KhachHangDto>.self, from: data) else {
+            return (false, "Không có phản hồi từ server.", nil)
+        }
+        return (env.isSuccess, env.message, env.data)
+    }
+
     func ganShipper(hoaDonId: String, nguoiShip: String) async -> ActionResult {
         let now = isoNow()
         let body = GanShipperRequest(id: hoaDonId, nguoiShip: nguoiShip, ngayShip: now, ngayIn: now)
