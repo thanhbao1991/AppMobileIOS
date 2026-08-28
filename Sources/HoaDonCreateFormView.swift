@@ -193,38 +193,38 @@ struct HoaDonCreateFormView: View {
             }
 
             if selectedKhach == nil {
-                TextField("Tìm khách theo tên/SĐT...", text: $khachSearchText)
-                    .textFieldStyle(.roundedBorder)
-                    .onChange(of: khachSearchText) { q in scheduleKhachSearch(q) }
-
-                if !khachSearchResults.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(khachSearchResults) { kh in
-                            Button { selectKhach(kh) } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(kh.ten).font(.subheadline.bold())
-                                        if let dt = kh.phones.first?.soDienThoai {
-                                            Text(dt).font(.caption).foregroundColor(.textMuted)
-                                        }
-                                        if let dc = kh.addresses.first?.diaChi, !dc.isEmpty {
-                                            Text(dc).font(.caption).foregroundColor(.textMuted)
-                                        }
-                                    }
-                                    Spacer()
-                                }
-                                .padding(.vertical, 6)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            Divider()
-                        }
-                    }
-                }
-
                 if showNewKhachForm {
                     newKhachForm
                 } else {
+                    TextField("Tìm khách theo tên/SĐT...", text: $khachSearchText)
+                        .textFieldStyle(.roundedBorder)
+                        .onChange(of: khachSearchText) { q in scheduleKhachSearch(q) }
+
+                    if !khachSearchResults.isEmpty {
+                        VStack(spacing: 0) {
+                            ForEach(khachSearchResults) { kh in
+                                Button { selectKhach(kh) } label: {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(kh.ten).font(.subheadline.bold())
+                                            if let dt = kh.phones.first?.soDienThoai {
+                                                Text(dt).font(.caption).foregroundColor(.textMuted)
+                                            }
+                                            if let dc = kh.addresses.first?.diaChi, !dc.isEmpty {
+                                                Text(dc).font(.caption).foregroundColor(.textMuted)
+                                            }
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 6)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                Divider()
+                            }
+                        }
+                    }
+
                     Button { showNewKhachForm = true } label: {
                         Label("Khách mới", systemImage: "person.badge.plus")
                     }
