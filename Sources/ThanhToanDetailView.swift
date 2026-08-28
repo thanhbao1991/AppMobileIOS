@@ -17,6 +17,13 @@ struct ThanhToanDetailView: View {
         item.phuongThucThanhToanId?.lowercased() == PaymentMethod.chuyenKhoanId
     }
 
+    /// SePay webhook tự thu — khớp đúng số tiền chuyển khoản thật vào tài khoản ngân hàng, đổi
+    /// sang Tiền mặt sẽ làm lệch đối soát nên không cho đổi (chặn cả UI lẫn Backend, xem
+    /// ChiTietHoaDonThanhToanService.DoiPhuongThucAsync).
+    private var isAutoBank: Bool {
+        isBank && item.tuDongLuc != nil
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -42,16 +49,22 @@ struct ThanhToanDetailView: View {
                     }
 
                     VStack(spacing: 10) {
-                        ActionButtonView(
-                            icon: "arrow.left.arrow.right", code: nil,
-                            caption: isBank ? "Đổi sang Tiền mặt" : "Đổi sang Chuyển khoản",
-                            color: isBank ? .successColor : .brandPrimary
-                        ) {
-                            showDoiPhuongThucConfirm = true
-                        }
+                        if isAutoBank {
+                            Text("🤖 Chuyển khoản thu tự động (SePay) — không thể đổi phương thức/xoá (khớp đối soát với tiền thật đã vào tài khoản).")
+                                .font(.caption).foregroundColor(.textMuted)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            ActionButtonView(
+                                icon: "arrow.left.arrow.right", code: nil,
+                                caption: isBank ? "Đổi sang Tiền mặt" : "Đổi sang Chuyển khoản",
+                                color: isBank ? .successColor : .brandPrimary
+                            ) {
+                                showDoiPhuongThucConfirm = true
+                            }
 
-                        ActionButtonView(icon: "trash", code: nil, caption: "Xoá", color: .dangerColor) {
-                            showDeleteConfirm = true
+                            ActionButtonView(icon: "trash", code: nil, caption: "Xoá", color: .dangerColor) {
+                                showDeleteConfirm = true
+                            }
                         }
                     }
                 }
