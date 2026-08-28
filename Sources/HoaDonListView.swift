@@ -692,7 +692,7 @@ private struct AppOrderPickerSheet: View {
                                     }
                                     Spacer()
                                     Text(HoaDonFormatting.money(order.total))
-                                        .font(.subheadline.bold()).foregroundColor(.brandPrimary)
+                                        .font(.subheadline.bold()).foregroundColor(.primary)
                                 }
                                 if !order.address.isEmpty {
                                     Text(order.address).font(.caption).foregroundColor(.textMuted).lineLimit(1)
