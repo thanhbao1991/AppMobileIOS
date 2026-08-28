@@ -143,24 +143,6 @@ struct HoaDonCreateFormView: View {
             await loadCatalog()
             await applyPresets()
         }
-        .sheet(item: $pickerTarget) { target in
-            ProductPickerSheet(
-                sanPhamList: sanPhamList,
-                toppingList: toppingList,
-                giaRiengMap: giaRiengMap,
-                editingItem: target.index.map { items[$0] },
-                onAdd: { draft in
-                    items.append(draft)
-                    recalcGiamGia()
-                },
-                onSaveEdit: target.index.map { idx -> (DraftChiTiet) -> Void in
-                    { draft in
-                        items[idx] = draft
-                        recalcGiamGia()
-                    }
-                }
-            )
-        }
     }
 
     // ══════════════════════════════════════════════
@@ -463,13 +445,39 @@ struct HoaDonCreateFormView: View {
                 }
             }
 
-            Button { pickerTarget = PickerTarget(index: nil) } label: {
-                Text("Thêm món")
-                    .frame(maxWidth: .infinity)
+            // Panel chọn/sửa món nằm NGAY TRONG monCard — không mở sheet riêng nữa (2 sheet chồng
+            // nhau: sheet "Tạo đơn" + sheet "Chọn món" vẫn tạo cảm giác 2 màn hình dù bên trong đã
+            // gộp list+cấu hình). Bấm "Thêm món"/chạm 1 dòng món chỉ mở rộng panel tại chỗ, cùng
+            // cuộn chung với phần còn lại của form.
+            if let pickerTarget {
+                Divider()
+                ProductPickerPanel(
+                    sanPhamList: sanPhamList,
+                    toppingList: toppingList,
+                    giaRiengMap: giaRiengMap,
+                    editingItem: pickerTarget.index.map { items[$0] },
+                    onAdd: { draft in
+                        items.append(draft)
+                        recalcGiamGia()
+                    },
+                    onSaveEdit: pickerTarget.index.map { idx -> (DraftChiTiet) -> Void in
+                        { draft in
+                            items[idx] = draft
+                            recalcGiamGia()
+                        }
+                    },
+                    onClose: { self.pickerTarget = nil }
+                )
+                .id(pickerTarget.id)
+            } else {
+                Button { pickerTarget = PickerTarget(index: nil) } label: {
+                    Text("Thêm món")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.brandPrimary)
+                .font(.subheadline.bold())
             }
-            .buttonStyle(.plain)
-            .foregroundColor(.brandPrimary)
-            .font(.subheadline.bold())
         }
     }
 
@@ -867,18 +875,20 @@ private enum SanPhamSearch {
 }
 
 // ══════════════════════════════════════════════
-// Sheet chọn/sửa món — chọn sản phẩm → size/topping/số lượng/ghi chú → thêm hoặc lưu.
+// Panel chọn/sửa món — chọn sản phẩm → size/topping/số lượng/ghi chú → thêm hoặc lưu. Nhúng THẲNG
+// vào monCard (KHÔNG mở sheet riêng) — mở sheet lồng trên sheet "Tạo đơn" vẫn tạo cảm giác 2 màn
+// hình dù nội dung bên trong đã gộp list+cấu hình vào 1 khối.
 // ══════════════════════════════════════════════
 
-private struct ProductPickerSheet: View {
+private struct ProductPickerPanel: View {
     let sanPhamList: [SanPhamDto]
     let toppingList: [ToppingDto]
     let giaRiengMap: [String: Double]
     let editingItem: DraftChiTiet?
     let onAdd: (DraftChiTiet) -> Void
     let onSaveEdit: ((DraftChiTiet) -> Void)?
+    let onClose: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     @State private var picking: SanPhamBienTheDto?
     @State private var pickingSanPham: SanPhamDto?
@@ -920,40 +930,32 @@ private struct ProductPickerSheet: View {
         return donGia * Double(soLuong) + toppingTien
     }
 
-    /// 1 màn hình duy nhất — không push sang màn hình/sheet khác ở bất kỳ bước nào: ô tìm luôn hiện
-    /// (kể cả sau khi đã chọn món, để đổi món khác không cần nút riêng), gõ tìm hiện dropdown kết
-    /// quả bên dưới (KHÔNG liệt kê cả catalog — danh sách món quá dài để cuộn hết), chọn 1 món thì
-    /// dropdown ẩn đi còn phần cấu hình số lượng/đơn giá/ghi chú/topping hiện ngay bên dưới, tất cả
-    /// vẫn trong cùng 1 ScrollView/sheet.
+    /// Nhúng trực tiếp trong monCard, KHÔNG NavigationStack/sheet riêng — cùng cuộn với phần còn lại
+    /// của form "Tạo đơn" nên chỉ còn đúng 1 sheet duy nhất. Ô tìm luôn hiện (kể cả sau khi đã chọn
+    /// món, để đổi món không cần nút riêng), gõ tìm hiện dropdown kết quả bên dưới (KHÔNG liệt kê cả
+    /// catalog — danh sách món quá dài để cuộn hết), chọn 1 món thì dropdown ẩn đi còn phần cấu hình
+    /// số lượng/đơn giá/ghi chú/topping hiện ngay bên dưới.
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if editingItem == nil {
-                        TextField("Tìm món...", text: $searchText)
-                            .textFieldStyle(.roundedBorder)
-                        if pickingSanPham == nil && !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
-                            productListSection
-                        }
-                    }
-
-                    if let pickingSanPham, let picking {
-                        if editingItem == nil { Divider() }
-                        configSection(pickingSanPham, picking)
-                    }
-                }
-                .padding()
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text(editingItem != nil ? "Sửa món" : "Thêm món").font(.subheadline.bold())
+                Spacer()
+                Button("Đóng") { onClose() }.font(.caption)
             }
-            .navigationTitle("Chọn món")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Đóng") { dismiss() }
+
+            if editingItem == nil {
+                TextField("Tìm món...", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                if pickingSanPham == nil && !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                    productListSection
                 }
+            }
+
+            if let pickingSanPham, let picking {
+                if editingItem == nil { Divider() }
+                configSection(pickingSanPham, picking)
             }
         }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
         .onAppear { preloadEditing() }
     }
 
@@ -1152,11 +1154,11 @@ private struct ProductPickerSheet: View {
 
         if let onSaveEdit {
             onSaveEdit(draft)
-            dismiss()
+            onClose()
         } else {
             onAdd(draft)
             // Quay lại danh sách để chọn thêm món tiếp — khớp Desktop (SanPhamSearch.Clear+Focus
-            // sau AddChiTiet), không đóng sheet để nhân viên lên đơn nhiều món liên tiếp không cần
+            // sau AddChiTiet), không đóng panel để nhân viên lên đơn nhiều món liên tiếp không cần
             // mở lại "Thêm món" mỗi lần.
             pickingSanPham = nil
             picking = nil
