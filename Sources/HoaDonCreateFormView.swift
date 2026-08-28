@@ -43,6 +43,9 @@ struct HoaDonCreateFormView: View {
     @State private var khachInfo: KhachHangInfoDto?
     @State private var giaRiengBanner: String?
     @State private var presetWarningBanner: String?
+    /// Sau khi chọn khách, ẩn bớt 3 ô tên/SĐT/địa chỉ (thông tin đã có sẵn trong "selectedKhachInfo")
+    /// — chỉ hiện lại khi bấm "Sửa" để chỉnh SĐT/địa chỉ riêng cho đơn này.
+    @State private var showEditKhachHang = false
     @State private var showNewKhachForm = false
     @State private var newKhachTen = ""
     @State private var newKhachSdt = ""
@@ -104,7 +107,6 @@ struct HoaDonCreateFormView: View {
                     khachHangCard
                     monCard
                     discountCard
-                    ghiChuCard
                     summaryCard
                 }
                 .padding()
@@ -168,6 +170,8 @@ struct HoaDonCreateFormView: View {
                 Label("Khách hàng", systemImage: "person.crop.circle").font(.headline)
                 Spacer()
                 if selectedKhach != nil {
+                    Button(showEditKhachHang ? "Xong" : "Sửa") { showEditKhachHang.toggle() }
+                        .font(.caption)
                     Button("Bỏ chọn") { clearKhach() }.font(.caption)
                 }
             }
@@ -214,9 +218,12 @@ struct HoaDonCreateFormView: View {
                 selectedKhachInfo(selectedKhach!)
             }
 
-            // SĐT/địa chỉ luôn hiển thị + sửa được, kể cả khi đã chọn khách (khớp Desktop: gán trực
-            // tiếp trên đơn, không bắt buộc trùng 100% dữ liệu lưu sẵn của khách).
-            if HoaDonFormatting.needKhachHang(phanLoai) || selectedKhach != nil || !sdt.isEmpty || !diaChi.isEmpty {
+            // Khi CHƯA chọn khách: luôn hiện 3 ô để gõ tay/tạo mới. Khi ĐÃ chọn khách: ẩn bớt (thông
+            // tin đã hiện gọn trong selectedKhachInfo), chỉ hiện lại khi bấm "Sửa" — gán trực tiếp
+            // trên đơn, không bắt buộc trùng 100% dữ liệu lưu sẵn của khách (khớp Desktop).
+            if selectedKhach == nil
+                ? (HoaDonFormatting.needKhachHang(phanLoai) || !sdt.isEmpty || !diaChi.isEmpty)
+                : showEditKhachHang {
                 Divider()
                 TextField("Tên khách (không bắt buộc)", text: $tenKhach)
                     .textFieldStyle(.roundedBorder)
@@ -469,14 +476,6 @@ struct HoaDonCreateFormView: View {
     // Ghi chú + tổng kết
     // ══════════════════════════════════════════════
 
-    private var ghiChuCard: some View {
-        DetailCard {
-            Text("Ghi chú đơn").font(.headline)
-            TextField("Ghi chú...", text: $ghiChuDon)
-                .textFieldStyle(.roundedBorder)
-        }
-    }
-
     private var summaryCard: some View {
         DetailCard {
             HStack {
@@ -558,6 +557,7 @@ struct HoaDonCreateFormView: View {
 
     private func selectKhach(_ kh: KhachHangDto) {
         selectedKhach = kh
+        showEditKhachHang = false
         tenKhach = kh.ten
         sdt = kh.phones.first(where: { $0.isDefault })?.soDienThoai ?? kh.phones.first?.soDienThoai ?? ""
         diaChi = kh.addresses.first(where: { $0.isDefault })?.diaChi ?? kh.addresses.first?.diaChi ?? ""
@@ -570,6 +570,7 @@ struct HoaDonCreateFormView: View {
 
     private func clearKhach() {
         selectedKhach = nil
+        showEditKhachHang = false
         khachInfo = nil
         tenKhach = ""
         sdt = ""
