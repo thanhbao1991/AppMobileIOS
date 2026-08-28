@@ -920,21 +920,23 @@ private struct ProductPickerSheet: View {
         return donGia * Double(soLuong) + toppingTien
     }
 
-    /// 1 màn hình duy nhất — không push sang màn hình khác khi chọn món: danh sách tìm/chọn món
-    /// và phần tinh chỉnh số lượng/đơn giá/ghi chú/topping cùng nằm trong 1 ScrollView, chọn món
-    /// xong thì phần cấu hình hiện ngay bên dưới, danh sách vẫn còn để đổi món khác nếu cần.
+    /// 1 màn hình duy nhất — không push sang màn hình khác khi chọn món: gõ tìm hiện dropdown kết
+    /// quả (KHÔNG liệt kê cả catalog — danh sách món quá dài để cuộn hết), chọn xong dropdown biến
+    /// mất, phần cấu hình số lượng/đơn giá/ghi chú/topping hiện ngay tại chỗ; "Đổi món" quay lại ô
+    /// tìm để chọn món khác.
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    if editingItem == nil {
+                    if editingItem == nil && pickingSanPham == nil {
                         TextField("Tìm món...", text: $searchText)
                             .textFieldStyle(.roundedBorder)
-                        productListSection
+                        if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                            productListSection
+                        }
                     }
 
                     if let pickingSanPham, let picking {
-                        if editingItem == nil { Divider() }
                         configSection(pickingSanPham, picking)
                     }
                 }
@@ -955,11 +957,10 @@ private struct ProductPickerSheet: View {
 
     private var productListSection: some View {
         LazyVStack(spacing: 0) {
-            ForEach(filteredProducts) { sp in
-                let active = pickingSanPham?.id == sp.id
+            ForEach(filteredProducts.prefix(30)) { sp in
                 Button { selectProduct(sp) } label: {
                     HStack {
-                        Text(sp.ten).foregroundColor(active ? .brandPrimary : .primary)
+                        Text(sp.ten)
                         Spacer()
                         Text(sp.bienThe.map { HoaDonFormatting.money($0.giaBan) }.first ?? "")
                             .font(.caption).foregroundColor(.textMuted)
@@ -983,7 +984,18 @@ private struct ProductPickerSheet: View {
 
     private func configSection(_ sp: SanPhamDto, _ bt: SanPhamBienTheDto) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(sp.ten).font(.headline)
+            HStack {
+                Text(sp.ten).font(.headline)
+                Spacer()
+                if editingItem == nil {
+                    Button("Đổi món") {
+                        pickingSanPham = nil
+                        picking = nil
+                        searchText = ""
+                    }
+                    .font(.caption)
+                }
+            }
 
             if sp.bienThe.count > 1 {
                 VStack(alignment: .leading, spacing: 6) {

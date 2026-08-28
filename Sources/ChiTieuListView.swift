@@ -237,8 +237,10 @@ struct AddExpenseSheet: View {
     @State private var saving = false
     @State private var errorMessage: String?
 
+    /// Rỗng khi chưa gõ gì — danh sách nguyên liệu quá dài để liệt kê hết như dropdown, phải gõ
+    /// tìm mới hiện kết quả (khớp cách sửa "Thêm món" bên HoaDonCreateFormView.ProductPickerSheet).
     private var filteredList: [NguyenLieuDto] {
-        guard !searchText.isEmpty else { return nguyenLieuList }
+        guard !searchText.isEmpty else { return [] }
         return nguyenLieuList.filter { $0.ten.matchesSearch(searchText) }
     }
 
