@@ -569,12 +569,12 @@ private struct AddHoaDonSheet: View {
     @State private var showGoiSom = false
     @State private var showAppOrder = false
 
+    // Không có "App" ở đây: đơn App chỉ được tạo qua "Bắt đơn App" (nút riêng bên dưới, lấy từ store).
     private let categories: [(code: String, icon: String)] = [
         ("Ship", "scooter"),
         ("Tại Chỗ", "chair.fill"),
         ("Mv", "bag.fill"),
         ("Mh", "hand.raised.fill"),
-        ("App", "iphone"),
     ]
 
     var body: some View {
