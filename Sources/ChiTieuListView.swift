@@ -268,19 +268,28 @@ struct AddExpenseSheet: View {
                     }
                 }
 
+                // Số lượng/đơn giá/thành tiền chung 1 hàng thay vì xếp chồng — khớp cách gộp bên
+                // "Thêm món" (HoaDonCreateFormView.ProductPickerSheet.configSection).
                 Section("Số lượng & đơn giá") {
-                    Stepper("Số lượng: \(soLuong.formatted())", value: $soLuong, in: 1...9999)
-                    HStack {
-                        Text("Đơn giá")
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Số lượng").font(.caption2).foregroundColor(.textMuted)
+                            Stepper("\(soLuong.formatted())", value: $soLuong, in: 1...9999).fixedSize()
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Đơn giá").font(.caption2).foregroundColor(.textMuted)
+                            TextField("0", value: $donGia, format: .number)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 84)
+                        }
                         Spacer()
-                        TextField("0", value: $donGia, format: .number)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    HStack {
-                        Text("Thành tiền")
-                        Spacer()
-                        Text(HoaDonFormatting.money(thanhTien)).bold()
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("Thành tiền").font(.caption2).foregroundColor(.textMuted)
+                            Text(HoaDonFormatting.money(thanhTien))
+                                .font(.subheadline.bold())
+                                .foregroundColor(.brandPrimary)
+                        }
                     }
                 }
 
