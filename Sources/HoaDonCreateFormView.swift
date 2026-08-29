@@ -944,7 +944,7 @@ private struct ProductPickerPanel: View {
                 Button("Đóng") { onClose() }.font(.caption)
             }
 
-            if editingItem == nil {
+            if editingItem == nil && pickingSanPham == nil {
                 TextField("Tìm món...", text: $searchText)
                     .textFieldStyle(.roundedBorder)
                     .focused($searchFocused)
@@ -953,7 +953,7 @@ private struct ProductPickerPanel: View {
                             selectProduct(first)
                         }
                     }
-                if pickingSanPham == nil && !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
                     productListSection
                 }
             }
@@ -1006,6 +1006,7 @@ private struct ProductPickerPanel: View {
                         pickingSanPham = nil
                         picking = nil
                         searchText = ""
+                        searchFocused = true
                     }
                     .font(.caption)
                 }
