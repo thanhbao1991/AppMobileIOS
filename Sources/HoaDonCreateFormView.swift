@@ -27,7 +27,7 @@ struct HoaDonCreateFormView: View {
 
     // Món
     @State private var items: [DraftChiTiet] = []
-    @State private var pickerTarget: PickerTarget?
+    @State private var pickerTarget: PickerTarget? = PickerTarget(index: nil)
     @State private var sanPhamList: [SanPhamDto] = []
     @State private var toppingList: [ToppingDto] = []
     @State private var giaRiengList: [KhachHangGiaBanDto] = []
@@ -447,8 +447,9 @@ struct HoaDonCreateFormView: View {
 
             // Panel chọn/sửa món nằm NGAY TRONG monCard — không mở sheet riêng nữa (2 sheet chồng
             // nhau: sheet "Tạo đơn" + sheet "Chọn món" vẫn tạo cảm giác 2 màn hình dù bên trong đã
-            // gộp list+cấu hình). Bấm "Thêm món"/chạm 1 dòng món chỉ mở rộng panel tại chỗ, cùng
-            // cuộn chung với phần còn lại của form.
+            // gộp list+cấu hình). Ô tìm món luôn hiện sẵn (không cần bấm "Thêm món" mở ra), chạm 1
+            // dòng món chỉ mở rộng panel tại chỗ sang chế độ sửa, cùng cuộn chung với phần còn lại
+            // của form.
             if let pickerTarget {
                 Divider()
                 ProductPickerPanel(
@@ -466,17 +467,9 @@ struct HoaDonCreateFormView: View {
                             recalcGiamGia()
                         }
                     },
-                    onClose: { self.pickerTarget = nil }
+                    onClose: { self.pickerTarget = PickerTarget(index: nil) }
                 )
                 .id(pickerTarget.id)
-            } else {
-                Button { pickerTarget = PickerTarget(index: nil) } label: {
-                    Text("Thêm món")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(.brandPrimary)
-                .font(.subheadline.bold())
             }
         }
     }
@@ -947,7 +940,7 @@ private struct ProductPickerPanel: View {
             }
 
             if editingItem == nil && pickingSanPham == nil {
-                TextField("Tìm món...", text: $searchText)
+                TextField("Tìm món để thêm...", text: $searchText)
                     .textFieldStyle(.roundedBorder)
                     .focused($searchFocused)
                     .onSubmit {
@@ -1199,6 +1192,7 @@ private struct ProductPickerPanel: View {
             pickingSanPham = nil
             picking = nil
             searchText = ""
+            searchFocused = true
         }
     }
 }
