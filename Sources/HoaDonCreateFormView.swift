@@ -898,6 +898,7 @@ private struct ProductPickerPanel: View {
     @State private var toppingQty: [String: Int] = [:]
     /// 0 = tab Ghi chú, 1 = tab Topping.
     @State private var detailTab = 0
+    @FocusState private var searchFocused: Bool
 
     private let quickNoteGroups: [(title: String, notes: [String])] = [
         ("Đường", ["Không đường", "Ít ngọt", "Ngọt", "Nhiều ngọt", "Đường riêng", "Đắng"]),
@@ -946,6 +947,12 @@ private struct ProductPickerPanel: View {
             if editingItem == nil {
                 TextField("Tìm món...", text: $searchText)
                     .textFieldStyle(.roundedBorder)
+                    .focused($searchFocused)
+                    .onSubmit {
+                        if let first = filteredProducts.first(where: { !$0.bienThe.isEmpty }) {
+                            selectProduct(first)
+                        }
+                    }
                 if pickingSanPham == nil && !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
                     productListSection
                 }
@@ -956,7 +963,10 @@ private struct ProductPickerPanel: View {
                 configSection(pickingSanPham, picking)
             }
         }
-        .onAppear { preloadEditing() }
+        .onAppear {
+            preloadEditing()
+            if editingItem == nil { searchFocused = true }
+        }
     }
 
     private var productListSection: some View {
