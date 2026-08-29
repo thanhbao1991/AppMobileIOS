@@ -938,10 +938,12 @@ private struct ProductPickerPanel: View {
     /// số lượng/đơn giá/ghi chú/topping hiện ngay bên dưới.
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(editingItem != nil ? "Sửa món" : "Thêm món").font(.subheadline.bold())
-                Spacer()
-                Button("Đóng") { onClose() }.font(.caption)
+            if !(editingItem == nil && pickingSanPham == nil) {
+                HStack {
+                    Text(editingItem != nil ? "Sửa món" : "Thêm món").font(.subheadline.bold())
+                    Spacer()
+                    Button("Đóng") { onClose() }.font(.caption)
+                }
             }
 
             if editingItem == nil && pickingSanPham == nil {
@@ -1009,6 +1011,10 @@ private struct ProductPickerPanel: View {
                         searchFocused = true
                     }
                     .font(.caption)
+                    Button("Xong") {
+                        confirmAdd(sp, picking ?? bt)
+                    }
+                    .font(.caption.bold())
                 }
             }
 
@@ -1075,11 +1081,13 @@ private struct ProductPickerPanel: View {
                 noteSection
             }
 
-            Button(editingItem != nil ? "Lưu" : "Thêm vào đơn") {
-                confirmAdd(sp, picking ?? bt)
+            if editingItem != nil {
+                Button("Lưu") {
+                    confirmAdd(sp, picking ?? bt)
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .frame(maxWidth: .infinity)
         }
     }
 
