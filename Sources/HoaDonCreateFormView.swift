@@ -938,9 +938,9 @@ private struct ProductPickerPanel: View {
     /// số lượng/đơn giá/ghi chú/topping hiện ngay bên dưới.
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if !(editingItem == nil && pickingSanPham == nil) {
+            if editingItem != nil {
                 HStack {
-                    Text(editingItem != nil ? "Sửa món" : "Thêm món").font(.subheadline.bold())
+                    Text("Sửa món").font(.subheadline.bold())
                     Spacer()
                     Button("Đóng") { onClose() }.font(.caption)
                 }
@@ -1011,6 +1011,7 @@ private struct ProductPickerPanel: View {
                         searchFocused = true
                     }
                     .font(.caption)
+                    Spacer().frame(width: 20)
                     Button("Xong") {
                         confirmAdd(sp, picking ?? bt)
                     }
@@ -1045,7 +1046,23 @@ private struct ProductPickerPanel: View {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Số lượng").font(.caption2).foregroundColor(.textMuted)
-                    Stepper("\(soLuong)", value: $soLuong, in: 1...50).fixedSize()
+                    HStack(spacing: 14) {
+                        Button {
+                            if soLuong > 1 { soLuong -= 1 }
+                        } label: {
+                            Image(systemName: "minus.circle.fill").font(.title3)
+                        }
+                        .disabled(soLuong <= 1)
+                        Text("\(soLuong)").font(.subheadline.bold()).frame(minWidth: 20)
+                        Button {
+                            if soLuong < 50 { soLuong += 1 }
+                        } label: {
+                            Image(systemName: "plus.circle.fill").font(.title3)
+                        }
+                        .disabled(soLuong >= 50)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.brandPrimary)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Đơn giá").font(.caption2).foregroundColor(.textMuted)
