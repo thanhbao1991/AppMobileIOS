@@ -1050,55 +1050,59 @@ private struct ProductPickerPanel: View {
 
             // Số lượng/đơn giá/thành tiền chung 1 hàng thay vì xếp chồng — nhìn thấy ngay thành tiền
             // của dòng đang cấu hình mà không cần thêm vào đơn rồi mới biết.
-            HStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    Button {
-                        if soLuong > 1 { soLuong -= 1 }
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
+            GeometryReader { geo in
+                let spacing: CGFloat = 8
+                let unit = (geo.size.width - spacing * 2) / 3.1
+                HStack(spacing: spacing) {
+                    HStack(spacing: 4) {
+                        Button {
+                            if soLuong > 1 { soLuong -= 1 }
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                        }
+                        .disabled(soLuong <= 1)
+                        Text("\(soLuong)").font(.subheadline.bold()).frame(minWidth: 16)
+                        Button {
+                            if soLuong < 50 { soLuong += 1 }
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                        .disabled(soLuong >= 50)
                     }
-                    .disabled(soLuong <= 1)
-                    Text("\(soLuong)").font(.subheadline.bold()).frame(minWidth: 16)
-                    Button {
-                        if soLuong < 50 { soLuong += 1 }
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                    }
-                    .disabled(soLuong >= 50)
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(.brandPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 4) {
-                    Button {
-                        donGia = max(0, donGia - 5000)
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
-                    }
-                    .disabled(donGia <= 0)
-                    TextField("0", value: $donGia, format: .number)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(minWidth: 96)
-                    Button {
-                        donGia += 5000
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(.brandPrimary)
-                .layoutPriority(1)
-
-                Text(HoaDonFormatting.money(thanhTienDraft))
-                    .font(.subheadline.bold())
+                    .buttonStyle(.plain)
                     .foregroundColor(.brandPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .frame(width: unit, alignment: .leading)
+
+                    HStack(spacing: 4) {
+                        Button {
+                            donGia = max(0, donGia - 5000)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                        }
+                        .disabled(donGia <= 0)
+                        TextField("0", value: $donGia, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .textFieldStyle(.roundedBorder)
+                        Button {
+                            donGia += 5000
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.brandPrimary)
+                    .frame(width: unit * 1.1, alignment: .center)
+
+                    Text(HoaDonFormatting.money(thanhTienDraft))
+                        .font(.subheadline.bold())
+                        .foregroundColor(.brandPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .frame(width: unit, alignment: .trailing)
+                }
             }
+            .frame(height: 34)
 
             // Ghi chú/Topping đặt ngang hàng qua tab thay vì xếp chồng — đỡ cuộn dài khi có nhiều
             // topping. Tab "Ghi chú" trước vì hầu như món nào cũng cần chỉnh đường/đá, topping
