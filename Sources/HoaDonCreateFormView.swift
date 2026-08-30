@@ -913,7 +913,9 @@ private struct ProductPickerPanel: View {
     private var filteredProducts: [SanPhamDto] {
         let keyword = SanPhamSearch.normalize(searchText)
         guard !keyword.isEmpty else { return sanPhamList }
-        return sanPhamList.filter { ($0.timKiem ?? "").contains(keyword) }
+        return sanPhamList
+            .filter { ($0.timKiem ?? "").contains(keyword) }
+            .sorted { $0.thuTu > $1.thuTu }
     }
 
     private var activeNotes: Set<String> {

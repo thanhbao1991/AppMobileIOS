@@ -454,6 +454,7 @@ struct SanPhamDto: Decodable, Identifiable {
     let ten: String
     let ngungBan: Bool
     let tenNhomSanPham: String?
+    let thuTu: Int
     let bienThe: [SanPhamBienTheDto]
     /// Chuỗi token đã chuẩn hoá sẵn từ server (SanPhamSearchHelper.BuildTimKiem: tên không dấu +
     /// tên liền không cách + viết tắt tự nhận diện ("ts") + VietTat tự đặt tay ("cfk"...), nối bằng
