@@ -804,7 +804,7 @@ struct HoaDonCreateFormView: View {
     private func save() async {
         guard !items.isEmpty else { errorMessage = "Chưa có món nào."; return }
         if phanLoai == "Tại Chỗ" && tenBan.trimmingCharacters(in: .whitespaces).isEmpty {
-            errorMessage = "Đơn tại chỗ phải nhập số bàn."
+            errorMessage = "Đơn tại chỗ phải chọn bàn trước khi lưu."
             return
         }
         saving = true
