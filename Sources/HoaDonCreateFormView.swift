@@ -153,12 +153,14 @@ struct HoaDonCreateFormView: View {
     // Bàn
     // ══════════════════════════════════════════════
 
+    /// Khớp SlotLists.TaiCho (Desktop, HoaDonDomain.cs) — danh sách bàn cố định, chọn chứ không gõ
+    /// tay để tránh gõ sai/trùng tên bàn đang có người khác dùng.
+    private let banSlots = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "13", "Sân 1", "Sân 2"]
+
     private var tenBanCard: some View {
         DetailCard {
             Text("Số bàn").font(.headline)
-            TextField("Vd: 12", text: $tenBan)
-                .textFieldStyle(.roundedBorder)
-                .keyboardType(.numbersAndPunctuation)
+            chipsRow(banSlots, active: tenBan) { tenBan = $0 }
         }
     }
 
