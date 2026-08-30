@@ -954,7 +954,6 @@ private struct ProductPickerPanel: View {
             }
 
             if let pickingSanPham, let picking {
-                if editingItem == nil { Divider() }
                 configSection(pickingSanPham, picking)
             }
         }
@@ -1011,7 +1010,7 @@ private struct ProductPickerPanel: View {
                     Button("Xong") {
                         confirmAdd(sp, picking ?? bt)
                     }
-                    .font(.caption.bold())
+                    .buttonStyle(.borderedProminent)
                 } else {
                     Button("Lưu") {
                         confirmAdd(sp, picking ?? bt)
@@ -1024,11 +1023,19 @@ private struct ProductPickerPanel: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(sp.bienThe.sorted(by: { $0.giaBan < $1.giaBan })) { variant in
+                            let active = variant.id == bt.id
                             Button("\(variant.tenBienThe) \(HoaDonFormatting.moneyShort(variant.giaBan))") {
                                 picking = variant
                                 donGia = variant.giaBan
                             }
                             .font(.caption.bold())
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(active ? Color.brandPrimary.opacity(0.15) : Color.clear)
+                            .foregroundColor(active ? .brandPrimary : .textMuted)
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule().stroke(active ? Color.brandPrimary : Color.textMuted.opacity(0.3), lineWidth: 1)
+                            )
                         }
                     }
                 }
