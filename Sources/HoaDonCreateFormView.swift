@@ -1016,26 +1016,19 @@ private struct ProductPickerPanel: View {
                     Button("Lưu") {
                         confirmAdd(sp, picking ?? bt)
                     }
-                    .font(.caption.bold())
+                    .buttonStyle(.borderedProminent)
                 }
             }
 
             if sp.bienThe.count > 1 {
-                VStack(alignment: .leading, spacing: 6) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(sp.bienThe.sorted(by: { $0.giaBan < $1.giaBan })) { variant in
-                                let active = variant.id == bt.id
-                                Button("\(variant.tenBienThe) \(HoaDonFormatting.moneyShort(variant.giaBan))") {
-                                    picking = variant
-                                    donGia = variant.giaBan
-                                }
-                                .font(.caption.bold())
-                                .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.12))
-                                .foregroundColor(active ? .white : .primary)
-                                .clipShape(Capsule())
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(sp.bienThe.sorted(by: { $0.giaBan < $1.giaBan })) { variant in
+                            Button("\(variant.tenBienThe) \(HoaDonFormatting.moneyShort(variant.giaBan))") {
+                                picking = variant
+                                donGia = variant.giaBan
                             }
+                            .font(.caption.bold())
                         }
                     }
                 }
@@ -1044,41 +1037,35 @@ private struct ProductPickerPanel: View {
             // Số lượng/đơn giá/thành tiền chung 1 hàng thay vì xếp chồng — nhìn thấy ngay thành tiền
             // của dòng đang cấu hình mà không cần thêm vào đơn rồi mới biết.
             HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Số lượng").font(.caption2).foregroundColor(.textMuted)
-                    HStack(spacing: 14) {
-                        Button {
-                            if soLuong > 1 { soLuong -= 1 }
-                        } label: {
-                            Image(systemName: "minus.circle.fill").font(.title3)
-                        }
-                        .disabled(soLuong <= 1)
-                        Text("\(soLuong)").font(.subheadline.bold()).frame(minWidth: 20)
-                        Button {
-                            if soLuong < 50 { soLuong += 1 }
-                        } label: {
-                            Image(systemName: "plus.circle.fill").font(.title3)
-                        }
-                        .disabled(soLuong >= 50)
+                HStack(spacing: 14) {
+                    Button {
+                        if soLuong > 1 { soLuong -= 1 }
+                    } label: {
+                        Image(systemName: "minus.circle.fill").font(.title3)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.brandPrimary)
+                    .disabled(soLuong <= 1)
+                    Text("\(soLuong)").font(.subheadline.bold()).frame(minWidth: 20)
+                    Button {
+                        if soLuong < 50 { soLuong += 1 }
+                    } label: {
+                        Image(systemName: "plus.circle.fill").font(.title3)
+                    }
+                    .disabled(soLuong >= 50)
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Đơn giá").font(.caption2).foregroundColor(.textMuted)
-                    TextField("0", value: $donGia, format: .number)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 84)
-                }
+                .buttonStyle(.plain)
+                .foregroundColor(.brandPrimary)
+
+                TextField("0", value: $donGia, format: .number)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 84)
+
                 Spacer()
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("Thành tiền").font(.caption2).foregroundColor(.textMuted)
-                    Text(HoaDonFormatting.money(thanhTienDraft))
-                        .font(.subheadline.bold())
-                        .foregroundColor(.brandPrimary)
-                }
+
+                Text(HoaDonFormatting.money(thanhTienDraft))
+                    .font(.subheadline.bold())
+                    .foregroundColor(.brandPrimary)
             }
 
             // Ghi chú/Topping đặt ngang hàng qua tab thay vì xếp chồng — đỡ cuộn dài khi có nhiều
