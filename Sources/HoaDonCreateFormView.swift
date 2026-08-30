@@ -978,18 +978,28 @@ private struct ProductPickerPanel: View {
     private var productListSection: some View {
         LazyVStack(spacing: 0) {
             ForEach(filteredProducts.prefix(30)) { sp in
-                Button { selectProduct(sp) } label: {
-                    HStack {
+                let sizeL = sp.bienThe.first { $0.tenBienThe == "Size L" }
+                HStack {
+                    Button { selectProduct(sp) } label: {
                         Text(sp.ten)
-                        Spacer()
-                        Text(sp.bienThe.map { HoaDonFormatting.money($0.giaBan) }.first ?? "")
-                            .font(.caption).foregroundColor(.textMuted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .disabled(sp.bienThe.isEmpty)
+
+                    if let sizeL {
+                        Button {
+                            selectProduct(sp, variant: sizeL)
+                        } label: {
+                            Text("Size L \(HoaDonFormatting.money(sizeL.giaBan))")
+                                .font(.caption.bold())
+                                .foregroundColor(.brandPrimary)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
-                .disabled(sp.bienThe.isEmpty)
+                .padding(.vertical, 8)
                 Divider()
             }
         }
@@ -1000,6 +1010,12 @@ private struct ProductPickerPanel: View {
         let bt = sp.bienThe.first(where: { $0.macDinh }) ?? sp.bienThe.first
         picking = bt
         resetDetailState(bt)
+    }
+
+    private func selectProduct(_ sp: SanPhamDto, variant: SanPhamBienTheDto) {
+        pickingSanPham = sp
+        picking = variant
+        resetDetailState(variant)
     }
 
     private func configSection(_ sp: SanPhamDto, _ bt: SanPhamBienTheDto) -> some View {
