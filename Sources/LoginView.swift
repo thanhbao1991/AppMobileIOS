@@ -2,7 +2,7 @@ import SwiftUI
 
 struct LoginView: View {
     @Binding var isLoggedIn: Bool
-    @State private var matKhau = ""
+    @State private var matKhau = "123456"
     @State private var loading = false
     @State private var errorText: String?
 
