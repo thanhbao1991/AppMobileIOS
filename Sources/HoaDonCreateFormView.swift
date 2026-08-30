@@ -351,17 +351,19 @@ struct HoaDonCreateFormView: View {
             if info.donKhac > 0 {
                 infoBadge("Đơn khác chưa trả \(HoaDonFormatting.money(info.donKhac))", color: .warningColor)
             }
-            if info.duocNhanVoucher {
-                if info.daNhanVoucher {
-                    infoBadge("Đã nhận voucher tháng này", color: .successColor)
-                } else if info.diemThangTruoc >= 3000 {
-                    let soVoucher = info.diemThangTruoc / 3000
-                    infoBadge("Đủ điều kiện voucher \(HoaDonFormatting.money(Double(soVoucher) * 10000))", color: .pinkColor)
+            HStack(spacing: 8) {
+                if info.duocNhanVoucher {
+                    if info.daNhanVoucher {
+                        infoBadge("Đã nhận voucher", color: .successColor)
+                    } else if info.diemThangTruoc >= 3000 {
+                        let soVoucher = info.diemThangTruoc / 3000
+                        infoBadge("Đủ điều kiện voucher \(HoaDonFormatting.money(Double(soVoucher) * 10000))", color: .pinkColor)
+                    }
                 }
-            }
-            if info.diemThangNay > 0 || info.diemThangTruoc > 0 {
-                Text("Điểm: \(HoaDonFormatting.diemDisplay(info.diemThangNay)) tháng này · \(HoaDonFormatting.diemDisplay(info.diemThangTruoc)) tháng trước")
-                    .font(.caption2).foregroundColor(.textMuted)
+                if info.diemThangNay > 0 || info.diemThangTruoc > 0 {
+                    Text("\(HoaDonFormatting.diemDisplay(info.diemThangNay)) th.này · \(HoaDonFormatting.diemDisplay(info.diemThangTruoc)) th.trước")
+                        .font(.caption2).foregroundColor(.textMuted)
+                }
             }
         }
     }
