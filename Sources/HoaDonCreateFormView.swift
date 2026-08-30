@@ -217,7 +217,7 @@ struct HoaDonCreateFormView: View {
                     }
                     .font(.subheadline)
                 }
-            } else {
+            } else if !showEditKhachHang {
                 selectedKhachInfo(selectedKhach!)
             }
 
@@ -227,7 +227,6 @@ struct HoaDonCreateFormView: View {
             // khách: ẩn (thông tin hiện gọn trong selectedKhachInfo), bấm "Sửa" mở editKhachForm —
             // sửa thẳng hồ sơ khách, đủ nhiều SĐT/địa chỉ như Desktop.
             if selectedKhach != nil && showEditKhachHang {
-                Divider()
                 editKhachForm
             }
         }
