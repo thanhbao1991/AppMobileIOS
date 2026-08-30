@@ -1052,7 +1052,7 @@ private struct ProductPickerPanel: View {
             // của dòng đang cấu hình mà không cần thêm vào đơn rồi mới biết.
             GeometryReader { geo in
                 let spacing: CGFloat = 8
-                let unit = (geo.size.width - spacing * 2) / 3.1
+                let unit = (geo.size.width - spacing * 2) / 3.3
                 HStack(spacing: spacing) {
                     HStack(spacing: 4) {
                         Button {
@@ -1092,7 +1092,7 @@ private struct ProductPickerPanel: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.brandPrimary)
-                    .frame(width: unit * 1.1, alignment: .center)
+                    .frame(width: unit * 1.3, alignment: .center)
 
                     Text(HoaDonFormatting.money(thanhTienDraft))
                         .font(.subheadline.bold())
