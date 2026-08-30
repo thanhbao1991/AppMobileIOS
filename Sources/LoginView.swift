@@ -10,10 +10,6 @@ struct LoginView: View {
         VStack(spacing: 16) {
             Spacer()
             Text("ĐENN").font(.system(size: 40, weight: .bold))
-            SecureField("Mật khẩu", text: $matKhau)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal, 32)
-                .onSubmit { Task { await doLogin() } }
 
             if let errorText {
                 Text(errorText).foregroundColor(.red).font(.footnote)
