@@ -1081,7 +1081,7 @@ private struct ProductPickerPanel: View {
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
                         .textFieldStyle(.roundedBorder)
-                        .frame(minWidth: 64)
+                        .frame(minWidth: 96)
                     Button {
                         donGia += 5000
                     } label: {
@@ -1090,7 +1090,7 @@ private struct ProductPickerPanel: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.brandPrimary)
-                .frame(maxWidth: .infinity, alignment: .center)
+                .layoutPriority(1)
 
                 Text(HoaDonFormatting.money(thanhTienDraft))
                     .font(.subheadline.bold())
