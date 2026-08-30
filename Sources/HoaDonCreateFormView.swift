@@ -143,7 +143,7 @@ struct HoaDonCreateFormView: View {
         .task {
             await loadCatalog()
             await applyPresets()
-            if selectedKhach == nil && (phanLoai == "Ship" || phanLoai == "Mh") {
+            if selectedKhach == nil && phanLoai == "Mh" {
                 khachSearchFocused = true
             }
         }
@@ -462,6 +462,7 @@ struct HoaDonCreateFormView: View {
                     toppingList: toppingList,
                     giaRiengMap: giaRiengMap,
                     editingItem: pickerTarget.index.map { items[$0] },
+                    autoFocusSearchOnAppear: phanLoai != "Mh",
                     onAdd: { draft in
                         items.append(draft)
                         recalcGiamGia()
@@ -883,6 +884,7 @@ private struct ProductPickerPanel: View {
     let toppingList: [ToppingDto]
     let giaRiengMap: [String: Double]
     let editingItem: DraftChiTiet?
+    var autoFocusSearchOnAppear: Bool = true
     let onAdd: (DraftChiTiet) -> Void
     let onSaveEdit: ((DraftChiTiet) -> Void)?
     let onClose: () -> Void
@@ -967,7 +969,7 @@ private struct ProductPickerPanel: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onAppear {
             preloadEditing()
-            if editingItem == nil { searchFocused = true }
+            if editingItem == nil && autoFocusSearchOnAppear { searchFocused = true }
         }
     }
 
@@ -1048,51 +1050,54 @@ private struct ProductPickerPanel: View {
 
             // Số lượng/đơn giá/thành tiền chung 1 hàng thay vì xếp chồng — nhìn thấy ngay thành tiền
             // của dòng đang cấu hình mà không cần thêm vào đơn rồi mới biết.
-            HStack(spacing: 16) {
-                HStack(spacing: 14) {
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
                     Button {
                         if soLuong > 1 { soLuong -= 1 }
                     } label: {
-                        Image(systemName: "minus.circle.fill").font(.title3)
+                        Image(systemName: "minus.circle.fill")
                     }
                     .disabled(soLuong <= 1)
-                    Text("\(soLuong)").font(.subheadline.bold()).frame(minWidth: 20)
+                    Text("\(soLuong)").font(.subheadline.bold()).frame(minWidth: 16)
                     Button {
                         if soLuong < 50 { soLuong += 1 }
                     } label: {
-                        Image(systemName: "plus.circle.fill").font(.title3)
+                        Image(systemName: "plus.circle.fill")
                     }
                     .disabled(soLuong >= 50)
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.brandPrimary)
 
-                HStack(spacing: 8) {
+                HStack(spacing: 4) {
                     Button {
                         donGia = max(0, donGia - 5000)
                     } label: {
-                        Image(systemName: "minus.circle.fill").font(.title3)
+                        Image(systemName: "minus.circle.fill")
                     }
                     .disabled(donGia <= 0)
                     TextField("0", value: $donGia, format: .number)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 84)
+                        .frame(width: 64)
                     Button {
                         donGia += 5000
                     } label: {
-                        Image(systemName: "plus.circle.fill").font(.title3)
+                        Image(systemName: "plus.circle.fill")
                     }
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.brandPrimary)
 
-                Spacer()
+                Spacer(minLength: 4)
 
                 Text(HoaDonFormatting.money(thanhTienDraft))
                     .font(.subheadline.bold())
                     .foregroundColor(.brandPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .layoutPriority(1)
             }
 
             // Ghi chú/Topping đặt ngang hàng qua tab thay vì xếp chồng — đỡ cuộn dài khi có nhiều
