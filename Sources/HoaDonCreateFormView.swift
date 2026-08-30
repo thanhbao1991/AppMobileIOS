@@ -357,7 +357,7 @@ struct HoaDonCreateFormView: View {
                         infoBadge("Đã nhận voucher", color: .successColor)
                     } else if info.diemThangTruoc >= 3000 {
                         let soVoucher = info.diemThangTruoc / 3000
-                        infoBadge("Đủ điều kiện voucher \(HoaDonFormatting.money(Double(soVoucher) * 10000))", color: .pinkColor)
+                        infoBadge("Voucher \(HoaDonFormatting.money(Double(soVoucher) * 10000))", color: .pinkColor)
                     }
                 }
                 if info.diemThangNay > 0 || info.diemThangTruoc > 0 {
@@ -526,9 +526,7 @@ struct HoaDonCreateFormView: View {
             HStack {
                 Label("Giảm giá", systemImage: "tag.fill").font(.headline)
                 Spacer()
-                if giamGiaManual {
-                    Button("Tự động") { giamGiaManual = false; recalcGiamGia() }.font(.caption)
-                }
+                Button("Tự động") { applyAutoGiamGia() }.font(.caption)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -622,6 +620,24 @@ struct HoaDonCreateFormView: View {
         if !presetWarnings.isEmpty {
             presetWarningBanner = presetWarnings.joined(separator: "\n")
         }
+    }
+
+    /// Số tiền voucher khách đang đủ điều kiện nhận (nil nếu chưa đủ điều kiện/đã nhận rồi) — khớp
+    /// điều kiện hiện badge "Voucher ..." trong khachInfoBadges.
+    private var voucherGiamGia: Double? {
+        guard let info = khachInfo, info.duocNhanVoucher, !info.daNhanVoucher, info.diemThangTruoc >= 3000 else { return nil }
+        let soVoucher = info.diemThangTruoc / 3000
+        return Double(soVoucher) * 10000
+    }
+
+    private func applyAutoGiamGia() {
+        if let voucher = voucherGiamGia {
+            giamGiaManual = true
+            giamGia = voucher
+        } else {
+            giamGiaManual = false
+        }
+        recalcGiamGia()
     }
 
     private func recalcGiamGia() {
