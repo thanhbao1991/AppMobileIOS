@@ -38,6 +38,7 @@ struct HoaDonCreateFormView: View {
     @State private var sdt = ""
     @State private var diaChi = ""
     @State private var khachSearchText = ""
+    @FocusState private var khachSearchFocused: Bool
     @State private var khachSearchResults: [KhachHangDto] = []
     @State private var khachSearchTask: Task<Void, Never>?
     @State private var khachInfo: KhachHangInfoDto?
@@ -142,6 +143,9 @@ struct HoaDonCreateFormView: View {
         .task {
             await loadCatalog()
             await applyPresets()
+            if selectedKhach == nil && (phanLoai == "Ship" || phanLoai == "Mh") {
+                khachSearchFocused = true
+            }
         }
     }
 
@@ -180,6 +184,7 @@ struct HoaDonCreateFormView: View {
                 } else {
                     TextField("Tìm khách theo tên/SĐT...", text: $khachSearchText)
                         .textFieldStyle(.roundedBorder)
+                        .focused($khachSearchFocused)
                         .onChange(of: khachSearchText) { q in scheduleKhachSearch(q) }
 
                     if !khachSearchResults.isEmpty {
@@ -488,7 +493,7 @@ struct HoaDonCreateFormView: View {
                     Text(item.toppingText).font(.caption).foregroundColor(.brandPrimary)
                 }
                 if !item.noteText.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Text(item.noteText).font(.caption).italic().foregroundColor(.warningColor)
+                    Text(item.noteText).font(.caption).italic().foregroundColor(.orange)
                 }
             }
             Spacer()
@@ -1062,11 +1067,26 @@ private struct ProductPickerPanel: View {
                 .buttonStyle(.plain)
                 .foregroundColor(.brandPrimary)
 
-                TextField("0", value: $donGia, format: .number)
-                    .keyboardType(.numberPad)
-                    .multilineTextAlignment(.trailing)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 84)
+                HStack(spacing: 8) {
+                    Button {
+                        donGia = max(0, donGia - 5000)
+                    } label: {
+                        Image(systemName: "minus.circle.fill").font(.title3)
+                    }
+                    .disabled(donGia <= 0)
+                    TextField("0", value: $donGia, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 84)
+                    Button {
+                        donGia += 5000
+                    } label: {
+                        Image(systemName: "plus.circle.fill").font(.title3)
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.brandPrimary)
 
                 Spacer()
 
