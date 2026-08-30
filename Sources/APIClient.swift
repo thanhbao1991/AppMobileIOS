@@ -45,7 +45,7 @@ actor APIClient {
 
     private func doRefresh(_ refreshToken: String) async -> String? {
         let req = makeRequest("/api/auth/refresh", method: "POST",
-                               body: jsonBody(RefreshRequest(refreshToken: refreshToken, thietBi: deviceName(), nenTang: "iOS")),
+                               body: jsonBody(RefreshRequest(refreshToken: refreshToken, thietBi: deviceName(), nenTang: "iOS", thietBiId: deviceId())),
                                authorized: false)
         let (data, http) = await send(req, allowRefresh: false)
         guard let data, http?.statusCode == 200,
@@ -57,7 +57,7 @@ actor APIClient {
 
     func login(taiKhoan: String, matKhau: String) async -> LoginResult {
         let req = makeRequest("/api/auth/login", method: "POST",
-                               body: jsonBody(LoginRequest(taiKhoan: taiKhoan, matKhau: matKhau, thietBi: deviceName(), nenTang: "iOS")),
+                               body: jsonBody(LoginRequest(taiKhoan: taiKhoan, matKhau: matKhau, thietBi: deviceName(), nenTang: "iOS", thietBiId: deviceId())),
                                authorized: false)
         let (data, _) = await send(req, allowRefresh: false)
         guard let data else { return .networkError }
@@ -69,6 +69,14 @@ actor APIClient {
 
     private func deviceName() -> String {
         UIDevice.current.name
+    }
+
+    /// Định danh ổn định của máy (khác deviceName() — tên máy do người dùng đặt, dễ trùng nếu 2 máy
+    /// cùng chưa đổi tên mặc định "iPhone", từng khiến backend dedupe nhầm 2 máy là 1, thu hồi phiên
+    /// lẫn nhau — xem incident_ios_multidevice_same_name_session_kick). identifierForVendor ổn định
+    /// qua các lần mở app, chỉ đổi nếu gỡ hết app của cùng vendor.
+    private func deviceId() -> String? {
+        UIDevice.current.identifierForVendor?.uuidString
     }
 
     // Danh sách/gỡ thiết bị đăng nhập — màn hình "Thiết bị đăng nhập" trong MoreMenuView.
