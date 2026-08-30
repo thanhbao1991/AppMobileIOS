@@ -940,14 +940,6 @@ private struct ProductPickerPanel: View {
     /// số lượng/đơn giá/ghi chú/topping hiện ngay bên dưới.
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if editingItem != nil {
-                HStack {
-                    Text("ĐANG SỬA MÓN").font(.subheadline.bold())
-                    Spacer()
-                    Button("Đóng") { onClose() }.font(.caption)
-                }
-            }
-
             if editingItem == nil && pickingSanPham == nil {
                 TextField("Tìm món để thêm...", text: $searchText)
                     .textFieldStyle(.roundedBorder)
@@ -967,7 +959,7 @@ private struct ProductPickerPanel: View {
             }
         }
         .padding(12)
-        .background(Color(.tertiarySystemBackground))
+        .background(editingItem != nil ? Color.orange.opacity(0.15) : Color(.tertiarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onAppear {
             preloadEditing()
