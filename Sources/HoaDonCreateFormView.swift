@@ -270,8 +270,9 @@ struct HoaDonCreateFormView: View {
                 Text(editError).font(.caption).foregroundColor(.dangerColor)
             }
 
-            HStack(spacing: 24) {
+            HStack(spacing: 16) {
                 Button(editSaving ? "Đang lưu..." : "Lưu") { Task { await saveEditKhach() } }
+                    .buttonStyle(.borderedProminent)
                     .disabled(editSaving)
                 Button("Huỷ") { showEditKhachHang = false }
                     .foregroundColor(.textMuted)
@@ -300,6 +301,9 @@ struct HoaDonCreateFormView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(kh.ten).font(.subheadline.bold())
+                if let info = khachInfo, info.tongNo > 0 {
+                    infoBadge("Nợ \(HoaDonFormatting.money(info.tongNo))", color: .dangerColor)
+                }
                 Spacer()
                 if let info = khachInfo, !info.duocNhanVoucher {
                     infoBadge("Không tích điểm", color: .textMuted)
@@ -341,9 +345,6 @@ struct HoaDonCreateFormView: View {
 
     private func khachInfoBadges(_ info: KhachHangInfoDto) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            if info.tongNo > 0 {
-                infoBadge("Nợ \(HoaDonFormatting.money(info.tongNo))", color: .dangerColor)
-            }
             if info.soDu > 0 {
                 infoBadge("Ví \(HoaDonFormatting.money(info.soDu))", color: .brandPrimary)
             }
