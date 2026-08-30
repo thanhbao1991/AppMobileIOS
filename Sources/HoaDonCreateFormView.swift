@@ -933,7 +933,7 @@ private struct ProductPickerPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             if editingItem != nil {
                 HStack {
-                    Text("Sửa món").font(.subheadline.bold())
+                    Text("ĐANG SỬA MÓN").font(.subheadline.bold())
                     Spacer()
                     Button("Đóng") { onClose() }.font(.caption)
                 }
@@ -958,6 +958,9 @@ private struct ProductPickerPanel: View {
                 configSection(pickingSanPham, picking)
             }
         }
+        .padding(12)
+        .background(Color(.tertiarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onAppear {
             preloadEditing()
             if editingItem == nil { searchFocused = true }
@@ -1009,12 +1012,16 @@ private struct ProductPickerPanel: View {
                         confirmAdd(sp, picking ?? bt)
                     }
                     .font(.caption.bold())
+                } else {
+                    Button("Lưu") {
+                        confirmAdd(sp, picking ?? bt)
+                    }
+                    .font(.caption.bold())
                 }
             }
 
             if sp.bienThe.count > 1 {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Size").font(.caption).foregroundColor(.textMuted)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(sp.bienThe.sorted(by: { $0.giaBan < $1.giaBan })) { variant in
@@ -1089,14 +1096,6 @@ private struct ProductPickerPanel: View {
                 toppingSection
             } else {
                 noteSection
-            }
-
-            if editingItem != nil {
-                Button("Lưu") {
-                    confirmAdd(sp, picking ?? bt)
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
             }
         }
     }
