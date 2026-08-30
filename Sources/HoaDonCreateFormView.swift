@@ -123,8 +123,8 @@ struct HoaDonCreateFormView: View {
                     if phanLoai == "Tại Chỗ" { tenBanCard }
                     khachHangCard
                     monCard
-                    discountCard
                     summaryCard
+                    discountCard
                 }
                 .padding()
             }
