@@ -143,7 +143,7 @@ struct HoaDonCreateFormView: View {
         .task {
             await loadCatalog()
             await applyPresets()
-            if selectedKhach == nil && phanLoai == "Mh" {
+            if selectedKhach == nil && (phanLoai == "Mh" || phanLoai == "Ship") {
                 khachSearchFocused = true
             }
         }
@@ -462,7 +462,7 @@ struct HoaDonCreateFormView: View {
                     toppingList: toppingList,
                     giaRiengMap: giaRiengMap,
                     editingItem: pickerTarget.index.map { items[$0] },
-                    autoFocusSearchOnAppear: phanLoai != "Mh",
+                    autoFocusSearchOnAppear: !(phanLoai == "Mh" || phanLoai == "Ship"),
                     onAdd: { draft in
                         items.append(draft)
                         recalcGiamGia()
