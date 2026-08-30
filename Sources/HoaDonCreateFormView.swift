@@ -1018,7 +1018,7 @@ private struct ProductPickerPanel: View {
                 Text(sp.ten).font(.headline)
                 Spacer()
                 if editingItem == nil {
-                    Button("Đổi món") {
+                    Button("Bỏ chọn") {
                         pickingSanPham = nil
                         picking = nil
                         searchText = ""
