@@ -492,6 +492,9 @@ struct HoaDonCreateFormView: View {
                 Text(["", "Mặc định", "Size Chuẩn", "Chuẩn"].contains(item.tenBienThe)
                      ? item.tenSanPham : "\(item.tenSanPham) (\(item.tenBienThe))")
                     .font(.subheadline.bold())
+                if giaRiengMap[item.sanPhamBienTheId] == item.donGia {
+                    Text("Giá riêng").font(.caption2.bold()).foregroundColor(.pinkColor)
+                }
                 if !item.toppingText.isEmpty {
                     Text(item.toppingText).font(.caption).foregroundColor(.brandPrimary)
                 }
@@ -1074,6 +1077,10 @@ private struct ProductPickerPanel: View {
                         }
                     }
                 }
+            }
+
+            if giaRiengMap[bt.id] == donGia {
+                Text("Giá riêng").font(.caption2.bold()).foregroundColor(.pinkColor)
             }
 
             // Số lượng/đơn giá/thành tiền chung 1 hàng thay vì xếp chồng — nhìn thấy ngay thành tiền
