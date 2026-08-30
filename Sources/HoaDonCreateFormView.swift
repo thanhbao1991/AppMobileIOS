@@ -1068,6 +1068,7 @@ private struct ProductPickerPanel: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.brandPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 4) {
                     Button {
@@ -1080,7 +1081,7 @@ private struct ProductPickerPanel: View {
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 64)
+                        .frame(minWidth: 64)
                     Button {
                         donGia += 5000
                     } label: {
@@ -1089,15 +1090,14 @@ private struct ProductPickerPanel: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.brandPrimary)
-
-                Spacer(minLength: 4)
+                .frame(maxWidth: .infinity, alignment: .center)
 
                 Text(HoaDonFormatting.money(thanhTienDraft))
                     .font(.subheadline.bold())
                     .foregroundColor(.brandPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                    .layoutPriority(1)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
 
             // Ghi chú/Topping đặt ngang hàng qua tab thay vì xếp chồng — đỡ cuộn dài khi có nhiều
