@@ -10,16 +10,22 @@ struct ContentView: View {
     @State private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
 
     var body: some View {
-        Group {
-            if isLoggedIn {
-                MainTabView(isLoggedIn: $isLoggedIn)
-            } else {
-                LoginView(isLoggedIn: $isLoggedIn)
+        ZStack(alignment: .top) {
+            Group {
+                if isLoggedIn {
+                    MainTabView(isLoggedIn: $isLoggedIn)
+                } else {
+                    LoginView(isLoggedIn: $isLoggedIn)
+                }
             }
+            // Hiện lý do vừa rung (xem EntityChangeBus.toastText) — đặt ở gốc ContentView để hiện đè
+            // lên MỌI tab, không riêng tab đang xem. ignoresSafeArea RIÊNG cho banner (không phải cho
+            // cả Group) để nó nổi lên trên vùng status bar/notch, KHÔNG đè lên card đầu tiên của list
+            // bên dưới thanh tìm kiếm — trước đây .overlay đặt trong safe area nên banner nằm ngay
+            // trên card đầu tiên, che luôn nội dung đang xem.
+            SignalToastBanner()
+                .ignoresSafeArea(edges: .top)
         }
-        // Hiện lý do vừa rung (xem EntityChangeBus.toastText) — đặt ở gốc ContentView để hiện đè lên
-        // MỌI tab, không riêng tab đang xem.
-        .overlay(alignment: .top) { SignalToastBanner() }
         .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in
             isLoggedIn = false
         }
