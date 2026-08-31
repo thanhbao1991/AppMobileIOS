@@ -93,6 +93,9 @@ struct ContentView: View {
 /// thao tác — đặt lên trên cùng, cho phép chạm xuyên qua phần trống còn lại của màn hình.
 private struct SignalToastBanner: View {
     @ObservedObject private var bus = EntityChangeBus.shared
+    /// Theo ngón tay khi vuốt lên để tắt SỚM banner đang hiện — chỉ ảnh hưởng banner này, tin nhắn
+    /// tiếp theo (EntityChangeBus.post) vẫn hiện bình thường qua toastText mới.
+    @State private var dragOffset: CGFloat = 0
 
     /// warningColor (vàng amber) quá sáng để chữ trắng đọc được — riêng nó dùng chữ đen, các màu
     /// còn lại (xanh/đỏ/hồng/xám) đủ tối cho chữ trắng.
@@ -121,9 +124,25 @@ private struct SignalToastBanner: View {
             .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
             .padding(.top, 8)
             .padding(.horizontal, 16)
+            .offset(y: dragOffset)
             .transition(.move(edge: .top).combined(with: .opacity))
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: bus.toastText)
-            .allowsHitTesting(false)
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        // Chỉ theo chiều vuốt LÊN — vuốt xuống không kéo giãn banner ra khỏi vị trí.
+                        dragOffset = min(0, value.translation.height)
+                    }
+                    .onEnded { value in
+                        if value.translation.height < -20 {
+                            bus.dismissToast()
+                        }
+                        dragOffset = 0
+                    }
+            )
+            // Trước đây false để chạm xuyên qua banner xuống nội dung bên dưới — giờ cần bắt được
+            // gesture vuốt nên phải nhận hit-test, chấp nhận đánh đổi: lúc banner hiện (~3.5s),
+            // vùng nó che tạm thời chặn tap xuống nội dung ngay dưới.
         }
     }
 }

@@ -44,6 +44,13 @@ final class EntityChangeBus: ObservableObject {
         notifyReceived(entityName: entityName, action: action, voice: voice)
     }
 
+    /// Vuốt lên để tắt SỚM banner đang hiện (SignalToastBanner) — chỉ tắt cái đang hiện, không tắt
+    /// cơ chế thông báo nói chung, signal tiếp theo vẫn hiện bình thường.
+    func dismissToast() {
+        toastDismissTask?.cancel()
+        toastText = nil
+    }
+
     /// Rung + "ting" mỗi khi app đang mở nhận signal real-time (bất kể entity nào) — cho nhân viên
     /// biết có cập nhật mới mà không cần dán mắt vào màn hình. post() chỉ được gọi từ callback
     /// SignalRClient (xem ContentView) nên chỉ kêu khi kết nối đang sống, tức app đang mở.
