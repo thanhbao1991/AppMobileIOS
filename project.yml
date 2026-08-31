@@ -30,6 +30,7 @@ targets:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
         NSContactsUsageDescription: Đồng bộ tên khách hàng vào Danh bạ để hiện tên khi khách gọi đến.
+        NSCameraUsageDescription: Chụp ảnh hoá đơn mua hàng để đọc tự động vào Chi tiêu.
         CFBundleURLTypes:
           - CFBundleURLName: uk.denncoffee.appmobileios
             CFBundleURLSchemes:

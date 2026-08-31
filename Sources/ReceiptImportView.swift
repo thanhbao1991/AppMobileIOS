@@ -1,31 +1,46 @@
 import PhotosUI
 import SwiftUI
 
-/// Nút "Thêm từ ảnh" cạnh nút "+" thường trong tab Chi tiêu — chọn ảnh hoá đơn mua hàng từ thư viện
-/// ảnh, gửi lên Backend (Gemini Vision) đọc từng dòng + tự gợi ý map NguyenLieu, rồi mở form duyệt/
-/// sửa trước khi lưu thật. Xem ReceiptParseService (Backend) cho phần đọc ảnh + học mapping.
+/// 2 nút "Thêm từ ảnh" cạnh nút "+" thường trong tab Chi tiêu — chọn ảnh hoá đơn mua hàng (thư viện
+/// hoặc chụp thẳng bằng camera), gửi lên Backend (Gemini Vision) đọc từng dòng + tự gợi ý map
+/// NguyenLieu, rồi mở form duyệt/sửa trước khi lưu thật. Xem ReceiptParseService (Backend) cho phần
+/// đọc ảnh + học mapping. Dùng chung 1 state (loading/lỗi/kết quả) vì chỉ 1 luồng chạy tại 1 thời điểm.
 struct ReceiptImportButton: View {
     let date: Date
     let onSaved: () -> Void
 
     @State private var pickerItem: PhotosPickerItem?
+    @State private var showCamera = false
     @State private var loading = false
     @State private var loadError: String?
     @State private var parseResult: ReceiptParseResultDto?
 
     var body: some View {
-        PhotosPicker(selection: $pickerItem, matching: .images) {
-            if loading {
-                ProgressView().frame(width: 34, height: 34)
-            } else {
-                Image(systemName: "doc.text.viewfinder").font(.system(size: 30))
+        HStack(spacing: 10) {
+            PhotosPicker(selection: $pickerItem, matching: .images) {
+                iconOrSpinner("photo.on.rectangle")
             }
+            .disabled(loading)
+            .onChange(of: pickerItem) { item in
+                guard let item else { return }
+                Task { await handlePickedFromLibrary(item) }
+            }
+
+            Button {
+                showCamera = true
+            } label: {
+                iconOrSpinner("camera.fill")
+            }
+            .disabled(loading)
         }
         .foregroundColor(.brandPrimary)
-        .disabled(loading)
-        .onChange(of: pickerItem) { item in
-            guard let item else { return }
-            Task { await handlePicked(item) }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { image in
+                showCamera = false
+                guard let image, let data = image.jpegData(compressionQuality: 0.85) else { return }
+                Task { await handleImageData(data) }
+            }
+            .ignoresSafeArea()
         }
         .alert("Đọc ảnh thất bại", isPresented: Binding(
             get: { loadError != nil },
@@ -42,19 +57,62 @@ struct ReceiptImportButton: View {
         }
     }
 
-    private func handlePicked(_ item: PhotosPickerItem) async {
-        loading = true
-        defer { loading = false; pickerItem = nil }
+    @ViewBuilder
+    private func iconOrSpinner(_ systemName: String) -> some View {
+        if loading {
+            ProgressView().frame(width: 30, height: 30)
+        } else {
+            Image(systemName: systemName).font(.system(size: 28))
+        }
+    }
 
+    private func handlePickedFromLibrary(_ item: PhotosPickerItem) async {
+        defer { pickerItem = nil }
         guard let data = try? await item.loadTransferable(type: Data.self) else {
             loadError = "Không đọc được ảnh đã chọn."
             return
         }
+        await handleImageData(data)
+    }
+
+    private func handleImageData(_ data: Data) async {
+        loading = true
+        defer { loading = false }
         let (result, message) = await APIClient.shared.parseReceipt(imageData: data)
         if let result, !result.lines.isEmpty {
             parseResult = result
         } else {
             loadError = message ?? "Không đọc được dòng nào từ ảnh."
+        }
+    }
+}
+
+/// Bọc UIImagePickerController(sourceType: .camera) — PhotosPicker (SwiftUI) không hỗ trợ chụp
+/// camera trực tiếp trước iOS 17, deployment target app đang là iOS 16.
+private struct CameraPicker: UIViewControllerRepresentable {
+    let onCapture: (UIImage?) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(onCapture: onCapture) }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onCapture: (UIImage?) -> Void
+        init(onCapture: @escaping (UIImage?) -> Void) { self.onCapture = onCapture }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            onCapture(info[.originalImage] as? UIImage)
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            onCapture(nil)
         }
     }
 }
