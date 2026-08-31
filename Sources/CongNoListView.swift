@@ -147,13 +147,19 @@ struct CongNoFooterView: View {
         }
         .padding()
         .overlay { if payingAll { ProgressView() } }
-        .alert("Xác nhận thanh toán toàn bộ nợ", isPresented: $showPayAllConfirm) {
-            TextField("Nhập lại \(totalText)", text: $payAllInput)
-                .keyboardType(.numberPad)
+        .alert(items.count > 1 ? "Xác nhận thanh toán toàn bộ nợ" : "Xác nhận thanh toán", isPresented: $showPayAllConfirm) {
+            // Chỉ bắt gõ lại số tiền khi thu GỘP nhiều hoá đơn cùng lúc — rủi ro bấm nhầm hàng loạt.
+            // Chỉ 1 đơn thì hỏi xác nhận thường là đủ, khớp cách xác nhận F1 trong chi tiết đơn.
+            if items.count > 1 {
+                TextField("Nhập lại \(totalText)", text: $payAllInput)
+                    .keyboardType(.numberPad)
+            }
             Button("Xác nhận") { Task { await payAll() } }
             Button("Huỷ", role: .cancel) {}
         } message: {
-            Text("Thu tiền mặt \(items.count) hoá đơn, tổng \(totalText). Nhập lại đúng số tiền để xác nhận.")
+            Text(items.count > 1
+                 ? "Thu tiền mặt \(items.count) hoá đơn, tổng \(totalText). Nhập lại đúng số tiền để xác nhận."
+                 : "Thu tiền mặt \(totalText) cho hoá đơn này?")
         }
         .alert("Kết quả", isPresented: Binding(
             get: { payAllResultMessage != nil },
@@ -182,11 +188,13 @@ struct CongNoFooterView: View {
     /// thu — chặn bấm nhầm hàng loạt hoá đơn cùng lúc, không có cách hoàn tác gộp nào ngoài rollback
     /// từng đơn một. Thu tuần tự từng hoá đơn qua F1 (giống bấm tay "Tiền mặt" trong chi tiết đơn).
     private func payAll() async {
-        let entered = payAllInput.filter(\.isNumber)
-        let expected = String(Int(items.reduce(0) { $0 + $1.conLai }.rounded()))
-        guard !entered.isEmpty, entered == expected else {
-            payAllResultMessage = "Số tiền nhập không khớp \(totalText) — đã huỷ, không có gì thay đổi."
-            return
+        if items.count > 1 {
+            let entered = payAllInput.filter(\.isNumber)
+            let expected = String(Int(items.reduce(0) { $0 + $1.conLai }.rounded()))
+            guard !entered.isEmpty, entered == expected else {
+                payAllResultMessage = "Số tiền nhập không khớp \(totalText) — đã huỷ, không có gì thay đổi."
+                return
+            }
         }
 
         payingAll = true
