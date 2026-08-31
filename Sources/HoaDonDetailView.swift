@@ -218,7 +218,8 @@ struct HoaDonDetailView: View {
     }
 
     private func itemRow(_ ct: ChiTietHoaDonResponseDto, allToppings: [ChiTietHoaDonToppingResponseDto]) -> some View {
-        let toppingTien = Self.toppingTien(ct.toppingText, allToppings: allToppings)
+        let toppings = Self.toppingParts(ct.toppingText, allToppings: allToppings)
+        let toppingTien = toppings.reduce(0.0) { $0 + $1.tien }
         return HStack(alignment: .top, spacing: 10) {
             Text("\(ct.soLuong)")
                 .font(.caption.bold())
@@ -227,8 +228,9 @@ struct HoaDonDetailView: View {
                 .background(Circle().fill(Color.brandPrimary))
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(ct.tenSanPham)\(bienTheSuffix(ct.tenBienThe))").font(.subheadline.bold())
-                if let topping = ct.toppingText, !topping.isEmpty {
-                    Text(topping).font(.caption).foregroundColor(.brandPrimary)
+                if !toppings.isEmpty {
+                    Text(toppings.map(\.text).joined(separator: ", "))
+                        .font(.caption).foregroundColor(.brandPrimary)
                 }
                 if let note = ct.noteText, !note.isEmpty {
                     Text(note).font(.caption).italic().foregroundColor(.warningColor)
@@ -241,23 +243,24 @@ struct HoaDonDetailView: View {
     }
 
     /// toppingText dạng "Trân châu, Thạch x2" (BuildToppingText Desktop) chỉ có TÊN, không có GIÁ —
-    /// tính lại tiền topping của dòng này bằng cách khớp tên với đơn giá trong
-    /// d.chiTietHoaDonToppings (đơn giá 1 loại topping là cố định, không đổi theo món/dòng nào áp
-    /// dụng). Thiếu bước này khiến tổng các dòng món hiện thấp hơn "Tổng tiền" đúng bằng phần
-    /// topping — khớp cách parse trong HoaDonEditFormView.parseToppingText.
-    private static func toppingTien(_ toppingText: String?, allToppings: [ChiTietHoaDonToppingResponseDto]) -> Double {
-        guard let toppingText, !toppingText.isEmpty else { return 0 }
-        return toppingText.split(separator: ",").reduce(0.0) { sum, part in
+    /// khớp tên với đơn giá trong d.chiTietHoaDonToppings (đơn giá 1 loại topping cố định, không đổi
+    /// theo món/dòng nào áp dụng) để vừa tính tiền vừa ghi giá ngay sau tên topping ("Trân châu
+    /// +5.000"), thay vì hiện tên trơn không ai biết tốn thêm bao nhiêu.
+    private static func toppingParts(_ toppingText: String?, allToppings: [ChiTietHoaDonToppingResponseDto]) -> [(text: String, tien: Double)] {
+        guard let toppingText, !toppingText.isEmpty else { return [] }
+        return toppingText.split(separator: ",").compactMap { part -> (text: String, tien: Double)? in
             let trimmed = part.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty else { return sum }
+            guard !trimmed.isEmpty else { return nil }
             var name = trimmed
             var qty = 1
             if let range = trimmed.range(of: #"\s+x(\d+)$"#, options: .regularExpression) {
                 name = String(trimmed[trimmed.startIndex..<range.lowerBound])
                 qty = Int(trimmed[range].trimmingCharacters(in: CharacterSet(charactersIn: " x"))) ?? 1
             }
-            guard let top = allToppings.first(where: { $0.ten == name }) else { return sum }
-            return sum + top.gia * Double(qty)
+            guard let top = allToppings.first(where: { $0.ten == name }) else { return (trimmed, 0) }
+            let tien = top.gia * Double(qty)
+            let label = qty > 1 ? "\(name) x\(qty)" : name
+            return ("\(label) +\(HoaDonFormatting.money(tien))", tien)
         }
     }
 
