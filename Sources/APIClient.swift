@@ -371,6 +371,19 @@ actor APIClient {
         return CreateActionResult(success: env.isSuccess, message: env.message, id: env.data?.id)
     }
 
+    /// Sửa hoá đơn đã có — PUT /api/HoaDon/{id} nhận cùng shape body với tạo mới
+    /// (HoaDonCrudService.UpdateAsync xoá sạch ChiTietHoaDons/Toppings cũ rồi AddAsync lại từ dto,
+    /// khớp cách Desktop HoaDonEditWindow.Save ghi đè toàn bộ chứ không diff từng dòng).
+    func updateHoaDonFull(id: String, _ body: HoaDonFullCreateRequest) async -> CreateActionResult {
+        let req = makeRequest("/api/HoaDon/\(id)", method: "PUT", body: jsonBody(body))
+        let (data, _) = await send(req)
+        guard let data,
+              let env = try? JSONDecoder().decode(ApiEnvelope<IdOnlyDto>.self, from: data) else {
+            return CreateActionResult(success: false, message: "Không có phản hồi từ server.", id: nil)
+        }
+        return CreateActionResult(success: env.isSuccess, message: env.message, id: env.data?.id ?? id)
+    }
+
     /// Danh sách sản phẩm/topping đang bán — tải 1 lần lúc mở form thêm hoá đơn rồi lọc/tìm cục bộ
     /// (khớp cách Desktop cache AppDataCache.SanPhams, không gọi search API theo từng phím gõ).
     func getSanPhamList() async -> [SanPhamDto] {

@@ -902,7 +902,7 @@ private enum SanPhamSearch {
 // hình dù nội dung bên trong đã gộp list+cấu hình vào 1 khối.
 // ══════════════════════════════════════════════
 
-private struct ProductPickerPanel: View {
+struct ProductPickerPanel: View {
     let sanPhamList: [SanPhamDto]
     let toppingList: [ToppingDto]
     let giaRiengMap: [String: Double]

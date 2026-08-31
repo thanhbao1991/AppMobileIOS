@@ -16,6 +16,7 @@ struct HoaDonDetailView: View {
     @State private var copiedFeedback = false
     @State private var showSmsComposer = false
     @State private var qrImage: UIImage?
+    @State private var showEditForm = false
 
     var body: some View {
         NavigationStack {
@@ -51,6 +52,12 @@ struct HoaDonDetailView: View {
         .task { await load() }
         .sheet(isPresented: $showShipperPicker) {
             shipperPickerSheet
+        }
+        .sheet(isPresented: $showEditForm) {
+            HoaDonEditFormView(hoaDonId: hoaDonId) {
+                onChanged()
+                Task { await load() }
+            }
         }
         .sheet(isPresented: $showSmsComposer) {
             if let detail {
@@ -246,6 +253,10 @@ struct HoaDonDetailView: View {
         // cấu hình Tin nhắn — canSendText() false, hiện nút cũng không bấm được).
         let canSms = MFMessageComposeViewController.canSendText()
 
+        // Khớp guard UpdateAsync (Backend, HoaDonCrudService): đã có thanh toán VÀ không phải đơn
+        // hôm nay thì server chặn sửa món/tiền — ẩn nút thay vì để bấm xong mới báo lỗi.
+        let canEdit = payments.isEmpty || (d.ngayGio?.hasPrefix(DateNavFormat.queryDate.string(from: Date())) ?? true)
+
         return VStack(spacing: 10) {
             HStack(spacing: 10) {
                 ActionButtonView(
@@ -258,6 +269,12 @@ struct HoaDonDetailView: View {
                 if canSms {
                     ActionButtonView(icon: "message", code: nil, caption: "Gửi SMS", color: .brandPrimary) {
                         showSmsComposer = true
+                    }
+                }
+
+                if canEdit {
+                    ActionButtonView(icon: "pencil", code: nil, caption: "Sửa đơn", color: .warningColor) {
+                        showEditForm = true
                     }
                 }
             }
