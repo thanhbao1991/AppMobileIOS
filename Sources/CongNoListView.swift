@@ -13,14 +13,16 @@ struct CongNoListView: View {
 
     private var sortedItems: [HoaDonListDto] {
         items
-            .filter { anyMatchesSearch(searchText, $0.tenKhachHangText, $0.tenBan, $0.ghiChu, $0.tenMonSummary) }
+            // Bắt buộc gõ ĐÚNG dấu — khác mọi tab khác (tìm không dấu vẫn khớp) — vì đây là danh sách
+            // nợ, khớp nhầm 2 khách tên gần giống nhau (khác dấu) có thể thu/gửi bill nhầm người.
+            .filter { anyMatchesSearch(searchText, diacriticInsensitive: false, $0.tenKhachHangText, $0.tenBan, $0.ghiChu, $0.tenMonSummary) }
             .sorted { ($0.ngayNo ?? "") > ($1.ngayNo ?? "") }
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                SearchBar(text: $searchText, placeholder: "Tìm khách, món, ghi chú...")
+                SearchBar(text: $searchText, placeholder: "Tìm có dấu: khách, món, ghi chú...")
 
                 if !hasLoaded {
                     Spacer(); ProgressView(); Spacer()

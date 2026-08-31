@@ -48,13 +48,18 @@ struct SearchFieldRow: View {
 
 extension String {
     /// So khớp không phân biệt hoa/thường, bỏ qua nil/rỗng — dùng cho mọi bộ lọc search client-side.
-    func matchesSearch(_ query: String) -> Bool {
+    /// Mặc định KHÔNG phân biệt dấu tiếng Việt (gõ "ca phe" vẫn khớp "Cà Phê") — trừ tab Công nợ
+    /// (truyền diacriticInsensitive: false), nơi cần gõ ĐÚNG dấu để tránh khớp nhầm 2 khách tên gần
+    /// giống nhau (nợ là tiền thật, không muốn thu/gửi bill nhầm người).
+    func matchesSearch(_ query: String, diacriticInsensitive: Bool = true) -> Bool {
         guard !query.isEmpty else { return true }
-        return localizedCaseInsensitiveContains(query)
+        var options: String.CompareOptions = [.caseInsensitive]
+        if diacriticInsensitive { options.insert(.diacriticInsensitive) }
+        return range(of: query, options: options) != nil
     }
 }
 
-func anyMatchesSearch(_ query: String, _ fields: String?...) -> Bool {
+func anyMatchesSearch(_ query: String, diacriticInsensitive: Bool = true, _ fields: String?...) -> Bool {
     guard !query.isEmpty else { return true }
-    return fields.contains { $0?.localizedCaseInsensitiveContains(query) == true }
+    return fields.contains { $0?.matchesSearch(query, diacriticInsensitive: diacriticInsensitive) == true }
 }
