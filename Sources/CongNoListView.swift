@@ -48,6 +48,7 @@ struct CongNoListView: View {
                         }
                     }
                     .listStyle(.plain)
+                    .scrollDismissesKeyboard(.immediately)
                     .refreshable { await load() }
                 }
 
@@ -87,6 +88,10 @@ struct CongNoFooterView: View {
     var showName: Bool = true
 
     @State private var copiedFeedback = false
+    @State private var showPayAllConfirm = false
+    @State private var payAllInput = ""
+    @State private var payingAll = false
+    @State private var payAllResultMessage: String?
 
     private var totalText: String {
         HoaDonFormatting.money(items.reduce(0) { $0 + $1.conLai })
@@ -102,30 +107,104 @@ struct CongNoFooterView: View {
     }
 
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 6) {
             HStack {
                 Spacer()
                 Text("Hôm nay: \(todayText)")
                     .font(.caption2).foregroundColor(.dangerColor)
             }
-            HStack {
-                Text("Tổng nợ").font(.subheadline).foregroundColor(.textMuted)
-                Spacer()
-                if showSendButton {
-                    Button {
-                        Task { await copyBillImage() }
-                    } label: {
-                        Label(copiedFeedback ? "Đã copy" : "Gửi Tất Cả Bill Nợ", systemImage: copiedFeedback ? "checkmark" : "doc.on.doc")
-                            .font(.caption.bold())
+            HStack(spacing: 8) {
+                Group {
+                    if showSendButton {
+                        footerColumnButton(
+                            icon: copiedFeedback ? "checkmark" : "doc.on.doc",
+                            label: copiedFeedback ? "Đã copy" : "Gửi Bill",
+                            color: .brandPrimary
+                        ) {
+                            Task { await copyBillImage() }
+                        }
+                    } else {
+                        Color.clear
                     }
-                    .buttonStyle(.bordered)
-                    .tint(.brandPrimary)
-                    Spacer()
                 }
-                Text(totalText).font(.headline).foregroundColor(.dangerColor)
+                .frame(maxWidth: .infinity)
+
+                Group {
+                    if showSendButton && !items.isEmpty {
+                        footerColumnButton(icon: "banknote", label: "Thanh toán", color: .successColor) {
+                            payAllInput = ""
+                            showPayAllConfirm = true
+                        }
+                        .disabled(payingAll)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(maxWidth: .infinity)
+
+                Text(totalText)
+                    .font(.headline)
+                    .foregroundColor(.dangerColor)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .padding()
+        .overlay { if payingAll { ProgressView() } }
+        .alert("Xác nhận thanh toán toàn bộ nợ", isPresented: $showPayAllConfirm) {
+            TextField("Nhập lại \(totalText)", text: $payAllInput)
+                .keyboardType(.numberPad)
+            Button("Xác nhận") { Task { await payAll() } }
+            Button("Huỷ", role: .cancel) {}
+        } message: {
+            Text("Thu tiền mặt \(items.count) hoá đơn, tổng \(totalText). Nhập lại đúng số tiền để xác nhận.")
+        }
+        .alert("Kết quả", isPresented: Binding(
+            get: { payAllResultMessage != nil },
+            set: { if !$0 { payAllResultMessage = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(payAllResultMessage ?? "")
+        }
+    }
+
+    private func footerColumnButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: icon)
+                Text(label).font(.caption2.bold())
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.bordered)
+        .tint(color)
+    }
+
+    /// Yêu cầu gõ lại ĐÚNG tổng nợ đang hiện (so khớp số nguyên, bỏ dấu chấm/khoảng trắng) trước khi
+    /// thu — chặn bấm nhầm hàng loạt hoá đơn cùng lúc, không có cách hoàn tác gộp nào ngoài rollback
+    /// từng đơn một. Thu tuần tự từng hoá đơn qua F1 (giống bấm tay "Tiền mặt" trong chi tiết đơn).
+    private func payAll() async {
+        let entered = payAllInput.filter(\.isNumber)
+        let expected = String(Int(items.reduce(0) { $0 + $1.conLai }.rounded()))
+        guard !entered.isEmpty, entered == expected else {
+            payAllResultMessage = "Số tiền nhập không khớp \(totalText) — đã huỷ, không có gì thay đổi."
+            return
+        }
+
+        payingAll = true
+        var failCount = 0
+        for item in items {
+            let result = await APIClient.shared.thuTien(
+                hoaDonId: item.id, isCash: true, soTien: item.conLai,
+                ten: item.tenKhachHangText ?? "Khách lẻ", khachHangId: item.khachHangId
+            )
+            if !result.success { failCount += 1 }
+        }
+        payingAll = false
+        payAllResultMessage = failCount == 0
+            ? "Đã thu tiền mặt toàn bộ \(items.count) hoá đơn."
+            : "Thu xong nhưng \(failCount)/\(items.count) hoá đơn lỗi — kiểm tra lại."
     }
 
     /// Render toàn bộ danh sách (kể cả phần cần cuộn) thành 1 ảnh, copy vào clipboard để dán thẳng

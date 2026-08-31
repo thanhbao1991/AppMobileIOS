@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Ô tìm kiếm client-side dùng chung cho mọi tab danh sách — khớp hành vi search trên
 /// TraSuaApp.Mobile (web mobile cũ): lọc theo tên khách/ghi chú/tên món ngay trên dữ liệu đã tải,
@@ -26,6 +27,10 @@ struct SearchFieldRow: View {
             TextField(placeholder, text: $text)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+                .onSubmit {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
             if !text.isEmpty {
                 Button {
                     text = ""
