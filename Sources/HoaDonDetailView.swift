@@ -172,7 +172,7 @@ struct HoaDonDetailView: View {
                         }
                         ForEach(Array(chiTiet.enumerated()), id: \.element.id) { index, ct in
                             if index > 0 { Divider() }
-                            itemRow(ct)
+                            itemRow(ct, allToppings: d.chiTietHoaDonToppings ?? [])
                         }
                     }
                 }
@@ -217,8 +217,9 @@ struct HoaDonDetailView: View {
         .overlay { if busy { ProgressView() } }
     }
 
-    private func itemRow(_ ct: ChiTietHoaDonResponseDto) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+    private func itemRow(_ ct: ChiTietHoaDonResponseDto, allToppings: [ChiTietHoaDonToppingResponseDto]) -> some View {
+        let toppingTien = Self.toppingTien(ct.toppingText, allToppings: allToppings)
+        return HStack(alignment: .top, spacing: 10) {
             Text("\(ct.soLuong)")
                 .font(.caption.bold())
                 .foregroundColor(.white)
@@ -226,13 +227,37 @@ struct HoaDonDetailView: View {
                 .background(Circle().fill(Color.brandPrimary))
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(ct.tenSanPham)\(bienTheSuffix(ct.tenBienThe))").font(.subheadline.bold())
+                if let topping = ct.toppingText, !topping.isEmpty {
+                    Text(topping).font(.caption).foregroundColor(.brandPrimary)
+                }
                 if let note = ct.noteText, !note.isEmpty {
                     Text(note).font(.caption).italic().foregroundColor(.warningColor)
                 }
             }
             Spacer()
-            Text(HoaDonFormatting.money(ct.donGia * Double(ct.soLuong)))
+            Text(HoaDonFormatting.money(ct.donGia * Double(ct.soLuong) + toppingTien))
                 .font(.subheadline.bold())
+        }
+    }
+
+    /// toppingText dạng "Trân châu, Thạch x2" (BuildToppingText Desktop) chỉ có TÊN, không có GIÁ —
+    /// tính lại tiền topping của dòng này bằng cách khớp tên với đơn giá trong
+    /// d.chiTietHoaDonToppings (đơn giá 1 loại topping là cố định, không đổi theo món/dòng nào áp
+    /// dụng). Thiếu bước này khiến tổng các dòng món hiện thấp hơn "Tổng tiền" đúng bằng phần
+    /// topping — khớp cách parse trong HoaDonEditFormView.parseToppingText.
+    private static func toppingTien(_ toppingText: String?, allToppings: [ChiTietHoaDonToppingResponseDto]) -> Double {
+        guard let toppingText, !toppingText.isEmpty else { return 0 }
+        return toppingText.split(separator: ",").reduce(0.0) { sum, part in
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return sum }
+            var name = trimmed
+            var qty = 1
+            if let range = trimmed.range(of: #"\s+x(\d+)$"#, options: .regularExpression) {
+                name = String(trimmed[trimmed.startIndex..<range.lowerBound])
+                qty = Int(trimmed[range].trimmingCharacters(in: CharacterSet(charactersIn: " x"))) ?? 1
+            }
+            guard let top = allToppings.first(where: { $0.ten == name }) else { return sum }
+            return sum + top.gia * Double(qty)
         }
     }
 
