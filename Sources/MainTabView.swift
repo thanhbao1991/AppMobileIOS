@@ -143,6 +143,7 @@ private struct MoreMenuView: View {
                     }
                     Button(role: .destructive) {
                         Prefs.clear()
+                        Prefs.manualLogout = true
                         isLoggedIn = false
                     } label: {
                         Label("Đăng xuất", systemImage: "rectangle.portrait.and.arrow.right")

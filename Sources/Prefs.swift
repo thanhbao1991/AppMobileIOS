@@ -16,6 +16,8 @@ enum Prefs {
     private static let keyToken = "token"
     private static let keyRefreshToken = "refresh_token"
     private static let keyDisplayName = "display_name"
+    private static let keyLastTaiKhoan = "last_tai_khoan"
+    private static let keyManualLogout = "manual_logout"
 
     static var token: String? {
         get { defaults.string(forKey: keyToken) }
@@ -31,10 +33,24 @@ enum Prefs {
     }
     static var isLoggedIn: Bool { !(token?.isEmpty ?? true) }
 
+    /// Tài khoản đăng nhập gần nhất, để tự điền lại khi hiện form thủ công (sau đăng xuất).
+    static var lastTaiKhoan: String {
+        get { defaults.string(forKey: keyLastTaiKhoan) ?? "admin" }
+        set { defaults.set(newValue, forKey: keyLastTaiKhoan) }
+    }
+
+    /// True khi user vừa bấm "Đăng xuất" chủ động — LoginView phải đứng yên chờ bấm tay, không
+    /// tự auto-login lại ngay. Reset về false ngay khi login (tự động hoặc thủ công) thành công.
+    static var manualLogout: Bool {
+        get { defaults.bool(forKey: keyManualLogout) }
+        set { defaults.set(newValue, forKey: keyManualLogout) }
+    }
+
     static func saveSession(token: String, refreshToken: String?, displayName: String?) {
         Prefs.token = token
         if let rt = refreshToken, !rt.isEmpty { Prefs.refreshToken = rt }
         if let dn = displayName, !dn.isEmpty { Prefs.displayName = dn }
+        manualLogout = false
     }
 
     static func clear() {
