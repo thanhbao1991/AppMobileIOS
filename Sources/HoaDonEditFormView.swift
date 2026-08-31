@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// Sửa hoá đơn đã có — tái dùng ProductPickerPanel/DraftChiTiet từ HoaDonCreateFormView. Khác tạo
-/// mới: KHÔNG cho đổi khách hàng đã gán (chỉ sửa món/giảm giá/ghi chú/bàn) — đổi khách hàng qua
-/// form sửa dễ gây nhầm công nợ/điểm giữa 2 khách, không phải nhu cầu thực tế của "sửa lỗi nhập
-/// nhầm tại chỗ" (khớp lý do PUT /api/HoaDon/{id} chỉ mở cho đơn hôm nay hoặc chưa thu tiền — xem
-/// guard trong HoaDonCrudService.UpdateAsync).
+/// Sửa hoá đơn đã có — tái dùng ProductPickerPanel/DraftChiTiet + toàn bộ luồng chọn/sửa/tạo khách
+/// hàng từ HoaDonCreateFormView (copy có chủ đích, không tách chung — 2 form khác nhau đủ nhiều chỗ
+/// nhỏ nhặt là dễ vỡ nếu ép dùng chung 1 component). Gửi PUT /api/HoaDon/{id} cùng shape body với
+/// tạo mới (HoaDonCrudService.UpdateAsync xoá sạch ChiTietHoaDons/Toppings cũ rồi AddAsync lại từ
+/// dto — khớp cách Desktop HoaDonEditWindow.Save ghi đè toàn bộ chứ không diff từng dòng).
 struct HoaDonEditFormView: View {
     let hoaDonId: String
     let onUpdated: () -> Void
@@ -13,20 +13,44 @@ struct HoaDonEditFormView: View {
 
     @State private var loading = true
     @State private var loadError: String?
-    @State private var detail: HoaDonDetailDto?
+    @State private var originalGhiChu: String?
 
     @State private var phanLoai = ""
     @State private var tenBan = ""
     @State private var items: [DraftChiTiet] = []
-    @State private var pickerTarget: PickerTarget? = nil
+    @State private var pickerTarget: PickerTarget? = PickerTarget(index: nil)
     @State private var sanPhamList: [SanPhamDto] = []
     @State private var toppingList: [ToppingDto] = []
     @State private var giaRiengList: [KhachHangGiaBanDto] = []
     @State private var unmatchedNames: [String] = []
 
+    // Khách hàng — copy nguyên luồng từ HoaDonCreateFormView.
+    @State private var selectedKhach: KhachHangDto?
+    @State private var tenKhach = ""
+    @State private var sdt = ""
+    @State private var diaChi = ""
+    @State private var khachSearchText = ""
+    @FocusState private var khachSearchFocused: Bool
+    @State private var khachSearchResults: [KhachHangDto] = []
+    @State private var khachSearchTask: Task<Void, Never>?
+    @State private var khachInfo: KhachHangInfoDto?
+    @State private var giaRiengBanner: String?
+    @State private var showEditKhachHang = false
+    @State private var showNewKhachForm = false
+    @State private var newKhachTen = ""
+    @State private var newKhachSdt = ""
+    @State private var newKhachDiaChi = ""
+    @State private var newKhachVoucher = false
+    @State private var newKhachSaving = false
+    @State private var newKhachError: String?
+    @State private var editTen = ""
+    @State private var editPhoneRows: [EditContactRow] = []
+    @State private var editAddressRows: [EditContactRow] = []
+    @State private var editVoucher = false
+    @State private var editSaving = false
+    @State private var editError: String?
+
     @State private var giamGia: Double = 0
-    @State private var giamGiaManual = true
-    @State private var ghiChuDon = ""
 
     @State private var saving = false
     @State private var errorMessage: String?
@@ -34,6 +58,11 @@ struct HoaDonEditFormView: View {
     private struct PickerTarget: Identifiable {
         let index: Int?
         var id: String { index.map(String.init) ?? "new" }
+    }
+
+    private struct EditContactRow: Identifiable {
+        var id: String
+        var value: String
     }
 
     private let banSlots = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "13", "Sân 1", "Sân 2"]
@@ -44,9 +73,9 @@ struct HoaDonEditFormView: View {
     private var tongLy: Int { items.reduce(0) { $0 + $1.soLuong } }
 
     private var giaRiengMap: [String: Double] {
-        guard let khId = detail?.khachHangId else { return [:] }
+        guard let kh = selectedKhach else { return [:] }
         var map: [String: Double] = [:]
-        for g in giaRiengList where g.khachHangId == khId { map[g.sanPhamBienTheId] = g.giaBan }
+        for g in giaRiengList where g.khachHangId == kh.id { map[g.sanPhamBienTheId] = g.giaBan }
         return map
     }
 
@@ -63,6 +92,14 @@ struct HoaDonEditFormView: View {
                             if let errorMessage {
                                 Text(errorMessage).foregroundColor(.dangerColor).font(.footnote)
                             }
+                            if let giaRiengBanner {
+                                Text("Đã áp giá riêng:\n\(giaRiengBanner)")
+                                    .font(.footnote).foregroundColor(.brandPrimary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(10)
+                                    .background(Color.brandPrimary.opacity(0.1))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
                             if !unmatchedNames.isEmpty {
                                 Text("Không khớp được món trong catalog hiện tại, giữ nguyên không sửa được:\n\(unmatchedNames.joined(separator: ", "))")
                                     .font(.footnote).foregroundColor(.warningColor)
@@ -72,12 +109,11 @@ struct HoaDonEditFormView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
 
-                            khachHangReadonlyCard
                             if phanLoai == "Tại Chỗ" { tenBanCard }
+                            khachHangCard
                             monCard
                             summaryCard
                             discountCard
-                            ghiChuCard
                         }
                         .padding()
                     }
@@ -91,11 +127,9 @@ struct HoaDonEditFormView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Đóng") { dismiss() }.disabled(saving)
                 }
-                if detail != nil {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(saving ? "Đang lưu..." : "Lưu") { Task { await save() } }
-                            .disabled(saving || items.isEmpty)
-                    }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "Đang lưu..." : "Lưu") { Task { await save() } }
+                        .disabled(saving || items.isEmpty || loading || loadError != nil)
                 }
             }
         }
@@ -103,39 +137,274 @@ struct HoaDonEditFormView: View {
     }
 
     // ══════════════════════════════════════════════
-
-    private var khachHangReadonlyCard: some View {
-        DetailCard {
-            Label("Khách hàng", systemImage: "person.fill").font(.headline)
-            if let d = detail {
-                Text(d.tenKhachHangText?.isEmpty == false ? d.tenKhachHangText! : (d.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
-                    .font(.subheadline.bold())
-                if let sdt = d.soDienThoaiText, !sdt.isEmpty {
-                    Text(sdt).font(.caption).foregroundColor(.textMuted)
-                }
-            }
-            Text("Không đổi được khách hàng khi sửa đơn — xoá đơn và tạo lại nếu gán nhầm khách.")
-                .font(.caption2).foregroundColor(.textMuted)
-        }
-    }
+    // Bàn
+    // ══════════════════════════════════════════════
 
     private var tenBanCard: some View {
         DetailCard {
             Text("Số bàn").font(.headline)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(banSlots, id: \.self) { v in
-                        Button(v) { tenBan = v }
-                            .font(.caption.bold())
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(v == tenBan ? Color.brandPrimary : Color.textMuted.opacity(0.12))
-                            .foregroundColor(v == tenBan ? .white : .primary)
-                            .clipShape(Capsule())
+            chipsRow(banSlots, active: tenBan) { tenBan = $0 }
+        }
+    }
+
+    // ══════════════════════════════════════════════
+    // Khách hàng (copy 1:1 từ HoaDonCreateFormView)
+    // ══════════════════════════════════════════════
+
+    private var khachHangCard: some View {
+        DetailCard {
+            HStack {
+                Label("Khách hàng", systemImage: "person.fill").font(.headline)
+                Spacer()
+                if selectedKhach != nil && !showEditKhachHang {
+                    Button("Sửa") { beginEditKhach() }.font(.caption)
+                    Spacer().frame(width: 20)
+                    Button("Bỏ chọn") { clearKhach() }.font(.caption)
+                }
+            }
+
+            if selectedKhach == nil {
+                if showNewKhachForm {
+                    newKhachForm
+                } else {
+                    TextField("Tìm khách theo tên/SĐT...", text: $khachSearchText)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($khachSearchFocused)
+                        .onChange(of: khachSearchText) { q in scheduleKhachSearch(q) }
+
+                    if !khachSearchResults.isEmpty {
+                        VStack(spacing: 0) {
+                            ForEach(khachSearchResults) { kh in
+                                Button { selectKhach(kh) } label: {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(kh.ten).font(.subheadline.bold())
+                                            if let dt = kh.phones.first?.soDienThoai {
+                                                Text(dt).font(.caption).foregroundColor(.textMuted)
+                                            }
+                                            if let dc = kh.addresses.first?.diaChi, !dc.isEmpty {
+                                                Text(dc).font(.caption).foregroundColor(.textMuted)
+                                            }
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 6)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                Divider()
+                            }
+                        }
+                    }
+
+                    Button { showNewKhachForm = true } label: {
+                        Label("Khách mới", systemImage: "person.badge.plus")
+                    }
+                    .font(.subheadline)
+                }
+            } else if !showEditKhachHang {
+                selectedKhachInfo(selectedKhach!)
+            }
+
+            if selectedKhach != nil && showEditKhachHang {
+                editKhachForm
+            }
+        }
+    }
+
+    private func fieldLabel(_ text: String, icon: String) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption.bold())
+            .foregroundColor(.textMuted)
+    }
+
+    private var editKhachForm: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            fieldLabel("Tên khách", icon: "person")
+            TextField("Tên khách", text: $editTen)
+                .textFieldStyle(.roundedBorder)
+
+            fieldLabel("Số điện thoại", icon: "phone")
+            contactRowsEditor($editPhoneRows, placeholder: "Số điện thoại", keyboard: .phonePad)
+            Button {
+                editPhoneRows.append(EditContactRow(id: UUID().uuidString, value: ""))
+            } label: {
+                Label("Thêm SĐT", systemImage: "plus")
+            }.font(.caption)
+
+            fieldLabel("Địa chỉ", icon: "location")
+            contactRowsEditor($editAddressRows, placeholder: "Địa chỉ", keyboard: .default)
+            Button {
+                editAddressRows.append(EditContactRow(id: UUID().uuidString, value: ""))
+            } label: {
+                Label("Thêm địa chỉ", systemImage: "plus")
+            }.font(.caption)
+
+            Toggle("Được nhận voucher", isOn: $editVoucher)
+                .font(.subheadline)
+
+            if let editError {
+                Text(editError).font(.caption).foregroundColor(.dangerColor)
+            }
+
+            HStack(spacing: 16) {
+                Button(editSaving ? "Đang lưu..." : "Lưu") { Task { await saveEditKhach() } }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(editSaving)
+                Button("Huỷ") { showEditKhachHang = false }
+                    .foregroundColor(.textMuted)
+                    .disabled(editSaving)
+            }
+            .font(.subheadline.bold())
+        }
+    }
+
+    private func contactRowsEditor(_ rows: Binding<[EditContactRow]>, placeholder: String, keyboard: UIKeyboardType) -> some View {
+        VStack(spacing: 6) {
+            ForEach(rows.wrappedValue.indices, id: \.self) { i in
+                HStack {
+                    TextField(placeholder, text: rows[i].value)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(keyboard)
+                    Button { rows.wrappedValue.remove(at: i) } label: {
+                        Image(systemName: "trash").foregroundColor(.dangerColor)
                     }
                 }
             }
         }
     }
+
+    private func selectedKhachInfo(_ kh: KhachHangDto) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(kh.ten).font(.subheadline.bold())
+                if let info = khachInfo, info.tongNo > 0 {
+                    infoBadge("Nợ \(HoaDonFormatting.money(info.tongNo))", color: .dangerColor)
+                }
+                Spacer()
+                if let info = khachInfo, !info.duocNhanVoucher {
+                    infoBadge("Không tích điểm", color: .textMuted)
+                }
+            }
+
+            if kh.phones.count > 1 {
+                chipsRow(kh.phones.map(\.soDienThoai), active: sdt) { sdt = $0 }
+            }
+            if kh.addresses.count > 1 {
+                chipsRow(kh.addresses.map(\.diaChi), active: diaChi) { diaChi = $0 }
+            }
+
+            if let info = khachInfo {
+                khachInfoBadges(info)
+                if !info.monGanDay.isEmpty || !info.monHayMua.isEmpty {
+                    favoriteChips(info)
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func chipsRow(_ values: [String], active: String, onSelect: @escaping (String) -> Void) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(values, id: \.self) { v in
+                    Button(v) { onSelect(v) }
+                        .font(.caption.bold())
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(v == active ? Color.brandPrimary : Color.textMuted.opacity(0.12))
+                        .foregroundColor(v == active ? .white : .primary)
+                        .clipShape(Capsule())
+                }
+            }
+        }
+    }
+
+    private func khachInfoBadges(_ info: KhachHangInfoDto) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if info.soDu > 0 {
+                infoBadge("Ví \(HoaDonFormatting.money(info.soDu))", color: .brandPrimary)
+            }
+            if info.donKhac > 0 {
+                infoBadge("Đơn khác chưa trả \(HoaDonFormatting.money(info.donKhac))", color: .warningColor)
+            }
+            HStack(spacing: 8) {
+                if info.duocNhanVoucher {
+                    if info.daNhanVoucher {
+                        infoBadge("Đã nhận voucher", color: .successColor)
+                    } else if info.diemThangTruoc >= 3000 {
+                        let soVoucher = info.diemThangTruoc / 3000
+                        infoBadge("Voucher \(HoaDonFormatting.money(Double(soVoucher) * 10000))", color: .pinkColor)
+                    }
+                }
+                if info.diemThangNay > 0 || info.diemThangTruoc > 0 {
+                    Text("\(HoaDonFormatting.diemDisplay(info.diemThangNay)) th.này · \(HoaDonFormatting.diemDisplay(info.diemThangTruoc)) th.trước")
+                        .font(.caption2).foregroundColor(.textMuted)
+                }
+            }
+        }
+    }
+
+    private func infoBadge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption.bold())
+            .foregroundColor(color)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private func favoriteChips(_ info: KhachHangInfoDto) -> some View {
+        let all = (info.monGanDay + info.monHayMua).reduce(into: [KhachHangFavoriteItemDto]()) { acc, item in
+            if !acc.contains(where: { $0.id == item.id }) { acc.append(item) }
+        }
+        return VStack(alignment: .leading, spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(all) { fav in
+                        Button {
+                            quickAddFavorite(fav)
+                        } label: {
+                            Text(["", "Mặc định", "Size Chuẩn", "Chuẩn"].contains(fav.tenBienThe) ? fav.tenSanPham : "\(fav.tenSanPham) (\(fav.tenBienThe))")
+                                .font(.caption.bold())
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(Color.successColor.opacity(0.12))
+                                .foregroundColor(.successColor)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var newKhachForm: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Tên khách", text: $newKhachTen).textFieldStyle(.roundedBorder)
+            TextField("Số điện thoại (không bắt buộc)", text: $newKhachSdt).textFieldStyle(.roundedBorder).keyboardType(.phonePad)
+            TextField("Địa chỉ", text: $newKhachDiaChi).textFieldStyle(.roundedBorder)
+            Toggle("Được tích điểm/voucher", isOn: $newKhachVoucher).font(.caption)
+            if let newKhachError {
+                Text(newKhachError).foregroundColor(.dangerColor).font(.caption)
+            }
+            HStack {
+                Button("Huỷ") {
+                    showNewKhachForm = false
+                    newKhachTen = ""; newKhachSdt = ""; newKhachDiaChi = ""; newKhachVoucher = false
+                    newKhachError = nil
+                }
+                .buttonStyle(.bordered)
+                Spacer()
+                Button(newKhachSaving ? "Đang tạo..." : "Tạo khách") { Task { await createNewKhach() } }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(newKhachSaving)
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════
+    // Món
+    // ══════════════════════════════════════════════
 
     private var monCard: some View {
         DetailCard {
@@ -160,6 +429,7 @@ struct HoaDonEditFormView: View {
                 }
             }
 
+            // Ô tìm món luôn hiện sẵn (không ẩn sau nút "Thêm món") — khớp form Tạo đơn.
             if let pickerTarget {
                 Divider()
                 ProductPickerPanel(
@@ -174,16 +444,9 @@ struct HoaDonEditFormView: View {
                     onSaveEdit: pickerTarget.index.map { idx -> (DraftChiTiet) -> Void in
                         { draft in items[idx] = draft }
                     },
-                    onClose: { self.pickerTarget = nil }
+                    onClose: { self.pickerTarget = PickerTarget(index: nil) }
                 )
                 .id(pickerTarget.id)
-            } else {
-                Button {
-                    pickerTarget = PickerTarget(index: nil)
-                } label: {
-                    Label("Thêm món", systemImage: "plus.circle")
-                }
-                .font(.subheadline)
             }
         }
     }
@@ -198,6 +461,9 @@ struct HoaDonEditFormView: View {
                 Text(["", "Mặc định", "Size Chuẩn", "Chuẩn"].contains(item.tenBienThe)
                      ? item.tenSanPham : "\(item.tenSanPham) (\(item.tenBienThe))")
                     .font(.subheadline.bold())
+                if giaRiengMap[item.sanPhamBienTheId] == item.donGia {
+                    Text("Giá riêng").font(.caption2.bold()).foregroundColor(.pinkColor)
+                }
                 if !item.toppingText.isEmpty {
                     Text(item.toppingText).font(.caption).foregroundColor(.brandPrimary)
                 }
@@ -219,6 +485,10 @@ struct HoaDonEditFormView: View {
         .contentShape(Rectangle())
         .onTapGesture { pickerTarget = PickerTarget(index: index) }
     }
+
+    // ══════════════════════════════════════════════
+    // Giảm giá + tổng kết
+    // ══════════════════════════════════════════════
 
     private var discountCard: some View {
         DetailCard {
@@ -248,14 +518,6 @@ struct HoaDonEditFormView: View {
                     .textFieldStyle(.roundedBorder)
                 Text("đ")
             }
-        }
-    }
-
-    private var ghiChuCard: some View {
-        DetailCard {
-            Label("Ghi chú đơn", systemImage: "note.text").font(.headline)
-            TextField("Ghi chú...", text: $ghiChuDon)
-                .textFieldStyle(.roundedBorder)
         }
     }
 
@@ -300,7 +562,6 @@ struct HoaDonEditFormView: View {
             loading = false
             return
         }
-        detail = detailResult
         sanPhamList = spResult
         toppingList = tpResult
         giaRiengList = grResult
@@ -308,7 +569,10 @@ struct HoaDonEditFormView: View {
         phanLoai = detailResult.phanLoai ?? ""
         tenBan = detailResult.tenBan ?? ""
         giamGia = detailResult.giamGia
-        ghiChuDon = detailResult.ghiChu ?? ""
+        originalGhiChu = detailResult.ghiChu
+        tenKhach = detailResult.tenKhachHangText ?? ""
+        sdt = detailResult.soDienThoaiText ?? ""
+        diaChi = detailResult.diaChiText ?? ""
 
         var unmatched: [String] = []
         items = (detailResult.chiTietHoaDons ?? []).compactMap { ct -> DraftChiTiet? in
@@ -328,6 +592,11 @@ struct HoaDonEditFormView: View {
             )
         }
         unmatchedNames = unmatched
+
+        if let khId = detailResult.khachHangId, let kh = await APIClient.shared.getKhachHangById(khId) {
+            selectKhach(kh)
+        }
+
         loading = false
     }
 
@@ -349,8 +618,150 @@ struct HoaDonEditFormView: View {
         }
     }
 
+    private func scheduleKhachSearch(_ q: String) {
+        khachSearchTask?.cancel()
+        guard !q.trimmingCharacters(in: .whitespaces).isEmpty else {
+            khachSearchResults = []
+            return
+        }
+        khachSearchTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            let result = await APIClient.shared.searchKhachHang(q)
+            guard !Task.isCancelled else { return }
+            khachSearchResults = result
+        }
+    }
+
+    private func selectKhach(_ kh: KhachHangDto) {
+        selectedKhach = kh
+        showEditKhachHang = false
+        tenKhach = kh.ten
+        sdt = kh.phones.first(where: { $0.isDefault })?.soDienThoai ?? kh.phones.first?.soDienThoai ?? sdt
+        diaChi = kh.addresses.first(where: { $0.isDefault })?.diaChi ?? kh.addresses.first?.diaChi ?? diaChi
+        khachSearchText = ""
+        khachSearchResults = []
+        khachInfo = nil
+        applyGiaRiengToExistingItems()
+        Task { khachInfo = await APIClient.shared.getKhachHangInfo(khachHangId: kh.id) }
+    }
+
+    private func clearKhach() {
+        selectedKhach = nil
+        showEditKhachHang = false
+        khachInfo = nil
+        tenKhach = ""
+        sdt = ""
+        diaChi = ""
+    }
+
+    private func beginEditKhach() {
+        guard let kh = selectedKhach else { return }
+        editTen = kh.ten
+        editVoucher = kh.duocNhanVoucher
+        editPhoneRows = kh.phones.map { EditContactRow(id: $0.id, value: $0.soDienThoai) }
+        editAddressRows = kh.addresses.map { EditContactRow(id: $0.id, value: $0.diaChi) }
+        editError = nil
+        showEditKhachHang = true
+    }
+
+    private func saveEditKhach() async {
+        guard let kh = selectedKhach else { return }
+        let tenMoi = editTen.trimmingCharacters(in: .whitespaces)
+        guard !tenMoi.isEmpty else { editError = "Tên khách không được để trống."; return }
+
+        editSaving = true
+        editError = nil
+
+        let phones = editPhoneRows.enumerated().compactMap { i, row -> KhachHangPhoneDto? in
+            let v = row.value.trimmingCharacters(in: .whitespaces)
+            guard !v.isEmpty else { return nil }
+            return KhachHangPhoneDto(id: row.id, soDienThoai: v, isDefault: i == 0)
+        }
+        let addresses = editAddressRows.enumerated().compactMap { i, row -> KhachHangAddressDto? in
+            let v = row.value.trimmingCharacters(in: .whitespaces)
+            guard !v.isEmpty else { return nil }
+            return KhachHangAddressDto(id: row.id, diaChi: v, isDefault: i == 0)
+        }
+
+        let previousPhoneId = kh.phones.first(where: { $0.soDienThoai == sdt })?.id
+        let previousAddrId  = kh.addresses.first(where: { $0.diaChi == diaChi })?.id
+
+        let payload = KhachHangDto(
+            id: kh.id, ten: tenMoi, soDu: kh.soDu, duocNhanVoucher: editVoucher,
+            phones: phones, addresses: addresses, facebookThreadId: kh.facebookThreadId
+        )
+        let result = await APIClient.shared.updateKhachHang(payload)
+        editSaving = false
+        if result.success, let updated = result.khach {
+            selectedKhach = updated
+            tenKhach = updated.ten
+            sdt = updated.phones.first(where: { $0.id == previousPhoneId })?.soDienThoai
+                ?? updated.phones.first?.soDienThoai ?? ""
+            diaChi = updated.addresses.first(where: { $0.id == previousAddrId })?.diaChi
+                ?? updated.addresses.first?.diaChi ?? ""
+            showEditKhachHang = false
+            applyGiaRiengToExistingItems()
+        } else {
+            editError = result.message ?? "Lưu thất bại."
+        }
+    }
+
+    private func applyGiaRiengToExistingItems() {
+        let map = giaRiengMap
+        guard !map.isEmpty else { return }
+        var changed: [String] = []
+        for i in items.indices {
+            if let gia = map[items[i].sanPhamBienTheId], gia != items[i].donGia {
+                changed.append("\(items[i].tenSanPham): \(HoaDonFormatting.money(items[i].donGia)) → \(HoaDonFormatting.money(gia))")
+                items[i].donGia = gia
+            }
+        }
+        guard !changed.isEmpty else { return }
+        giaRiengBanner = changed.joined(separator: "\n")
+        Task {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            giaRiengBanner = nil
+        }
+    }
+
+    private func quickAddFavorite(_ fav: KhachHangFavoriteItemDto) {
+        guard let sp = sanPhamList.first(where: { $0.ten == fav.tenSanPham }) else { return }
+        let bt = sp.bienThe.first(where: { $0.tenBienThe == fav.tenBienThe })
+            ?? sp.bienThe.first(where: { $0.macDinh })
+            ?? sp.bienThe.first
+        guard let bt else { return }
+        var draft = DraftChiTiet(sanPhamBienTheId: bt.id, tenSanPham: sp.ten, tenBienThe: bt.tenBienThe, soLuong: 1, donGia: bt.giaBan)
+        if let gia = giaRiengMap[bt.id], gia != bt.giaBan { draft.donGia = gia }
+        items.append(draft)
+    }
+
+    private func createNewKhach() async {
+        let ten = newKhachTen.trimmingCharacters(in: .whitespaces)
+        let sdtVal = newKhachSdt.trimmingCharacters(in: .whitespaces)
+        let diaChiVal = newKhachDiaChi.trimmingCharacters(in: .whitespaces)
+        guard !ten.isEmpty else { newKhachError = "Vui lòng nhập tên khách."; return }
+        guard !diaChiVal.isEmpty else { newKhachError = "Vui lòng nhập địa chỉ."; return }
+
+        newKhachSaving = true
+        newKhachError = nil
+        let body = KhachHangCreateRequest(
+            ten: ten, duocNhanVoucher: newKhachVoucher,
+            phones: sdtVal.isEmpty ? [] : [KhachHangPhoneDto(soDienThoai: sdtVal, isDefault: true)],
+            addresses: [KhachHangAddressDto(diaChi: diaChiVal, isDefault: true)]
+        )
+        let result = await APIClient.shared.createKhachHang(body)
+        newKhachSaving = false
+        if result.success, let khach = result.khach {
+            selectKhach(khach)
+            showNewKhachForm = false
+            newKhachTen = ""; newKhachSdt = ""; newKhachDiaChi = ""; newKhachVoucher = false
+        } else {
+            newKhachError = result.message ?? "Tạo khách thất bại."
+        }
+    }
+
     private func save() async {
-        guard let detail else { return }
         guard !items.isEmpty else { errorMessage = "Chưa có món nào."; return }
         if phanLoai == "Tại Chỗ" && tenBan.trimmingCharacters(in: .whitespaces).isEmpty {
             errorMessage = "Đơn tại chỗ phải chọn bàn trước khi lưu."
@@ -379,11 +790,11 @@ struct HoaDonEditFormView: View {
         let body = HoaDonFullCreateRequest(
             phanLoai: phanLoai,
             tenBan: phanLoai == "Tại Chỗ" ? tenBan.trimmingCharacters(in: .whitespaces) : nil,
-            khachHangId: detail.khachHangId,
-            tenKhachHangText: detail.tenKhachHangText,
-            soDienThoaiText: detail.soDienThoaiText,
-            diaChiText: detail.diaChiText,
-            ghiChu: ghiChuDon.trimmingCharacters(in: .whitespaces).isEmpty ? nil : ghiChuDon,
+            khachHangId: selectedKhach?.id,
+            tenKhachHangText: tenKhach.trimmingCharacters(in: .whitespaces).isEmpty ? nil : tenKhach,
+            soDienThoaiText: sdt.trimmingCharacters(in: .whitespaces).isEmpty ? nil : sdt,
+            diaChiText: diaChi.trimmingCharacters(in: .whitespaces).isEmpty ? nil : diaChi,
+            ghiChu: originalGhiChu,
             giamGia: giamGia,
             chiTietHoaDons: chiTietDtos,
             chiTietHoaDonToppings: toppingDtos
