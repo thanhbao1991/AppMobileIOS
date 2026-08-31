@@ -31,6 +31,12 @@ final class EntityChangeBus: ObservableObject {
     /// Trước đây rung/"ting" xong không hiện gì, nhân viên không biết vừa có chuyện gì mà phải tự mở
     /// app dò từng tab.
     @Published var toastText: String?
+    /// Nhãn ngắn đứng đầu banner (vd "Thu tiền mặt", "Xoá đơn") — TÁCH riêng khỏi toastText để hiện
+    /// đậm/khác cỡ chữ với phần chi tiết, khớp phản hồi "đọc khó hiểu" (trước đây chỉ có mỗi phần
+    /// chi tiết "Bàn 5 120.000" không nói rõ vừa xảy ra chuyện gì).
+    @Published var toastLabel: String = ""
+    @Published var toastColor: Color = .brandPrimary
+    @Published var toastIcon: String = "bell.fill"
     private var toastDismissTask: Task<Void, Never>?
 
     func post(_ entityName: String, _ action: String, _ id: String, voice: String = "") {
@@ -45,7 +51,11 @@ final class EntityChangeBus: ObservableObject {
         AudioServicesPlaySystemSound(1007) // SMS-received1 — "ting" ngắn, quen thuộc
         AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
 
-        toastText = Self.reasonText(entityName: entityName, action: action, voice: voice)
+        let style = Self.style(entityName: entityName, action: action)
+        toastLabel = style.label
+        toastColor = style.color
+        toastIcon = style.icon
+        toastText = Self.reasonText(voice: voice)
         toastDismissTask?.cancel()
         toastDismissTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 3_500_000_000)
@@ -55,12 +65,39 @@ final class EntityChangeBus: ObservableObject {
     }
 
     /// voice là chuỗi "hiển thị||đọc" backend gửi kèm (xem BaseApiController.NotifyEntityChanged) —
-    /// lấy phần hiển thị. Nếu backend không gửi voice riêng cho signal này (đa số action CRUD
-    /// thường), tự ghép "tên thực thể + hành động" ra tiếng Việt để vẫn có gì đó hiện lên.
-    private static func reasonText(entityName: String, action: String, voice: String) -> String {
-        let display = voice.components(separatedBy: "||").first?.trimmingCharacters(in: .whitespaces) ?? ""
-        if !display.isEmpty { return display }
-        return "\(entityLabel(entityName)) \(actionLabel(action))"
+    /// lấy phần hiển thị làm dòng chi tiết bên dưới nhãn đậm (toastLabel). Rỗng nếu backend không
+    /// gửi voice riêng cho signal này (vd ROLLBACK/PRINT) — banner chỉ còn icon + nhãn, khỏi lặp lại
+    /// ý ("Hoàn tác thanh toán" + "Hoá đơn hoàn tác" trùng nghĩa).
+    private static func reasonText(voice: String) -> String {
+        voice.components(separatedBy: "||").first?.trimmingCharacters(in: .whitespaces) ?? ""
+    }
+
+    /// Nhãn + màu + icon theo (entityName, action) — quyết định nền banner và chữ đậm đầu dòng.
+    /// Màu khớp bộ token dùng xuyên suốt app (HoaDonFormatting.swift): xanh dương = tạo/thu CK, xanh
+    /// lá = thu tiền mặt, đỏ = xoá/ghi nợ, vàng = sửa/hoàn tác, hồng = ship, xám = khác.
+    private static func style(entityName: String, action: String) -> (label: String, color: Color, icon: String) {
+        if entityName.lowercased() == "hoadon" {
+            switch action {
+            case "CREATE": return ("Đơn mới", .brandPrimary, "plus.circle.fill")
+            case "UPDATE": return ("Sửa đơn", .warningColor, "pencil.circle.fill")
+            case "DEL": return ("Xoá đơn", .dangerColor, "trash.circle.fill")
+            case "F1": return ("Thu tiền mặt", .successColor, "banknote.fill")
+            case "F4": return ("Thu chuyển khoản", .brandPrimary, "creditcard.fill")
+            case "F4Auto": return ("Tự thu chuyển khoản", .brandPrimary, "sparkles")
+            case "F12": return ("Ghi nợ", .dangerColor, "exclamationmark.circle.fill")
+            case "ESC", "ESC_KHANH": return ("Chuyển đi ship", .pinkColor, "scooter")
+            case "ROLLBACK": return ("Hoàn tác thanh toán", .warningColor, "arrow.uturn.backward.circle.fill")
+            case "PRINT": return ("Yêu cầu in", .textMuted, "printer.fill")
+            default: break
+            }
+        }
+        switch action {
+        case "created": return ("\(entityLabel(entityName)) mới", .brandPrimary, "plus.circle.fill")
+        case "updated": return ("\(entityLabel(entityName)) cập nhật", .warningColor, "pencil.circle.fill")
+        case "deleted": return ("\(entityLabel(entityName)) đã xoá", .dangerColor, "trash.circle.fill")
+        case "reordered": return ("\(entityLabel(entityName)) sắp xếp lại", .textMuted, "arrow.up.arrow.down.circle.fill")
+        default: return (entityLabel(entityName), .textMuted, "bell.fill")
+        }
     }
 
     private static func entityLabel(_ entityName: String) -> String {
@@ -77,21 +114,6 @@ final class EntityChangeBus: ObservableObject {
         }
     }
 
-    private static func actionLabel(_ action: String) -> String {
-        switch action {
-        case "created": return "mới"
-        case "updated": return "vừa cập nhật"
-        case "deleted": return "vừa xoá"
-        case "reordered": return "sắp xếp lại"
-        case "F4": return "vừa thu tiền"
-        case "F4Auto": return "tự thu chuyển khoản"
-        case "F12": return "ghi nợ"
-        case "ESC", "ESC_KHANH": return "chuyển đi ship"
-        case "ROLLBACK": return "hoàn tác"
-        case "PRINT": return "yêu cầu in"
-        default: return "có cập nhật"
-        }
-    }
 }
 
 private struct EntityChangeListener: ViewModifier {

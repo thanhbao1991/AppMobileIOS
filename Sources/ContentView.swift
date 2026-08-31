@@ -88,19 +88,36 @@ struct ContentView: View {
 private struct SignalToastBanner: View {
     @ObservedObject private var bus = EntityChangeBus.shared
 
+    /// warningColor (vàng amber) quá sáng để chữ trắng đọc được — riêng nó dùng chữ đen, các màu
+    /// còn lại (xanh/đỏ/hồng/xám) đủ tối cho chữ trắng.
+    private var fgColor: Color { bus.toastColor == .warningColor ? .black : .white }
+
     var body: some View {
         if let text = bus.toastText {
-            Text(text)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
-                .padding(.top, 8)
-                .padding(.horizontal, 16)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: bus.toastText)
-                .allowsHitTesting(false)
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: bus.toastIcon)
+                    .font(.system(size: 20))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(bus.toastLabel)
+                        .font(.system(size: 14, weight: .bold))
+                    if !text.isEmpty {
+                        Text(text)
+                            .font(.system(size: 13, weight: .medium))
+                            .opacity(0.85)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundColor(fgColor)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(bus.toastColor, in: RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+            .padding(.top, 8)
+            .padding(.horizontal, 16)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: bus.toastText)
+            .allowsHitTesting(false)
         }
     }
 }
