@@ -191,6 +191,42 @@ struct ChiTieuHangNgayCreateRequest: Encodable {
     let billThang: Bool
 }
 
+// ---- Thêm chi tiêu từ ảnh hoá đơn (Gemini) ----
+
+struct ReceiptParseLineDto: Decodable, Identifiable {
+    var id: String { rawText }
+    let rawText: String
+    let soLuong: Double
+    let donGia: Double
+    let suggestedNguyenLieuId: String?
+    let suggestedNguyenLieuTen: String?
+    let suggestedFromLearnedAlias: Bool
+}
+
+struct ReceiptParseResultDto: Decodable {
+    let lines: [ReceiptParseLineDto]
+}
+
+struct ChiTieuHangNgayBulkItemRequest: Encodable {
+    let nguyenLieuId: String
+    let ten: String?
+    let soLuong: Double
+    let donGia: Double
+    let thanhTien: Double?
+    let ghiChu: String?
+    let billThang: Bool
+    /// Có giá trị thì Backend tự học/ghi đè alias RawText → nguyenLieuId cho lần đọc ảnh sau —
+    /// xem ChiTieuHangNgayBulkItemDto.RawText (Backend).
+    let rawText: String?
+}
+
+struct ChiTieuHangNgayBulkCreateRequest: Encodable {
+    let ngay: String
+    let ngayGio: String?
+    let billThang: Bool
+    let items: [ChiTieuHangNgayBulkItemRequest]
+}
+
 struct NguyenLieuBanHangDto: Decodable, Identifiable {
     let id: String
     let ten: String

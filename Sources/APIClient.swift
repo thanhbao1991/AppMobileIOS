@@ -132,6 +132,36 @@ actor APIClient {
         return await executeAction(req)
     }
 
+    /// Đọc ảnh hoá đơn qua Gemini — multipart/form-data field "image". Không dùng makeRequest (JSON
+    /// mặc định), tự dựng multipart body rồi gọi chung send() để có sẵn refresh-token/retry 401.
+    func parseReceipt(imageData: Data, mimeType: String = "image/jpeg") async -> (result: ReceiptParseResultDto?, message: String?) {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"receipt.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var req = URLRequest(url: URL(string: Prefs.apiBase + "/api/ChiTieuHangNgay/parse-receipt")!)
+        req.httpMethod = "POST"
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = Prefs.token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.httpBody = body
+
+        let (data, _) = await send(req)
+        guard let data else { return (nil, "Không có phản hồi từ server.") }
+        guard let env = try? JSONDecoder().decode(ApiEnvelope<ReceiptParseResultDto>.self, from: data) else {
+            return (nil, "Không đọc được phản hồi từ server.")
+        }
+        return (env.data, env.isSuccess ? nil : (env.message ?? "Đọc ảnh thất bại."))
+    }
+
+    func bulkCreateChiTieu(_ body: ChiTieuHangNgayBulkCreateRequest) async -> ActionResult {
+        let req = makeRequest("/api/ChiTieuHangNgay/bulk", method: "POST", body: jsonBody(body))
+        return await executeAction(req)
+    }
+
     func updateChiTieu(id: String, _ body: ChiTieuHangNgayCreateRequest) async -> ActionResult {
         let req = makeRequest("/api/ChiTieuHangNgay/\(id)", method: "PUT", body: jsonBody(body))
         return await executeAction(req)

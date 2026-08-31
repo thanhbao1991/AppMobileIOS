@@ -78,6 +78,10 @@ struct ChiTieuListView: View {
                     }
                     .foregroundColor(.brandPrimary)
 
+                    // "Thêm từ ảnh" — chọn ảnh hoá đơn mua hàng, Gemini đọc + tự gợi ý map nguyên
+                    // liệu, mở form duyệt trước khi lưu thật. Xem ReceiptImportView.swift.
+                    ReceiptImportButton(date: currentDate) { Task { await load() } }
+
                     VStack(alignment: .trailing, spacing: 2) {
                         HStack(spacing: 8) {
                             Text("Ngày: \(totalNgayText)")
