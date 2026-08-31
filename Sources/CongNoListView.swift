@@ -118,7 +118,7 @@ struct CongNoFooterView: View {
                         Task { await copyBillImage() }
                     }
                 } else {
-                    Color.clear
+                    EmptyView()
                 }
             }
             .frame(maxWidth: .infinity)
@@ -131,7 +131,7 @@ struct CongNoFooterView: View {
                     }
                     .disabled(payingAll)
                 } else {
-                    Color.clear
+                    EmptyView()
                 }
             }
             .frame(maxWidth: .infinity)
