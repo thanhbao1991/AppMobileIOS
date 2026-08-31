@@ -169,7 +169,7 @@ struct HoaDonListView: View {
                     Button { showDesktopSheet = true } label: {
                         Image(systemName: "desktopcomputer").font(.system(size: 28))
                     }
-                    .foregroundColor(.textMuted)
+                    .foregroundColor(.brandPrimary)
 
                     VStack(alignment: .trailing, spacing: 2) {
                         if !phanLoaiTotals.isEmpty {
