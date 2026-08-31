@@ -427,8 +427,16 @@ actor APIClient {
         return env.data ?? []
     }
 
-    func getKhachHangInfo(khachHangId: String) async -> KhachHangInfoDto? {
-        let req = makeRequest("/api/HoaDon/get-khach-hang-info/\(khachHangId)")
+    /// excludeHoaDonId: loại đơn đang sửa ra khỏi "Đơn khác chưa trả" — khớp
+    /// HoaDonCustomerInfoService.GetAsync(khachHangId, excludeHoaDonId) (Backend), tránh đơn đang
+    /// sửa tự đếm nợ của chính nó (Desktop truyền HoaDonId hiện tại khi mở HoaDonEditWindow cho đơn
+    /// có sẵn, chỉ để trống lúc tạo đơn mới).
+    func getKhachHangInfo(khachHangId: String, excludeHoaDonId: String? = nil) async -> KhachHangInfoDto? {
+        var path = "/api/HoaDon/get-khach-hang-info/\(khachHangId)"
+        if let excludeHoaDonId {
+            path += "?excludeHoaDonId=\(excludeHoaDonId)"
+        }
+        let req = makeRequest(path)
         let (data, _) = await send(req)
         guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<KhachHangInfoDto>.self, from: data), env.isSuccess else { return nil }
         return env.data

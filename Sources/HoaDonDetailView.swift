@@ -271,12 +271,6 @@ struct HoaDonDetailView: View {
                         showSmsComposer = true
                     }
                 }
-
-                if canEdit {
-                    ActionButtonView(icon: "pencil", code: nil, caption: "Sửa đơn", color: .warningColor) {
-                        showEditForm = true
-                    }
-                }
             }
 
             if d.conLai > 0 {
@@ -290,8 +284,9 @@ struct HoaDonDetailView: View {
                 }
             }
 
-            // Thứ tự cố định: Del luôn cuối cùng, Hoàn tác ngay trước Del, Đổi phương thức ngay
-            // trước Hoàn tác (3 nút cuối) — Ship/Ghi nợ (nếu có) xếp trước, không đụng vị trí 3 nút này.
+            // Thứ tự cố định: Del luôn cuối cùng, Sửa đơn ngay trước Del, Hoàn tác ngay trước Sửa,
+            // Đổi phương thức ngay trước Hoàn tác (4 nút cuối) — Ship/Ghi nợ (nếu có) xếp trước,
+            // không đụng vị trí các nút này.
             LazyVGrid(columns: twoColumns, spacing: 10) {
                 if d.phanLoai == "Ship" {
                     ActionButtonView(icon: "scooter", code: "Esc", caption: "Đi Ship", color: .pinkColor) {
@@ -318,6 +313,12 @@ struct HoaDonDetailView: View {
 
                     ActionButtonView(icon: "arrow.uturn.backward.circle", code: nil, caption: "Hoàn tác thanh toán", color: .warningColor) {
                         pendingAction = .rollback
+                    }
+                }
+
+                if canEdit {
+                    ActionButtonView(icon: "pencil", code: nil, caption: "Sửa đơn", color: .warningColor) {
+                        showEditForm = true
                     }
                 }
 

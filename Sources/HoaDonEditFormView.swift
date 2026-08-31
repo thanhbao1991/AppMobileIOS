@@ -643,7 +643,7 @@ struct HoaDonEditFormView: View {
         khachSearchResults = []
         khachInfo = nil
         applyGiaRiengToExistingItems()
-        Task { khachInfo = await APIClient.shared.getKhachHangInfo(khachHangId: kh.id) }
+        Task { khachInfo = await APIClient.shared.getKhachHangInfo(khachHangId: kh.id, excludeHoaDonId: hoaDonId) }
     }
 
     private func clearKhach() {
