@@ -107,46 +107,43 @@ struct CongNoFooterView: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack {
-                Spacer()
+        HStack(spacing: 8) {
+            Group {
+                if showSendButton {
+                    footerColumnButton(
+                        icon: copiedFeedback ? "checkmark" : "doc.on.doc",
+                        label: copiedFeedback ? "Đã copy" : "Gửi Bill",
+                        color: .brandPrimary
+                    ) {
+                        Task { await copyBillImage() }
+                    }
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            Group {
+                if showSendButton && !items.isEmpty {
+                    footerColumnButton(icon: "banknote", label: "Thanh toán", color: .successColor) {
+                        payAllInput = ""
+                        showPayAllConfirm = true
+                    }
+                    .disabled(payingAll)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            VStack(alignment: .trailing, spacing: 2) {
                 Text("Hôm nay: \(todayText)")
                     .font(.caption2).foregroundColor(.dangerColor)
-            }
-            HStack(spacing: 8) {
-                Group {
-                    if showSendButton {
-                        footerColumnButton(
-                            icon: copiedFeedback ? "checkmark" : "doc.on.doc",
-                            label: copiedFeedback ? "Đã copy" : "Gửi Bill",
-                            color: .brandPrimary
-                        ) {
-                            Task { await copyBillImage() }
-                        }
-                    } else {
-                        Color.clear
-                    }
-                }
-                .frame(maxWidth: .infinity)
-
-                Group {
-                    if showSendButton && !items.isEmpty {
-                        footerColumnButton(icon: "banknote", label: "Thanh toán", color: .successColor) {
-                            payAllInput = ""
-                            showPayAllConfirm = true
-                        }
-                        .disabled(payingAll)
-                    } else {
-                        Color.clear
-                    }
-                }
-                .frame(maxWidth: .infinity)
-
                 Text(totalText)
                     .font(.headline)
                     .foregroundColor(.dangerColor)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding()
         .overlay { if payingAll { ProgressView() } }
