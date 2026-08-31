@@ -260,7 +260,7 @@ struct HoaDonDetailView: View {
             guard let top = allToppings.first(where: { $0.ten == name }) else { return (trimmed, 0) }
             let tien = top.gia * Double(qty)
             let label = qty > 1 ? "\(name) x\(qty)" : name
-            return ("\(label) +\(HoaDonFormatting.money(tien))", tien)
+            return ("\(label) +\(HoaDonFormatting.moneyShort(tien))", tien)
         }
     }
 
