@@ -122,7 +122,11 @@ private struct SignalToastBanner: View {
             .padding(.vertical, 10)
             .background(bus.toastColor, in: RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
-            .padding(.top, 8)
+            // 60pt = đủ né tai thỏ/Dynamic Island (safe area top ~59pt) nhưng KHÔNG xuống quá sâu
+            // tới mức đè lên card đầu tiên bên dưới thanh tìm kiếm — banner dừng ngay ở vùng thanh
+            // tìm kiếm (có thể đè lên chính thanh tìm kiếm, chấp nhận được vì nó chỉ hiện ~3.5s),
+            // không lấn xuống danh sách. Trước đây 8pt nên đè lên đúng tai thỏ, chữ bị cắt.
+            .padding(.top, 60)
             .padding(.horizontal, 16)
             .offset(y: dragOffset)
             .transition(.move(edge: .top).combined(with: .opacity))
