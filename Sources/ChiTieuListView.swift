@@ -203,7 +203,7 @@ private struct ChiTieuDetailSheet: View {
             .overlay { if deleting { ProgressView() } }
         }
         .sheet(isPresented: $showEditForm) {
-            EditExpenseGhiChuSheet(item: item) {
+            EditExpenseSheet(item: item) {
                 onChanged()
                 dismiss()
             }
@@ -239,29 +239,63 @@ private struct ChiTieuDetailSheet: View {
     }
 }
 
-/// Sửa ghi chú 1 dòng chi tiêu — khớp phạm vi web mobile (OnPostEditAsync chỉ đổi GhiChu, các field
-/// khác giữ nguyên nhưng vẫn gửi đủ trong body PUT vì backend UpdateAsync ghi đè toàn bộ).
-private struct EditExpenseGhiChuSheet: View {
+/// Sửa 1 dòng chi tiêu — số lượng/đơn giá/ghi chú/loại đều sửa được, khớp bố cục "Thêm chi tiêu"
+/// (AddExpenseSheet) thay vì trước đây chỉ cho đổi Ghi chú (quá hẹp so với form Thêm). Tên nguyên
+/// liệu giữ cố định — đổi nguyên liệu thực chất là 1 dòng chi tiêu khác, không phải "sửa".
+private struct EditExpenseSheet: View {
     let item: ChiTieuHangNgayDto
     let onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var soLuong: Double
+    @State private var donGia: Double
     @State private var ghiChu: String
+    @State private var billThang: Bool
     @State private var saving = false
     @State private var errorMessage: String?
+
+    private var thanhTien: Double { soLuong * donGia }
 
     init(item: ChiTieuHangNgayDto, onSaved: @escaping () -> Void) {
         self.item = item
         self.onSaved = onSaved
+        _soLuong = State(initialValue: item.soLuong)
+        _donGia = State(initialValue: item.donGia)
         _ghiChu = State(initialValue: item.ghiChu ?? "")
+        _billThang = State(initialValue: item.billThang)
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Số lượng & đơn giá") {
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Số lượng").font(.caption2).foregroundColor(.textMuted)
+                            Stepper("\(soLuong.formatted())", value: $soLuong, in: 1...9999).fixedSize()
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Đơn giá").font(.caption2).foregroundColor(.textMuted)
+                            TextField("0", value: $donGia, format: .number)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 84)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("Thành tiền").font(.caption2).foregroundColor(.textMuted)
+                            Text(HoaDonFormatting.money(thanhTien))
+                                .font(.subheadline.bold())
+                                .foregroundColor(.brandPrimary)
+                        }
+                    }
+                }
+
                 Section(item.ten) {
                     TextField("Ghi chú", text: $ghiChu)
+                    Toggle("Bill tháng (nhà cung cấp)", isOn: $billThang)
                 }
+
                 if let errorMessage {
                     Text(errorMessage).foregroundColor(.dangerColor)
                 }
@@ -276,7 +310,7 @@ private struct EditExpenseGhiChuSheet: View {
                     Button(saving ? "Đang lưu..." : "Lưu") {
                         Task { await save() }
                     }
-                    .disabled(saving)
+                    .disabled(donGia <= 0 || saving)
                 }
             }
         }
@@ -288,9 +322,9 @@ private struct EditExpenseGhiChuSheet: View {
         let ngayIso = (item.ngay ?? item.ngayGio) ?? ""
         let ngayGioIso = item.ngayGio ?? ngayIso
         let body = ChiTieuHangNgayCreateRequest(
-            ten: item.ten, soLuong: item.soLuong, donGia: item.donGia, thanhTien: item.thanhTien,
+            ten: item.ten, soLuong: soLuong, donGia: donGia, thanhTien: thanhTien,
             ghiChu: ghiChu.isEmpty ? nil : ghiChu, ngay: ngayIso, ngayGio: ngayGioIso,
-            nguyenLieuId: item.nguyenLieuId, billThang: item.billThang
+            nguyenLieuId: item.nguyenLieuId, billThang: billThang
         )
         let result = await APIClient.shared.updateChiTieu(id: item.id, body)
         saving = false
