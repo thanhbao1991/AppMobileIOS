@@ -153,6 +153,7 @@ private struct MoreMenuView: View {
                 }
             }
             .navigationBarHidden(true)
+            .tint(.brandPrimary)
             .alert("Đồng bộ danh bạ", isPresented: Binding(get: { syncResultMessage != nil }, set: { if !$0 { syncResultMessage = nil } })) {
                 Button("OK") { syncResultMessage = nil }
             } message: {
