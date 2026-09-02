@@ -1,9 +1,9 @@
 import SwiftUI
 import UIKit
 
-// Màu khớp AppMobileAndroid/res/values/colors.xml (Bootstrap-style) — giữ đồng bộ hình ảnh 2 nền tảng.
+// Tông xanh navy chuyên nghiệp, khớp COLORS.primary của AppShippingIOS (src/theme.ts).
 extension Color {
-    static let brandPrimary = Color(red: 0x0D / 255, green: 0x6E / 255, blue: 0xFD / 255)
+    static let brandPrimary = Color(red: 0x1E / 255, green: 0x4E / 255, blue: 0x8C / 255)
     static let textMuted = Color(red: 0x6C / 255, green: 0x75 / 255, blue: 0x7D / 255)
     static let successColor = Color(red: 0x19 / 255, green: 0x87 / 255, blue: 0x54 / 255)
     static let dangerColor = Color(red: 0xDC / 255, green: 0x35 / 255, blue: 0x45 / 255)
