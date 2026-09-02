@@ -18,36 +18,41 @@ struct LoginView: View {
         ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
-            VStack(spacing: 28) {
-                logoHeader
+            // ScrollView (thay vì VStack trần) để SwiftUI tự tránh bàn phím - VStack đứng riêng
+            // trong ZStack KHÔNG được hệ thống tự đẩy lên khi bàn phím hiện.
+            ScrollView {
+                VStack(spacing: 28) {
+                    logoHeader
 
-                if let errorText {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                        Text(errorText)
+                    if let errorText {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                            Text(errorText)
+                        }
+                        .font(.footnote.weight(.medium))
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
                     }
-                    .font(.footnote.weight(.medium))
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-                }
 
-                if manualMode {
-                    manualForm
-                } else {
-                    VStack(spacing: 14) {
-                        ProgressView()
-                            .controlSize(.large)
-                        Text("Đang đăng nhập...")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                    if manualMode {
+                        manualForm
+                    } else {
+                        VStack(spacing: 14) {
+                            ProgressView()
+                                .controlSize(.large)
+                            Text("Đang đăng nhập...")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 8)
                     }
-                    .padding(.vertical, 8)
                 }
+                .padding(28)
+                .frame(maxWidth: 400)
+                .frame(maxWidth: .infinity)
             }
-            .padding(28)
-            .frame(maxWidth: 400)
         }
         .task {
             if !manualMode {
@@ -60,13 +65,13 @@ struct LoginView: View {
         VStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color.black)
+                    .fill(Color.brandPrimary)
                     .frame(width: 76, height: 76)
                 Image(systemName: "cup.and.saucer.fill")
                     .font(.system(size: 32))
                     .foregroundColor(.white)
             }
-            .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
+            .shadow(color: Color.brandPrimary.opacity(0.35), radius: 10, y: 6)
 
             Text("ĐENN")
                 .font(.system(size: 34, weight: .bold))
@@ -124,7 +129,7 @@ struct LoginView: View {
             }
             .foregroundColor(.white)
             .background(
-                (taiKhoan.isEmpty || matKhau.isEmpty || loading) ? Color.black.opacity(0.35) : Color.black,
+                (taiKhoan.isEmpty || matKhau.isEmpty || loading) ? Color.brandPrimary.opacity(0.35) : Color.brandPrimary,
                 in: RoundedRectangle(cornerRadius: 14)
             )
             .disabled(loading || taiKhoan.isEmpty || matKhau.isEmpty)
