@@ -1,15 +1,16 @@
 import SwiftUI
 
 /// Chi tiêu hằng ngày — GET/PUT/DELETE /api/ChiTieuHangNgay. List theo ngày (DayNavBar) + search.
-/// Vuốt trái để sửa ghi chú / xoá — khớp web mobile (OnPostEditAsync/OnPostDeleteAsync). Nút "+" thêm
-/// chi tiêu nằm ở footer, khớp bố cục HoaDonListView (nút tròn cạnh tổng tiền, không còn label "Tổng chi").
+/// Bấm vào dòng mở sheet chi tiết (Sửa/Xoá qua ActionButtonView + confirmationDialog trước khi xoá)
+/// — khớp phong cách HoaDonDetailView, thay cho swipeActions xoá thẳng không xác nhận trước đây. Nút
+/// "+" thêm chi tiêu nằm ở footer, khớp bố cục HoaDonListView (nút tròn cạnh tổng tiền).
 struct ChiTieuListView: View {
     @State private var currentDate = Date()
     @State private var items: [ChiTieuHangNgayDto] = []
     @State private var loading = false
     @State private var hasLoaded = false
     @State private var searchText = ""
-    @State private var editingItem: ChiTieuHangNgayDto?
+    @State private var selectedItem: ChiTieuHangNgayDto?
     @State private var showAdd = false
 
     private var filteredItems: [ChiTieuHangNgayDto] {
@@ -47,23 +48,10 @@ struct ChiTieuListView: View {
                                 .listRowSeparator(.hidden)
                         } else {
                             ForEach(filteredItems) { item in
-                                ChiTieuRowView(item: item)
+                                ChiTieuRowView(item: item, onSelect: { selectedItem = item })
                                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                                     .listRowBackground(Color.clear)
                                     .listRowSeparator(.hidden)
-                                    .swipeActions(edge: .trailing) {
-                                        Button(role: .destructive) {
-                                            Task { await delete(item) }
-                                        } label: {
-                                            Label("Xoá", systemImage: "trash")
-                                        }
-                                        Button {
-                                            editingItem = item
-                                        } label: {
-                                            Label("Sửa", systemImage: "pencil")
-                                        }
-                                        .tint(.brandPrimary)
-                                    }
                             }
                         }
                     }
@@ -97,8 +85,8 @@ struct ChiTieuListView: View {
             }
         }
         .task { await load() }
-        .sheet(item: $editingItem) { item in
-            EditExpenseGhiChuSheet(item: item) {
+        .sheet(item: $selectedItem) { item in
+            ChiTieuDetailSheet(item: item) {
                 Task { await load() }
             }
         }
@@ -115,17 +103,11 @@ struct ChiTieuListView: View {
         loading = false
         hasLoaded = true
     }
-
-    private func delete(_ item: ChiTieuHangNgayDto) async {
-        let result = await APIClient.shared.deleteChiTieu(id: item.id)
-        if result.success {
-            items.removeAll { $0.id == item.id }
-        }
-    }
 }
 
 private struct ChiTieuRowView: View {
     let item: ChiTieuHangNgayDto
+    var onSelect: (() -> Void)? = nil
 
     private var borderColor: Color {
         item.billThang ? .brandPrimary : .successColor
@@ -159,6 +141,101 @@ private struct ChiTieuRowView: View {
         .padding(12)
         .background(borderColor.pastelBackground())
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect?() }
+    }
+}
+
+/// Mở khi bấm vào 1 dòng chi tiêu — khớp phong cách HoaDonDetailView: xem thông tin trước, Sửa/Xoá
+/// là 2 nút ActionButtonView riêng bên dưới (không còn swipeActions xoá thẳng không xác nhận), Xoá
+/// bắt buộc qua confirmationDialog trước khi gọi API (khớp nguyên tắc "mọi thao tác đụng tiền/dữ
+/// liệu thật đều phải qua bước Xác nhận" — xem HoaDonDetailView.PendingAction).
+private struct ChiTieuDetailSheet: View {
+    let item: ChiTieuHangNgayDto
+    let onChanged: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var showEditForm = false
+    @State private var showDeleteConfirm = false
+    @State private var deleting = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(item.ten).font(.title3.bold())
+                    if let ghiChu = item.ghiChu, !ghiChu.isEmpty {
+                        Text(ghiChu).font(.subheadline).foregroundColor(.textMuted)
+                    }
+                }
+
+                VStack(spacing: 10) {
+                    infoRow("Số lượng", item.soLuong.formatted())
+                    infoRow("Đơn giá", HoaDonFormatting.money(item.donGia))
+                    infoRow("Thành tiền", HoaDonFormatting.money(item.thanhTien))
+                    infoRow("Loại", item.billThang ? "Bill tháng (nhà cung cấp)" : "Chi ngày")
+                }
+
+                if let errorMessage {
+                    Text(errorMessage).font(.footnote).foregroundColor(.dangerColor)
+                }
+
+                Spacer()
+
+                HStack(spacing: 12) {
+                    ActionButtonView(icon: "pencil", code: nil, caption: "Sửa", color: .warningColor) {
+                        showEditForm = true
+                    }
+                    ActionButtonView(icon: "trash", code: nil, caption: "Xoá", color: .dangerColor) {
+                        showDeleteConfirm = true
+                    }
+                }
+            }
+            .padding()
+            .navigationTitle("Chi tiết chi tiêu")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
+                }
+            }
+            .overlay { if deleting { ProgressView() } }
+        }
+        .sheet(isPresented: $showEditForm) {
+            EditExpenseGhiChuSheet(item: item) {
+                onChanged()
+                dismiss()
+            }
+        }
+        .confirmationDialog("Xoá chi tiêu", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("Xoá", role: .destructive) { Task { await delete() } }
+            Button("Huỷ", role: .cancel) {}
+        } message: {
+            Text("Xoá \"\(item.ten)\"? Không thể hoàn tác.")
+        }
+    }
+
+    private func infoRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).foregroundColor(.textMuted)
+            Spacer()
+            Text(value).multilineTextAlignment(.trailing)
+        }
+        .font(.subheadline)
+    }
+
+    private func delete() async {
+        deleting = true
+        errorMessage = nil
+        let result = await APIClient.shared.deleteChiTieu(id: item.id)
+        deleting = false
+        if result.success {
+            onChanged()
+            dismiss()
+        } else {
+            errorMessage = result.message ?? "Không xoá được."
+        }
     }
 }
 
