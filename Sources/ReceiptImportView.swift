@@ -214,7 +214,7 @@ private struct ReceiptReviewSheet: View {
     private func lineRow(_ line: Binding<ReceiptDraftLine>) -> some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(line.wrappedValue.rawText).font(.subheadline.bold())
+                Text(line.wrappedValue.rawText).font(.subheadline)
                 if line.wrappedValue.nguyenLieuId == nil {
                     Text("Chưa khớp — chọn nguyên liệu").font(.caption).foregroundColor(.warningColor)
                 } else if line.wrappedValue.fromLearnedAlias {
