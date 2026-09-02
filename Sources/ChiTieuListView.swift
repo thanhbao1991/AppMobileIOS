@@ -174,7 +174,7 @@ private struct ChiTieuDetailSheet: View {
                     infoRow("Số lượng", item.soLuong.formatted())
                     infoRow("Đơn giá", HoaDonFormatting.money(item.donGia))
                     infoRow("Thành tiền", HoaDonFormatting.money(item.thanhTien))
-                    infoRow("Loại", item.billThang ? "Bill tháng (nhà cung cấp)" : "Chi ngày")
+                    infoRow("Loại", item.billThang ? "Bill tháng" : "Chi ngày")
                     if let tk = item.tenTaiKhoan, !tk.isEmpty {
                         infoRow("Người thêm", tk)
                     }
@@ -272,31 +272,12 @@ private struct EditExpenseSheet: View {
         NavigationStack {
             Form {
                 Section("Số lượng & đơn giá") {
-                    HStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Số lượng").font(.caption2).foregroundColor(.textMuted)
-                            Stepper("\(soLuong.formatted())", value: $soLuong, in: 1...9999).fixedSize()
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Đơn giá").font(.caption2).foregroundColor(.textMuted)
-                            TextField("0", value: $donGia, format: .number)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 84)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("Thành tiền").font(.caption2).foregroundColor(.textMuted)
-                            Text(HoaDonFormatting.money(thanhTien))
-                                .font(.subheadline.bold())
-                                .foregroundColor(.brandPrimary)
-                        }
-                    }
+                    QuantityPriceRow(soLuong: $soLuong, donGia: $donGia, thanhTien: thanhTien)
                 }
 
                 Section(item.ten) {
                     TextField("Ghi chú", text: $ghiChu)
-                    Toggle("Bill tháng (nhà cung cấp)", isOn: $billThang)
+                    Toggle("Bill tháng", isOn: $billThang)
                 }
 
                 if let errorMessage {
@@ -337,6 +318,70 @@ private struct EditExpenseSheet: View {
         } else {
             errorMessage = result.message ?? "Không lưu được."
         }
+    }
+}
+
+/// Hàng Số lượng/Đơn giá/Thành tiền — khớp `configSection` bên HoaDonCreateFormView.ProductPickerSheet
+/// (nút tròn -/+ cho số lượng, -/+5000 quanh ô nhập đơn giá) thay cho Stepper mặc định trước đây, dùng
+/// chung cho cả AddExpenseSheet lẫn EditExpenseSheet để 2 form luôn khớp nhau.
+private struct QuantityPriceRow: View {
+    @Binding var soLuong: Double
+    @Binding var donGia: Double
+    var thanhTien: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            let spacing: CGFloat = 8
+            let unit = (geo.size.width - spacing * 2) / 3.3
+            HStack(spacing: spacing) {
+                HStack(spacing: 4) {
+                    Button {
+                        if soLuong > 1 { soLuong -= 1 }
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                    }
+                    .disabled(soLuong <= 1)
+                    Text(soLuong.formatted()).font(.subheadline.bold()).frame(minWidth: 16)
+                    Button {
+                        soLuong += 1
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.brandPrimary)
+                .frame(width: unit, alignment: .leading)
+
+                HStack(spacing: 4) {
+                    Button {
+                        donGia = max(0, donGia - 5000)
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                    }
+                    .disabled(donGia <= 0)
+                    TextField("0", value: $donGia, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .textFieldStyle(.roundedBorder)
+                    Button {
+                        donGia += 5000
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.brandPrimary)
+                .frame(width: unit * 1.3, alignment: .center)
+
+                Text(HoaDonFormatting.money(thanhTien))
+                    .font(.subheadline.bold())
+                    .foregroundColor(.brandPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(width: unit, alignment: .trailing)
+            }
+        }
+        .frame(height: 34)
     }
 }
 
@@ -388,34 +433,15 @@ struct AddExpenseSheet: View {
                     }
                 }
 
-                // Số lượng/đơn giá/thành tiền chung 1 hàng thay vì xếp chồng — khớp cách gộp bên
-                // "Thêm món" (HoaDonCreateFormView.ProductPickerSheet.configSection).
+                // Khớp hàng Số lượng/Đơn giá/Thành tiền bên "Thêm món"
+                // (HoaDonCreateFormView.ProductPickerSheet.configSection) qua QuantityPriceRow dùng chung.
                 Section("Số lượng & đơn giá") {
-                    HStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Số lượng").font(.caption2).foregroundColor(.textMuted)
-                            Stepper("\(soLuong.formatted())", value: $soLuong, in: 1...9999).fixedSize()
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Đơn giá").font(.caption2).foregroundColor(.textMuted)
-                            TextField("0", value: $donGia, format: .number)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 84)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("Thành tiền").font(.caption2).foregroundColor(.textMuted)
-                            Text(HoaDonFormatting.money(thanhTien))
-                                .font(.subheadline.bold())
-                                .foregroundColor(.brandPrimary)
-                        }
-                    }
+                    QuantityPriceRow(soLuong: $soLuong, donGia: $donGia, thanhTien: thanhTien)
                 }
 
                 Section {
                     TextField("Ghi chú", text: $ghiChu)
-                    Toggle("Bill tháng (nhà cung cấp)", isOn: $billThang)
+                    Toggle("Bill tháng", isOn: $billThang)
                 }
 
                 if let errorMessage {

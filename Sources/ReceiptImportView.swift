@@ -180,7 +180,7 @@ private struct ReceiptReviewSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle("Bill tháng (nhà cung cấp)", isOn: $billThang)
+                    Toggle("Bill tháng", isOn: $billThang)
                 } footer: {
                     Text("Áp dụng chung cho tất cả dòng bên dưới.")
                 }
