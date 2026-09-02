@@ -333,7 +333,8 @@ struct AddExpenseSheet: View {
         let body = ChiTieuHangNgayCreateRequest(
             ten: selected.ten, soLuong: soLuong, donGia: donGia, thanhTien: thanhTien,
             ghiChu: ghiChu.isEmpty ? nil : ghiChu,
-            ngay: dateIso, ngayGio: DateNavFormat.nowIso(onDate: date), nguyenLieuId: selected.id, billThang: billThang
+            // NgayGio do server quyết định (VietnamTime.Now) — giá trị gửi đây không được server dùng.
+            ngay: dateIso, ngayGio: dateIso, nguyenLieuId: selected.id, billThang: billThang
         )
         let result = await APIClient.shared.createChiTieu(body)
         saving = false

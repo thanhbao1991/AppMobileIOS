@@ -146,7 +146,9 @@ private struct ReceiptReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var lines: [ReceiptDraftLine]
     @State private var nguyenLieuList: [NguyenLieuDto] = []
-    @State private var billThang = false
+    // Mặc định bật — luồng "Thêm từ ảnh"/camera hầu hết dùng cho bill nhà cung cấp cuối tháng, người
+    // dùng vẫn tắt được nếu là hoá đơn lẻ trong ngày.
+    @State private var billThang = true
     @State private var saving = false
     @State private var errorMessage: String?
 
@@ -290,7 +292,6 @@ private struct ReceiptReviewSheet: View {
         saving = true
         errorMessage = nil
         let dateIso = DateNavFormat.queryDate.string(from: date) + "T00:00:00"
-        let ngayGioIso = DateNavFormat.nowIso(onDate: date)
         let items = includedLines.compactMap { line -> ChiTieuHangNgayBulkItemRequest? in
             guard let nguyenLieuId = line.nguyenLieuId else { return nil }
             return ChiTieuHangNgayBulkItemRequest(
@@ -304,7 +305,8 @@ private struct ReceiptReviewSheet: View {
                 rawText: line.rawText
             )
         }
-        let body = ChiTieuHangNgayBulkCreateRequest(ngay: dateIso, ngayGio: ngayGioIso, billThang: billThang, items: items)
+        // NgayGio do server quyết định (VietnamTime.Now) — không gửi, để Backend tự set.
+        let body = ChiTieuHangNgayBulkCreateRequest(ngay: dateIso, ngayGio: nil, billThang: billThang, items: items)
         let result = await APIClient.shared.bulkCreateChiTieu(body)
         saving = false
         if result.success {
