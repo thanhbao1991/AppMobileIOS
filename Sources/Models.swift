@@ -125,6 +125,8 @@ struct HoaDonDetailDto: Decodable {
     let chiTietHoaDons: [ChiTietHoaDonResponseDto]?
     let chiTietHoaDonToppings: [ChiTietHoaDonToppingResponseDto]?
     let payments: [HoaDonPaymentBriefDto]?
+    /// Tài khoản đã tạo đơn — nil nếu đơn khách tự đặt qua app (không phải nhân viên).
+    let tenTaiKhoan: String?
 }
 
 // ---- Thao tác nhanh trên hoá đơn ----
@@ -162,6 +164,8 @@ struct ChiTietHoaDonThanhToanDto: Decodable, Identifiable {
     let phuongThucThanhToanId: String?
     /// null = thu tay; có giá trị = SePay webhook tự thu — hiện icon robot phân biệt trên badge.
     let tuDongLuc: String?
+    /// Tài khoản đã bấm thu tiền — nil nếu dòng do hệ thống tự thu (SePay webhook, xem tuDongLuc).
+    let tenTaiKhoan: String?
 }
 
 // ---- Chi tiêu hằng ngày ----
@@ -177,6 +181,8 @@ struct ChiTieuHangNgayDto: Decodable, Identifiable {
     let ngayGio: String?
     let nguyenLieuId: String
     let billThang: Bool
+    /// Tài khoản đã thêm dòng chi tiêu này — nil ở dữ liệu cũ trước khi có field.
+    let tenTaiKhoan: String?
 }
 
 struct ChiTieuHangNgayCreateRequest: Encodable {

@@ -220,6 +220,9 @@ private struct ThanhToanRowView: View {
                 if let mon = item.tenMonSummary, !mon.isEmpty {
                     Text(mon).font(.footnote).foregroundColor(.textMuted).lineLimit(1)
                 }
+                if let tk = item.tenTaiKhoan, !tk.isEmpty {
+                    Text("Thu bởi: \(tk)").font(.caption2).foregroundColor(.textMuted).lineLimit(1)
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {

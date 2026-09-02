@@ -38,6 +38,7 @@ struct ThanhToanDetailView: View {
                         if let loai = item.loaiThanhToan, !loai.isEmpty { infoRow("Loại", loai) }
                         if let mon = item.tenMonSummary, !mon.isEmpty { infoRow("Món", mon) }
                         if let gc = item.ghiChu, !gc.isEmpty { infoRow("Ghi chú", gc) }
+                        if let tk = item.tenTaiKhoan, !tk.isEmpty { infoRow("Thu bởi", tk) }
                         infoRow("Phương thức", isBank ? "Chuyển khoản" : "Tiền mặt")
                         Divider()
                         HStack {

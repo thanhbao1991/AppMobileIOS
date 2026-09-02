@@ -175,6 +175,9 @@ private struct ChiTieuDetailSheet: View {
                     infoRow("Đơn giá", HoaDonFormatting.money(item.donGia))
                     infoRow("Thành tiền", HoaDonFormatting.money(item.thanhTien))
                     infoRow("Loại", item.billThang ? "Bill tháng (nhà cung cấp)" : "Chi ngày")
+                    if let tk = item.tenTaiKhoan, !tk.isEmpty {
+                        infoRow("Người thêm", tk)
+                    }
                 }
 
                 if let errorMessage {
