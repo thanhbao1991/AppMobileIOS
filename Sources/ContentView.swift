@@ -19,12 +19,10 @@ struct ContentView: View {
                 }
             }
             // Hiện lý do vừa rung (xem EntityChangeBus.toastText) — đặt ở gốc ContentView để hiện đè
-            // lên MỌI tab, không riêng tab đang xem. ignoresSafeArea RIÊNG cho banner (không phải cho
-            // cả Group) để nó nổi lên trên vùng status bar/notch, KHÔNG đè lên card đầu tiên của list
-            // bên dưới thanh tìm kiếm — trước đây .overlay đặt trong safe area nên banner nằm ngay
-            // trên card đầu tiên, che luôn nội dung đang xem.
+            // lên MỌI tab, không riêng tab đang xem. KHÔNG ignoresSafeArea (khác trước đây) — để banner
+            // tự nằm trong safe area giống DaySearchBar/SearchBar, cùng gốc toạ độ nên căn đúng vị trí
+            // ô tìm kiếm mà không cần hardcode offset theo tai thỏ/Dynamic Island từng máy.
             SignalToastBanner()
-                .ignoresSafeArea(edges: .top)
         }
         .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in
             isLoggedIn = false
@@ -103,30 +101,27 @@ private struct SignalToastBanner: View {
 
     var body: some View {
         if let text = bus.toastText {
-            HStack(alignment: .top, spacing: 10) {
+            // Gói gọn 1 dòng (nhãn: nội dung) thay vì 2 dòng riêng — để chiều cao khớp đúng
+            // ô tìm kiếm (SearchFieldRow: padding dọc 7 quanh 1 dòng chữ ≈ 36pt), tràn thì cắt "...".
+            HStack(spacing: 6) {
                 Image(systemName: bus.toastIcon)
-                    .font(.system(size: 20))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(bus.toastLabel)
-                        .font(.system(size: 14, weight: .bold))
-                    if !text.isEmpty {
-                        Text(text)
-                            .font(.system(size: 13, weight: .medium))
-                            .opacity(0.85)
-                    }
-                }
+                    .font(.system(size: 14))
+                Text(text.isEmpty ? bus.toastLabel : "\(bus.toastLabel): \(text)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Spacer(minLength: 0)
             }
             .foregroundColor(fgColor)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(bus.toastColor, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 10)
+            .frame(height: 36)
+            .background(bus.toastColor, in: RoundedRectangle(cornerRadius: 10))
             .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
-            // 60pt = đủ né tai thỏ/Dynamic Island (safe area top ~59pt) nhưng KHÔNG xuống quá sâu
-            // tới mức đè lên card đầu tiên bên dưới thanh tìm kiếm — banner dừng ngay ở vùng thanh
-            // tìm kiếm (có thể đè lên chính thanh tìm kiếm, chấp nhận được vì nó chỉ hiện ~3.5s),
-            // không lấn xuống danh sách. Trước đây 8pt nên đè lên đúng tai thỏ, chữ bị cắt.
-            .padding(.top, 60)
+            // padding(.top, 8) + padding(.horizontal, 16) khớp CHÍNH XÁC padding ngoài của
+            // DaySearchBar (.padding(.horizontal) mặc định = 16, .padding(.vertical, 8)) — cùng
+            // gốc safe area (không ignoresSafeArea nữa) nên banner chồng khít lên đúng vị trí ô
+            // tìm kiếm, không lệch xuống dưới hay tràn lên trên như trước.
+            .padding(.top, 8)
             .padding(.horizontal, 16)
             .offset(y: dragOffset)
             .transition(.move(edge: .top).combined(with: .opacity))
