@@ -290,6 +290,7 @@ private struct ReceiptReviewSheet: View {
         saving = true
         errorMessage = nil
         let dateIso = DateNavFormat.queryDate.string(from: date) + "T00:00:00"
+        let ngayGioIso = DateNavFormat.nowIso(onDate: date)
         let items = includedLines.compactMap { line -> ChiTieuHangNgayBulkItemRequest? in
             guard let nguyenLieuId = line.nguyenLieuId else { return nil }
             return ChiTieuHangNgayBulkItemRequest(
@@ -303,7 +304,7 @@ private struct ReceiptReviewSheet: View {
                 rawText: line.rawText
             )
         }
-        let body = ChiTieuHangNgayBulkCreateRequest(ngay: dateIso, ngayGio: dateIso, billThang: billThang, items: items)
+        let body = ChiTieuHangNgayBulkCreateRequest(ngay: dateIso, ngayGio: ngayGioIso, billThang: billThang, items: items)
         let result = await APIClient.shared.bulkCreateChiTieu(body)
         saving = false
         if result.success {

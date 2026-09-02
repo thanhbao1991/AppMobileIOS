@@ -11,6 +11,20 @@ enum DateNavFormat {
         return f
     }()
 
+    private static let queryTime: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    /// Ghép ngày được chọn (có thể là ngày cũ, xem DateNav) với GIỜ THỰC LÚC LƯU — tránh hardcode
+    /// "T00:00:00" khiến ChiTieuHangNgay.NgayGio luôn là nửa đêm dù lưu lúc nào trong ngày (bug phát
+    /// hiện 2/9 qua ảnh chụp "Duyệt hoá đơn": ngày đúng nhưng giờ/phút/giây luôn sai).
+    static func nowIso(onDate date: Date) -> String {
+        queryDate.string(from: date) + "T" + queryTime.string(from: Date())
+    }
+
     /// Chỉ Ngày/Tháng, bỏ năm — theo yêu cầu rút gọn UI (năm không cần thiết cho việc chọn nhanh).
     static let dayTitle: DateFormatter = {
         let f = DateFormatter()
