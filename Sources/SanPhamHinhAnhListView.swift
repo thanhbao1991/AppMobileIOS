@@ -61,9 +61,12 @@ struct SanPhamHinhAnhListView: View {
         if let url {
             if let idx = sanPhams.firstIndex(where: { $0.id == id }) {
                 let old = sanPhams[idx]
+                // Backend giữ nguyên tên file (id.ext) mỗi lần đổi ảnh nên URL không đổi —
+                // gắn query cache-bust để AsyncImage tải lại ngay, không phải thoát vào lại màn hình.
+                let bustedUrl = url + "?v=\(Int(Date().timeIntervalSince1970))"
                 sanPhams[idx] = SanPhamDto(
                     id: old.id, ten: old.ten, ngungBan: old.ngungBan, tenNhomSanPham: old.tenNhomSanPham,
-                    thuTu: old.thuTu, bienThe: old.bienThe, timKiem: old.timKiem, hinhAnh: url)
+                    thuTu: old.thuTu, bienThe: old.bienThe, timKiem: old.timKiem, hinhAnh: bustedUrl)
             }
         } else {
             errorMessage = message ?? "Không cập nhật được ảnh."
@@ -98,7 +101,12 @@ private struct SanPhamHinhAnhRow: View {
                 guard let item else { return }
                 Task {
                     defer { pickerItem = nil }
-                    guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                    // Ảnh gốc từ thư viện có thể vài MB (HEIC/JPEG full-res) — resize + nén trước khi
+                    // upload vì thumbnail chỉ hiển thị 48x48, tránh upload chậm và ảnh nặng làm cả
+                    // danh sách tải lâu về sau.
+                    guard let raw = try? await item.loadTransferable(type: Data.self),
+                          let image = UIImage(data: raw),
+                          let data = image.resizedForMenuUpload().jpegData(compressionQuality: 0.75) else { return }
                     onPicked(data, "image/jpeg")
                 }
             }
@@ -129,5 +137,16 @@ private struct SanPhamHinhAnhRow: View {
                         .foregroundColor(.brandPrimary)
                 )
         }
+    }
+}
+
+private extension UIImage {
+    func resizedForMenuUpload(maxDimension: CGFloat = 800) -> UIImage {
+        let maxSide = max(size.width, size.height)
+        guard maxSide > maxDimension else { return self }
+        let scale = maxDimension / maxSide
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in draw(in: CGRect(origin: .zero, size: newSize)) }
     }
 }
