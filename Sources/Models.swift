@@ -247,6 +247,15 @@ struct NguyenLieuDto: Decodable, Identifiable {
     let giaNhap: Double
 }
 
+/// Danh sách món trong menu — /api/SanPham, dùng cho màn "Ảnh menu" (đổi/thêm HinhAnh cho
+/// AppDatHangIOS). Chỉ lấy field cần, bỏ qua BienThe/TimKiem.
+struct SanPhamDto: Decodable, Identifiable {
+    let id: String
+    let ten: String
+    let ngungBan: Bool
+    let hinhAnh: String?
+}
+
 // ---- Công việc nội bộ ----
 
 struct CongViecNoiBoDto: Decodable, Identifiable {
@@ -348,6 +357,11 @@ struct ThongKeTraNoNgayDto: Decodable {
 struct ThongKeDonChuaThanhToanDto: Decodable {
     let tongChuaThanhToan: Double
     let danhSach: [DonChuaThanhToanItemDto]
+}
+
+struct ThongKeGiamGiaDto: Decodable {
+    let tongGiamGia: Double
+    let danhSach: [NamedAmountDto]
 }
 
 struct TongNoDto: Decodable {

@@ -157,6 +157,39 @@ actor APIClient {
         return (env.data, env.isSuccess ? nil : (env.message ?? "Đọc ảnh thất bại."))
     }
 
+    func getSanPhamList() async -> [SanPhamDto] {
+        let req = makeRequest("/api/SanPham")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[SanPhamDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    /// Đổi/thêm ảnh món — multipart/form-data field "image", cùng cách dựng body với parseReceipt().
+    /// Backend lưu vào wwwroot/menu-images, trả về URL ảnh mới (data: String) để cập nhật UI ngay
+    /// không cần tải lại cả danh sách.
+    func uploadSanPhamHinhAnh(id: String, imageData: Data, mimeType: String = "image/jpeg") async -> (url: String?, message: String?) {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"menu.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var req = URLRequest(url: URL(string: Prefs.apiBase + "/api/SanPham/\(id)/hinh-anh")!)
+        req.httpMethod = "POST"
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = Prefs.token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.httpBody = body
+
+        let (data, _) = await send(req)
+        guard let data else { return (nil, "Không có phản hồi từ server.") }
+        guard let env = try? JSONDecoder().decode(ApiEnvelope<String>.self, from: data) else {
+            return (nil, "Không đọc được phản hồi từ server.")
+        }
+        return (env.data, env.isSuccess ? nil : (env.message ?? "Cập nhật ảnh thất bại."))
+    }
+
     func bulkCreateChiTieu(_ body: ChiTieuHangNgayBulkCreateRequest) async -> ActionResult {
         let req = makeRequest("/api/ChiTieuHangNgay/bulk", method: "POST", body: jsonBody(body))
         return await executeAction(req)
@@ -262,6 +295,9 @@ actor APIClient {
     }
     func getThongKeDonChuaThanhToanThang(thang: Int, nam: Int) async -> ThongKeDonChuaThanhToanDto? {
         await getThongKeThang("don-chua-thanh-toan-thang", thang: thang, nam: nam)
+    }
+    func getThongKeGiamGiaThang(thang: Int, nam: Int) async -> ThongKeGiamGiaDto? {
+        await getThongKeThang("giam-gia-thang", thang: thang, nam: nam)
     }
 
     func getDoanhThuChiTietThang(thang: Int, nam: Int, ten: String) async -> [HoaDonListDto] {

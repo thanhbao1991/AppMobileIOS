@@ -113,6 +113,11 @@ private struct MoreMenuView: View {
                     } label: {
                         Label("Công việc", systemImage: "checklist")
                     }
+                    NavigationLink {
+                        SanPhamHinhAnhListView()
+                    } label: {
+                        Label("Ảnh menu", systemImage: "photo.on.rectangle.angled")
+                    }
                 }
 
                 Section {
