@@ -13,7 +13,6 @@ struct SanPhamHinhAnhListView: View {
 
     private var filtered: [SanPhamDto] {
         sanPhams
-            .filter { !$0.ngungBan }
             .filter { $0.ten.matchesSearch(query) }
             .sorted { $0.ten < $1.ten }
     }

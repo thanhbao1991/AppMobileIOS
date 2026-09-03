@@ -157,13 +157,6 @@ actor APIClient {
         return (env.data, env.isSuccess ? nil : (env.message ?? "Đọc ảnh thất bại."))
     }
 
-    func getSanPhamList() async -> [SanPhamDto] {
-        let req = makeRequest("/api/SanPham")
-        let (data, _) = await send(req)
-        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[SanPhamDto]>.self, from: data), env.isSuccess else { return [] }
-        return env.data ?? []
-    }
-
     /// Đổi/thêm ảnh món — multipart/form-data field "image", cùng cách dựng body với parseReceipt().
     /// Backend lưu vào wwwroot/menu-images, trả về URL ảnh mới (data: String) để cập nhật UI ngay
     /// không cần tải lại cả danh sách.
