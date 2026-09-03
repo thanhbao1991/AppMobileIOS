@@ -1070,12 +1070,9 @@ struct ProductPickerPanel: View {
                             }
                             .font(.caption.bold())
                             .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(active ? Color.brandPrimary.opacity(0.15) : Color.clear)
-                            .foregroundColor(active ? .brandPrimary : .textMuted)
+                            .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.12))
+                            .foregroundColor(active ? .white : .primary)
                             .clipShape(Capsule())
-                            .overlay(
-                                Capsule().stroke(active ? Color.brandPrimary : Color.textMuted.opacity(0.3), lineWidth: 1)
-                            )
                         }
                     }
                 }
