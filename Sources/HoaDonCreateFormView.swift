@@ -1177,34 +1177,32 @@ struct ProductPickerPanel: View {
         }
     }
 
-    /// Nhãn rút gọn cho nút — vẫn toggle đúng ghi chú đầy đủ (activeNotes/noteText không đổi), chỉ
-    /// rút chữ hiển thị để 4 nhóm xếp đủ 1 hàng ngang không bị tràn/cắt chữ.
+    /// Nhãn rút gọn cho nút — vẫn toggle đúng ghi chú đầy đủ (activeNotes/noteText không đổi). Chỉ
+    /// rút "Không" → "Ko", còn lại giữ nguyên chữ đầy đủ theo yêu cầu.
     private static let shortNoteLabels: [String: String] = [
-        "Không đường": "K.đường", "Nhiều ngọt": "N.ngọt", "Đường riêng": "Đ.riêng",
-        "Không đá": "K.đá", "Nhiều đá": "N.đá", "Đá riêng": "Đ.riêng",
-        "Không trà": "K.trà", "Trà nóng": "T.nóng", "Trà đá": "T.đá", "Chỉ TCĐĐ": "TCĐĐ",
-        "Sài gòn": "S.gòn", "Chỉ TCOL": "TCOL", "Chỉ TCT": "TCT",
+        "Không đường": "Ko đường", "Không đá": "Ko đá", "Không trà": "Ko trà",
     ]
 
     /// Lưới 4 cột (Đường/Đá/Trà/Khác cùng 1 hàng), mỗi nhóm xếp DỌC bên trong cột — khớp bố cục
-    /// HoaDonEditWindow.xaml bên Desktop mà nhân viên đã quen mắt, thay vì chip cuộn/xuống dòng ngang.
+    /// HoaDonEditWindow.xaml bên Desktop mà nhân viên đã quen mắt. Chip cao + cách nhau rộng hơn để
+    /// dễ bấm trúng bằng ngón tay.
     private var noteSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Ghi chú món...", text: $noteText)
                 .textFieldStyle(.roundedBorder)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: 4), spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: 4), spacing: 10) {
                 ForEach(quickNoteGroups, id: \.title) { group in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(group.title).font(.caption2).foregroundColor(.textMuted)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 8) {
                             ForEach(group.notes, id: \.self) { note in
                                 let active = activeNotes.contains(note)
                                 Button(Self.shortNoteLabels[note] ?? note) { toggleNote(note) }
                                     .font(.caption2.bold())
-                                    .padding(.horizontal, 5).padding(.vertical, 4)
+                                    .padding(.horizontal, 6).padding(.vertical, 10)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
+                                    .minimumScaleFactor(0.75)
                                     .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.1))
                                     .foregroundColor(active ? .white : .textMuted)
                                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
