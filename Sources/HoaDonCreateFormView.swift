@@ -1194,7 +1194,7 @@ struct ProductPickerPanel: View {
                 ForEach(quickNoteGroups, id: \.title) { group in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(group.title).font(.caption2).foregroundColor(.textMuted)
-                        VStack(alignment: .leading, spacing: 7) {
+                        VStack(alignment: .leading, spacing: 10) {
                             ForEach(group.notes, id: \.self) { note in
                                 let active = activeNotes.contains(note)
                                 Button(Self.shortNoteLabels[note] ?? note) { toggleNote(note) }
