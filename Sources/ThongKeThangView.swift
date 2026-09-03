@@ -24,6 +24,7 @@ struct ThongKeThangView: View {
     @State private var selectedNoKhachHang: TongNoItemDto?
     @State private var selectedThanhToanTen: String?
     @State private var selectedDoanhThuTen: String?
+    @State private var selectedGiamGiaTen: String?
 
     var body: some View {
         NavigationStack {
@@ -101,6 +102,8 @@ struct ThongKeThangView: View {
                                 } content: {
                                     ForEach(giamGia.danhSach) { item in
                                         AmountRow(label: item.ten, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedGiamGiaTen = item.ten }
                                     }
                                 }
                             }
@@ -149,6 +152,12 @@ struct ThongKeThangView: View {
             set: { selectedDoanhThuTen = $0?.ten }
         )) { selection in
             DoanhThuChiTietSheet(ten: selection.ten, currentDate: currentDate)
+        }
+        .sheet(item: Binding(
+            get: { selectedGiamGiaTen.map { ChiTieuTenSelection(ten: $0) } },
+            set: { selectedGiamGiaTen = $0?.ten }
+        )) { selection in
+            ThanhToanChiTietSheet(ten: selection.ten, currentDate: currentDate, isGiamGia: true)
         }
     }
 
@@ -324,6 +333,7 @@ struct ThanhToanChiTietSheet: View {
     let currentDate: Date
     var ngayFilter: Int? = nil
     var traNoIsShipper: Bool? = nil
+    var isGiamGia: Bool = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var items: [ThanhToanChiTietItemDto] = []
@@ -382,6 +392,12 @@ struct ThanhToanChiTietSheet: View {
                     nam: cal.component(.year, from: currentDate),
                     ten: ten,
                     isShipper: traNoIsShipper
+                )
+            } else if isGiamGia {
+                fetched = await APIClient.shared.getGiamGiaChiTietThang(
+                    thang: cal.component(.month, from: currentDate),
+                    nam: cal.component(.year, from: currentDate),
+                    ten: ten
                 )
             } else {
                 fetched = await APIClient.shared.getThanhToanChiTietThang(
