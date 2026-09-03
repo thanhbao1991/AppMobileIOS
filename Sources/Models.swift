@@ -247,15 +247,6 @@ struct NguyenLieuDto: Decodable, Identifiable {
     let giaNhap: Double
 }
 
-/// Danh sách món trong menu — /api/SanPham, dùng cho màn "Ảnh menu" (đổi/thêm HinhAnh cho
-/// AppDatHangIOS). Chỉ lấy field cần, bỏ qua BienThe/TimKiem.
-struct SanPhamDto: Decodable, Identifiable {
-    let id: String
-    let ten: String
-    let ngungBan: Bool
-    let hinhAnh: String?
-}
-
 // ---- Công việc nội bộ ----
 
 struct CongViecNoiBoDto: Decodable, Identifiable {
@@ -516,6 +507,8 @@ struct SanPhamDto: Decodable, Identifiable {
     /// tên liền không cách + viết tắt tự nhận diện ("ts") + VietTat tự đặt tay ("cfk"...), nối bằng
     /// ";"). Dùng để tìm món khớp Desktop (SanPhamMatchHelper.Search) thay vì so trực tiếp `ten`.
     let timKiem: String?
+    /// Ảnh menu cho AppDatHangIOS (app khách đặt hàng) — nil nếu chưa có ảnh khớp/upload.
+    let hinhAnh: String?
 }
 
 struct ToppingDto: Decodable, Identifiable, Hashable {

@@ -61,7 +61,10 @@ struct SanPhamHinhAnhListView: View {
         let (url, message) = await APIClient.shared.uploadSanPhamHinhAnh(id: id, imageData: data, mimeType: mime)
         if let url {
             if let idx = sanPhams.firstIndex(where: { $0.id == id }) {
-                sanPhams[idx] = SanPhamDto(id: sanPhams[idx].id, ten: sanPhams[idx].ten, ngungBan: sanPhams[idx].ngungBan, hinhAnh: url)
+                let old = sanPhams[idx]
+                sanPhams[idx] = SanPhamDto(
+                    id: old.id, ten: old.ten, ngungBan: old.ngungBan, tenNhomSanPham: old.tenNhomSanPham,
+                    thuTu: old.thuTu, bienThe: old.bienThe, timKiem: old.timKiem, hinhAnh: url)
             }
         } else {
             errorMessage = message ?? "Không cập nhật được ảnh."
