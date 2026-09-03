@@ -1184,17 +1184,15 @@ struct ProductPickerPanel: View {
             ForEach(quickNoteGroups, id: \.title) { group in
                 VStack(alignment: .leading, spacing: 4) {
                     Text(group.title).font(.caption2).foregroundColor(.textMuted)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(group.notes, id: \.self) { note in
-                                let active = activeNotes.contains(note)
-                                Button(note) { toggleNote(note) }
-                                    .font(.caption2.bold())
-                                    .padding(.horizontal, 8).padding(.vertical, 4)
-                                    .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.1))
-                                    .foregroundColor(active ? .white : .textMuted)
-                                    .clipShape(Capsule())
-                            }
+                    FlowLayout(spacing: 6) {
+                        ForEach(group.notes, id: \.self) { note in
+                            let active = activeNotes.contains(note)
+                            Button(note) { toggleNote(note) }
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.1))
+                                .foregroundColor(active ? .white : .textMuted)
+                                .clipShape(Capsule())
                         }
                     }
                 }
@@ -1252,6 +1250,50 @@ struct ProductPickerPanel: View {
             picking = nil
             searchText = ""
             searchFocused = true
+        }
+    }
+}
+
+/// Xếp các chip theo hàng, tự xuống dòng khi hết chỗ ngang — thay cho ScrollView(.horizontal) để
+/// nhân viên thấy hết mọi lựa chọn ghi chú ngay, không phải vuốt thêm mới thấy các nút bị cắt.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var rowWidth: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if rowWidth > 0 && rowWidth + spacing + size.width > maxWidth {
+                totalHeight += rowHeight + spacing
+                rowWidth = 0
+                rowHeight = 0
+            }
+            rowWidth += (rowWidth > 0 ? spacing : 0) + size.width
+            rowHeight = max(rowHeight, size.height)
+        }
+        totalHeight += rowHeight
+        return CGSize(width: maxWidth.isFinite ? maxWidth : rowWidth, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified)
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }
