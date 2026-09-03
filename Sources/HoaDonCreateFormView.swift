@@ -1177,22 +1177,38 @@ struct ProductPickerPanel: View {
         }
     }
 
+    /// Nhãn rút gọn cho nút — vẫn toggle đúng ghi chú đầy đủ (activeNotes/noteText không đổi), chỉ
+    /// rút chữ hiển thị để 4 nhóm xếp đủ 1 hàng ngang không bị tràn/cắt chữ.
+    private static let shortNoteLabels: [String: String] = [
+        "Không đường": "K.đường", "Nhiều ngọt": "N.ngọt", "Đường riêng": "Đ.riêng",
+        "Không đá": "K.đá", "Nhiều đá": "N.đá", "Đá riêng": "Đ.riêng",
+        "Không trà": "K.trà", "Trà nóng": "T.nóng", "Trà đá": "T.đá", "Chỉ TCĐĐ": "TCĐĐ",
+        "Sài gòn": "S.gòn", "Chỉ TCOL": "TCOL", "Chỉ TCT": "TCT",
+    ]
+
+    /// Lưới 4 cột (Đường/Đá/Trà/Khác cùng 1 hàng), mỗi nhóm xếp DỌC bên trong cột — khớp bố cục
+    /// HoaDonEditWindow.xaml bên Desktop mà nhân viên đã quen mắt, thay vì chip cuộn/xuống dòng ngang.
     private var noteSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Ghi chú món...", text: $noteText)
                 .textFieldStyle(.roundedBorder)
-            ForEach(quickNoteGroups, id: \.title) { group in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(group.title).font(.caption2).foregroundColor(.textMuted)
-                    FlowLayout(spacing: 6) {
-                        ForEach(group.notes, id: \.self) { note in
-                            let active = activeNotes.contains(note)
-                            Button(note) { toggleNote(note) }
-                                .font(.caption2.bold())
-                                .padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.1))
-                                .foregroundColor(active ? .white : .textMuted)
-                                .clipShape(Capsule())
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: 4), spacing: 8) {
+                ForEach(quickNoteGroups, id: \.title) { group in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(group.title).font(.caption2).foregroundColor(.textMuted)
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(group.notes, id: \.self) { note in
+                                let active = activeNotes.contains(note)
+                                Button(Self.shortNoteLabels[note] ?? note) { toggleNote(note) }
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 5).padding(.vertical, 4)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                    .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.1))
+                                    .foregroundColor(active ? .white : .textMuted)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            }
                         }
                     }
                 }
@@ -1250,50 +1266,6 @@ struct ProductPickerPanel: View {
             picking = nil
             searchText = ""
             searchFocused = true
-        }
-    }
-}
-
-/// Xếp các chip theo hàng, tự xuống dòng khi hết chỗ ngang — thay cho ScrollView(.horizontal) để
-/// nhân viên thấy hết mọi lựa chọn ghi chú ngay, không phải vuốt thêm mới thấy các nút bị cắt.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 6
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var rowWidth: CGFloat = 0
-        var totalHeight: CGFloat = 0
-        var rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if rowWidth > 0 && rowWidth + spacing + size.width > maxWidth {
-                totalHeight += rowHeight + spacing
-                rowWidth = 0
-                rowHeight = 0
-            }
-            rowWidth += (rowWidth > 0 ? spacing : 0) + size.width
-            rowHeight = max(rowHeight, size.height)
-        }
-        totalHeight += rowHeight
-        return CGSize(width: maxWidth.isFinite ? maxWidth : rowWidth, height: totalHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > bounds.minX && x + size.width > bounds.maxX {
-                x = bounds.minX
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified)
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
         }
     }
 }
