@@ -1199,8 +1199,8 @@ struct ProductPickerPanel: View {
                                 let active = activeNotes.contains(note)
                                 Button(Self.shortNoteLabels[note] ?? note) { toggleNote(note) }
                                     .font(.caption2.bold())
-                                    .padding(.horizontal, 6).padding(.vertical, 8)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 6)
+                                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.75)
                                     .background(active ? Color.brandPrimary : Color.textMuted.opacity(0.1))
