@@ -350,9 +350,21 @@ struct ThongKeDonChuaThanhToanDto: Decodable {
     let danhSach: [DonChuaThanhToanItemDto]
 }
 
+struct GiamGiaItemDto: Decodable, Identifiable {
+    let hoaDonId: String
+    let tenKhachHang: String
+    let soTien: Double
+    var id: String { hoaDonId }
+}
+
 struct ThongKeGiamGiaDto: Decodable {
     let tongGiamGia: Double
-    let danhSach: [NamedAmountDto]
+    let tongDonQuan: Double
+    let danhSachDonQuan: [GiamGiaItemDto]
+    let tongDonApp: Double
+    let danhSachDonApp: [GiamGiaItemDto]
+    let tongDonMuaHo: Double
+    let danhSachDonMuaHo: [GiamGiaItemDto]
 }
 
 struct TongNoDto: Decodable {

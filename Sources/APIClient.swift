@@ -309,14 +309,6 @@ actor APIClient {
         return env.data ?? []
     }
 
-    func getGiamGiaChiTietThang(thang: Int, nam: Int, ten: String) async -> [ThanhToanChiTietItemDto] {
-        let tenEncoded = ten.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ten
-        let req = makeRequest("/api/ThongKe/giam-gia-chi-tiet-thang?thang=\(thang)&nam=\(nam)&ten=\(tenEncoded)")
-        let (data, _) = await send(req)
-        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ThanhToanChiTietItemDto]>.self, from: data), env.isSuccess else { return [] }
-        return env.data ?? []
-    }
-
     /// Chi tiết card "Khách trả nợ" (bản ngày) — GetTraNoAsync gộp SUM theo tên khách nên card không
     /// có hoaDonId để tap; endpoint riêng này giữ nguyên bộ lọc nhưng trả nguyên danh sách.
     func getTraNoChiTietThang(thang: Int, nam: Int, ten: String, isShipper: Bool) async -> [ThanhToanChiTietItemDto] {

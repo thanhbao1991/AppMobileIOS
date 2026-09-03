@@ -24,7 +24,6 @@ struct ThongKeThangView: View {
     @State private var selectedNoKhachHang: TongNoItemDto?
     @State private var selectedThanhToanTen: String?
     @State private var selectedDoanhThuTen: String?
-    @State private var selectedGiamGiaTen: String?
 
     var body: some View {
         NavigationStack {
@@ -100,10 +99,23 @@ struct ThongKeThangView: View {
                                 StatCard(icon: "tag", title: "Giảm giá", value: giamGia.tongGiamGia, color: .thongKePurple, isExpanded: expandedCards.contains(.giamGia)) {
                                     toggle(.giamGia)
                                 } content: {
-                                    ForEach(giamGia.danhSach) { item in
-                                        AmountRow(label: item.ten, value: item.soTien)
+                                    SubTotalRow(label: "Đơn Quán", value: giamGia.tongDonQuan, color: .thongKePurple)
+                                    ForEach(giamGia.danhSachDonQuan) { item in
+                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
                                             .contentShape(Rectangle())
-                                            .onTapGesture { selectedGiamGiaTen = item.ten }
+                                            .onTapGesture { selectedHoaDonId = item.hoaDonId }
+                                    }
+                                    SubTotalRow(label: "Đơn App", value: giamGia.tongDonApp, color: .thongKePurple)
+                                    ForEach(giamGia.danhSachDonApp) { item in
+                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedHoaDonId = item.hoaDonId }
+                                    }
+                                    SubTotalRow(label: "Đơn Mua hộ", value: giamGia.tongDonMuaHo, color: .thongKePurple)
+                                    ForEach(giamGia.danhSachDonMuaHo) { item in
+                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { selectedHoaDonId = item.hoaDonId }
                                     }
                                 }
                             }
@@ -152,12 +164,6 @@ struct ThongKeThangView: View {
             set: { selectedDoanhThuTen = $0?.ten }
         )) { selection in
             DoanhThuChiTietSheet(ten: selection.ten, currentDate: currentDate)
-        }
-        .sheet(item: Binding(
-            get: { selectedGiamGiaTen.map { ChiTieuTenSelection(ten: $0) } },
-            set: { selectedGiamGiaTen = $0?.ten }
-        )) { selection in
-            ThanhToanChiTietSheet(ten: selection.ten, currentDate: currentDate, isGiamGia: true)
         }
     }
 
@@ -333,7 +339,6 @@ struct ThanhToanChiTietSheet: View {
     let currentDate: Date
     var ngayFilter: Int? = nil
     var traNoIsShipper: Bool? = nil
-    var isGiamGia: Bool = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var items: [ThanhToanChiTietItemDto] = []
@@ -392,12 +397,6 @@ struct ThanhToanChiTietSheet: View {
                     nam: cal.component(.year, from: currentDate),
                     ten: ten,
                     isShipper: traNoIsShipper
-                )
-            } else if isGiamGia {
-                fetched = await APIClient.shared.getGiamGiaChiTietThang(
-                    thang: cal.component(.month, from: currentDate),
-                    nam: cal.component(.year, from: currentDate),
-                    ten: ten
                 )
             } else {
                 fetched = await APIClient.shared.getThanhToanChiTietThang(
