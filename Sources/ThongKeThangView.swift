@@ -15,6 +15,7 @@ struct ThongKeThangView: View {
     @State private var doanhThu: ThongKeDoanhThuNgayDto?
     @State private var chuaThanhToan: ThongKeDonChuaThanhToanDto?
     @State private var tongNo: TongNoDto?
+    @State private var giamGia: ThongKeGiamGiaDto?
     @State private var chiTieuMonthItems: [ChiTieuHangNgayDto] = []
     @State private var hasLoaded = false
     @State private var expandedCards: Set<ThongKeThangCard> = []
@@ -91,6 +92,15 @@ struct ThongKeThangView: View {
                                         AmountRow(label: item.tenKhachHang, value: item.tongConLai)
                                             .contentShape(Rectangle())
                                             .onTapGesture { selectedNoKhachHang = item }
+                                    }
+                                }
+                            }
+                            if let giamGia {
+                                StatCard(icon: "tag", title: "Giảm giá", value: giamGia.tongGiamGia, color: .thongKePurple, isExpanded: expandedCards.contains(.giamGia)) {
+                                    toggle(.giamGia)
+                                } content: {
+                                    ForEach(giamGia.danhSach) { item in
+                                        AmountRow(label: item.ten, value: item.soTien)
                                     }
                                 }
                             }
@@ -176,8 +186,9 @@ struct ThongKeThangView: View {
         async let f = APIClient.shared.getThongKeDonChuaThanhToanThang(thang: thang, nam: nam)
         async let g = APIClient.shared.getTongNo()
         async let h = APIClient.shared.getChiTieuByMonth(year: nam, month: thang)
+        async let i = APIClient.shared.getThongKeGiamGiaThang(thang: thang, nam: nam)
 
-        (chiTieu, thanhToan, doanhThu, chuaThanhToan, tongNo, chiTieuMonthItems) = await (a, c, d, f, g, h)
+        (chiTieu, thanhToan, doanhThu, chuaThanhToan, tongNo, chiTieuMonthItems, giamGia) = await (a, c, d, f, g, h, i)
         hasLoaded = true
     }
 }
@@ -481,5 +492,5 @@ struct DoanhThuChiTietSheet: View {
 }
 
 private enum ThongKeThangCard: Hashable {
-    case thanhToan, doanhThu, chiTieu, chuaThanhToan, tongNo
+    case thanhToan, doanhThu, chiTieu, chuaThanhToan, tongNo, giamGia
 }
