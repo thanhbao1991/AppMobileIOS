@@ -101,9 +101,9 @@ private struct SanPhamHinhAnhRow: View {
                 guard let item else { return }
                 Task {
                     defer { pickerItem = nil }
-                    // Ảnh gốc từ thư viện có thể vài MB (HEIC/JPEG full-res) — resize + nén trước khi
-                    // upload vì thumbnail chỉ hiển thị 48x48, tránh upload chậm và ảnh nặng làm cả
-                    // danh sách tải lâu về sau.
+                    // Ảnh gốc từ thư viện có thể vài MB (HEIC/JPEG full-res) — crop 3:4 + resize về
+                    // đúng 200x267 (khớp hệt 92 ảnh seed ban đầu) trước khi upload, vì thumbnail chỉ
+                    // hiển thị 48x48/64x64, tránh upload chậm và ảnh nặng làm cả danh sách tải lâu.
                     guard let raw = try? await item.loadTransferable(type: Data.self),
                           let image = UIImage(data: raw),
                           let data = image.resizedForMenuUpload().jpegData(compressionQuality: 0.75) else { return }
@@ -141,12 +141,23 @@ private struct SanPhamHinhAnhRow: View {
 }
 
 private extension UIImage {
-    func resizedForMenuUpload(maxDimension: CGFloat = 800) -> UIImage {
-        let maxSide = max(size.width, size.height)
-        guard maxSide > maxDimension else { return self }
-        let scale = maxDimension / maxSide
-        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        return renderer.image { _ in draw(in: CGRect(origin: .zero, size: newSize)) }
+    /// Center-crop về tỉ lệ 3:4 rồi resize đúng 200x267 — khớp hệt kích thước 92 ảnh seed ban đầu
+    /// (từ AppShippingBackend). Cả 2 nơi hiển thị (ô 48x48, 64x64) đều crop-fit sẵn nên không cần
+    /// độ phân giải cao hơn — giữ file nhẹ như ảnh seed thay vì để nguyên full-res từ camera.
+    func resizedForMenuUpload() -> UIImage {
+        let targetSize = CGSize(width: 200, height: 267)
+        let targetRatio = targetSize.width / targetSize.height
+        let sourceRatio = size.width / size.height
+
+        var drawSize = targetSize
+        if sourceRatio > targetRatio {
+            drawSize.width = targetSize.height * sourceRatio
+        } else {
+            drawSize.height = targetSize.width / sourceRatio
+        }
+        let origin = CGPoint(x: (targetSize.width - drawSize.width) / 2, y: (targetSize.height - drawSize.height) / 2)
+
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        return renderer.image { _ in draw(in: CGRect(origin: origin, size: drawSize)) }
     }
 }
