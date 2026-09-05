@@ -13,86 +13,8 @@ struct GamificationConfigView: View {
         Group {
             if !hasLoaded {
                 VStack { Spacer(); ProgressView(); Spacer() }
-            } else if var cfg = config {
-                Form {
-                    Section("Ly Bí Mật 🎁") {
-                        moneyRow("Giá khách trả", value: Binding(
-                            get: { cfg.lyBiMatGiaTraTien },
-                            set: { cfg.lyBiMatGiaTraTien = $0; config = cfg }
-                        ))
-                        moneyRow("Ngưỡng giá thật tối đa", value: Binding(
-                            get: { cfg.lyBiMatNguongGiaThat },
-                            set: { cfg.lyBiMatNguongGiaThat = $0; config = cfg }
-                        ))
-                    } footer: {
-                        Text("Chỉ món có giá thật ≤ ngưỡng mới được đưa vào bốc ngẫu nhiên.")
-                    }
-
-                    Section("Giới thiệu bạn bè 👥") {
-                        moneyRow("Thưởng mỗi bên", value: Binding(
-                            get: { cfg.gioiThieuThuong },
-                            set: { cfg.gioiThieuThuong = $0; config = cfg }
-                        ))
-                    } footer: {
-                        Text("Cả người giới thiệu và người được giới thiệu đều nhận số tiền này vào ví.")
-                    }
-
-                    Section("Sinh nhật 🎂") {
-                        moneyRow("Quà sinh nhật (1 lần/năm)", value: Binding(
-                            get: { cfg.sinhNhatThuong },
-                            set: { cfg.sinhNhatThuong = $0; config = cfg }
-                        ))
-                    }
-
-                    Section("Thẻ sưu tập ly 🧋") {
-                        HStack {
-                            Text("Số đơn / lần đổi thưởng")
-                            Spacer()
-                            TextField("10", value: Binding(
-                                get: { cfg.stampMocThuong },
-                                set: { cfg.stampMocThuong = $0; config = cfg }
-                            ), format: .number)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 80)
-                        }
-                    }
-
-                    Section {
-                        ForEach(Array(cfg.vongQuayPhanThuong.enumerated()), id: \.element.id) { idx, item in
-                            VongQuayRowEditor(
-                                item: Binding(
-                                    get: { cfg.vongQuayPhanThuong[idx] },
-                                    set: { cfg.vongQuayPhanThuong[idx] = $0; config = cfg }
-                                ),
-                                phanTramText: phanTram(item, in: cfg.vongQuayPhanThuong)
-                            )
-                        }
-                        .onDelete { offsets in
-                            cfg.vongQuayPhanThuong.remove(atOffsets: offsets)
-                            config = cfg
-                        }
-
-                        Button {
-                            cfg.vongQuayPhanThuong.append(VongQuayPhanThuongDto(label: "Ô thưởng mới", trongSo: 10, thuong: 0))
-                            config = cfg
-                        } label: {
-                            Label("Thêm ô thưởng", systemImage: "plus.circle")
-                        }
-                    } header: {
-                        Text("Vòng quay may mắn 🎡")
-                    } footer: {
-                        Text("Trọng số càng cao thì % trúng càng lớn. Tiền thưởng = 0 nghĩa là \"không trúng\".")
-                    }
-
-                    if let errorMessage {
-                        Text(errorMessage).foregroundColor(.dangerColor)
-                    }
-                    if let savedMessage {
-                        Text(savedMessage).foregroundColor(.successColor)
-                    }
-                }
-                .tint(.brandPrimary)
+            } else if let configBinding = Binding($config) {
+                GamificationConfigForm(config: configBinding, errorMessage: errorMessage, savedMessage: savedMessage)
             }
         }
         .navigationTitle("Cấu hình Ưu đãi")
@@ -106,25 +28,6 @@ struct GamificationConfigView: View {
             }
         }
         .task { await load() }
-    }
-
-    private func moneyRow(_ label: String, value: Binding<Double>) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            TextField("0", value: value, format: .number)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 100)
-            Text("đ").foregroundColor(.textMuted)
-        }
-    }
-
-    private func phanTram(_ item: VongQuayPhanThuongDto, in list: [VongQuayPhanThuongDto]) -> String {
-        let tong = list.reduce(0) { $0 + $1.trongSo }
-        guard tong > 0 else { return "0%" }
-        let pct = Double(item.trongSo) / Double(tong) * 100
-        return String(format: "%.0f%%", pct)
     }
 
     private func load() async {
@@ -147,6 +50,90 @@ struct GamificationConfigView: View {
     }
 }
 
+private struct GamificationConfigForm: View {
+    @Binding var config: GamificationConfigDto
+    let errorMessage: String?
+    let savedMessage: String?
+
+    var body: some View {
+        Form {
+            Section("Ly Bí Mật 🎁") {
+                moneyRow("Giá khách trả", value: $config.lyBiMatGiaTraTien)
+                moneyRow("Ngưỡng giá thật tối đa", value: $config.lyBiMatNguongGiaThat)
+            } footer: {
+                Text("Chỉ món có giá thật ≤ ngưỡng mới được đưa vào bốc ngẫu nhiên.")
+            }
+
+            Section("Giới thiệu bạn bè 👥") {
+                moneyRow("Thưởng mỗi bên", value: $config.gioiThieuThuong)
+            } footer: {
+                Text("Cả người giới thiệu và người được giới thiệu đều nhận số tiền này vào ví.")
+            }
+
+            Section("Sinh nhật 🎂") {
+                moneyRow("Quà sinh nhật (1 lần/năm)", value: $config.sinhNhatThuong)
+            }
+
+            Section("Thẻ sưu tập ly 🧋") {
+                HStack {
+                    Text("Số đơn / lần đổi thưởng")
+                    Spacer()
+                    TextField("10", value: $config.stampMocThuong, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 80)
+                }
+            }
+
+            Section {
+                ForEach($config.vongQuayPhanThuong) { $item in
+                    VongQuayRowEditor(item: $item, phanTramText: phanTram(item, in: config.vongQuayPhanThuong))
+                }
+                .onDelete { offsets in
+                    config.vongQuayPhanThuong.remove(atOffsets: offsets)
+                }
+
+                Button {
+                    config.vongQuayPhanThuong.append(VongQuayPhanThuongDto(label: "Ô thưởng mới", trongSo: 10, thuong: 0))
+                } label: {
+                    Label("Thêm ô thưởng", systemImage: "plus.circle")
+                }
+            } header: {
+                Text("Vòng quay may mắn 🎡")
+            } footer: {
+                Text("Trọng số càng cao thì % trúng càng lớn. Tiền thưởng = 0 nghĩa là \"không trúng\".")
+            }
+
+            if let errorMessage {
+                Text(errorMessage).foregroundColor(.dangerColor)
+            }
+            if let savedMessage {
+                Text(savedMessage).foregroundColor(.successColor)
+            }
+        }
+        .tint(.brandPrimary)
+    }
+
+    private func moneyRow(_ label: String, value: Binding<Double>) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField("0", value: value, format: .number)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 100)
+            Text("đ").foregroundColor(.textMuted)
+        }
+    }
+
+    private func phanTram(_ item: VongQuayPhanThuongDto, in list: [VongQuayPhanThuongDto]) -> String {
+        let tong = list.reduce(0) { $0 + $1.trongSo }
+        guard tong > 0 else { return "0%" }
+        let pct = Double(item.trongSo) / Double(tong) * 100
+        return String(format: "%.0f%%", pct)
+    }
+}
+
 private struct VongQuayRowEditor: View {
     @Binding var item: VongQuayPhanThuongDto
     let phanTramText: String
@@ -155,10 +142,8 @@ private struct VongQuayRowEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Nhãn hiển thị", text: $item.label)
                 .font(.subheadline).fontWeight(.semibold)
-            HStack {
-                Stepper("Trọng số: \(item.trongSo) (\(phanTramText))", value: $item.trongSo, in: 1...1000)
-            }
-            .font(.caption)
+            Stepper("Trọng số: \(item.trongSo) (\(phanTramText))", value: $item.trongSo, in: 1...1000)
+                .font(.caption)
             HStack {
                 Text("Tiền thưởng")
                     .font(.caption)
