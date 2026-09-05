@@ -18,6 +18,9 @@ struct DeviceSessionsView: View {
                 List {
                     ForEach(sessions) { session in
                         SessionRowView(session: session)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
                                     Task { await revoke(session) }
@@ -74,41 +77,55 @@ private struct SessionRowView: View {
         }
     }
 
+    // Thiết bị này màu xanh lá phân biệt ngay giữa 1 danh sách dài — khớp badge "Thiết bị này".
+    private var accentColor: Color { session.laThietBiHienTai ? .successColor : .brandPrimary }
+
     var body: some View {
-        HStack {
-            Image(systemName: platformIcon)
-                .foregroundColor(.brandPrimary)
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                Circle().fill(accentColor.opacity(0.16)).frame(width: 40, height: 40)
+                Image(systemName: platformIcon)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundColor(accentColor)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(session.thietBi?.isEmpty == false ? session.thietBi! : "Thiết bị không tên")
-                        .font(.subheadline).fontWeight(.medium)
+                        .font(.subheadline.bold())
                     if session.laThietBiHienTai {
                         Text("Thiết bị này")
-                            .font(.caption2)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 7).padding(.vertical, 2)
                             .background(Color.successColor)
                             .foregroundColor(.white)
                             .clipShape(Capsule())
                     }
+                    Spacer()
                 }
+
                 HStack(spacing: 4) {
                     if let platformLabel {
-                        Text(platformLabel).font(.caption2).foregroundColor(.brandPrimary)
+                        Text(platformLabel).font(.caption.bold()).foregroundColor(accentColor)
                     }
                     // Chỉ có giá trị khi người xem là "admin" — xem được session của mọi tài khoản.
                     if let tk = session.tenTaiKhoan, !tk.isEmpty {
-                        Text("· \(tk)").font(.caption2).foregroundColor(.textMuted)
+                        Text("· \(tk)").font(.caption).foregroundColor(.textMuted)
                     }
                 }
-                Text("Đăng nhập: \(DeviceSessionsView.formatUtc(session.ngayTao))")
-                    .font(.caption2).foregroundColor(.textMuted)
-                Text("Hết hạn: \(DeviceSessionsView.formatUtc(session.hetHan))")
-                    .font(.caption2).foregroundColor(.textMuted)
+
+                HStack(spacing: 14) {
+                    Label(DeviceSessionsView.formatUtc(session.ngayTao), systemImage: "arrow.right.circle")
+                    Label(DeviceSessionsView.formatUtc(session.hetHan), systemImage: "clock")
+                }
+                .font(.caption2)
+                .foregroundColor(.textMuted)
+                .labelStyle(.titleAndIcon)
             }
-            Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

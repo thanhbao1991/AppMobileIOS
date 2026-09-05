@@ -22,12 +22,25 @@ actor APIClient {
         return req
     }
 
+    // Refresh đang chạy dở (nếu có) — nhiều màn hình bắn request song song trên cùng actor này (vd.
+    // ThongKeView.load() gọi 8 endpoint /api/ThongKe cùng lúc bằng "async let"). actor Swift MẶC ĐỊNH
+    // reentrant tại các điểm await — nếu cả 8 request cùng dính 401 (token hết hạn), mỗi request tự
+    // gọi doRefresh() riêng thì y hệt lỗi từng gặp bên AppShipperAndroid: backend xoay vòng refresh
+    // token kiểu one-time-use (AuthService.RefreshAsync ghi đè TokenHash ngay khi dùng), request thắng
+    // race lưu token mới xong thì các request thua bị BE từ chối refresh token cũ (đã tiêu) → 401 →
+    // Prefs.clear() xoá sạch luôn token mới vừa refresh thành công, bắt đăng xuất dù phiên còn sống.
+    // Gộp lại 1 Task refresh dùng chung: request đến sau thấy đang có refresh dở thì CHỜ kết quả đó
+    // thay vì tự gọi network riêng.
+    private var refreshTask: Task<String?, Never>?
+
     private func send(_ req: URLRequest, allowRefresh: Bool = true) async -> (Data?, HTTPURLResponse?) {
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
             let http = resp as? HTTPURLResponse
-            if http?.statusCode == 401, allowRefresh, let refreshToken = Prefs.refreshToken {
-                if let newToken = await doRefresh(refreshToken) {
+            if http?.statusCode == 401, allowRefresh {
+                let usedToken = req.value(forHTTPHeaderField: "Authorization")?
+                    .replacingOccurrences(of: "Bearer ", with: "")
+                if let newToken = await refreshTokenCoalesced(previousToken: usedToken) {
                     var retried = req
                     retried.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
                     return await send(retried, allowRefresh: false)
@@ -41,6 +54,25 @@ actor APIClient {
         } catch {
             return (nil, nil)
         }
+    }
+
+    /// Double-check trước khi refresh: nếu token hiện tại đã khác token vừa dùng lúc 401 nghĩa là 1
+    /// request khác vừa refresh xong — dùng luôn, khỏi gọi /api/auth/refresh thừa. Nếu chưa có ai
+    /// refresh, request đầu tiên tạo Task, các request đến sau (kể cả do actor reentrant) chỉ await
+    /// chung Task đó thay vì tạo Task/network call mới.
+    private func refreshTokenCoalesced(previousToken: String?) async -> String? {
+        if let current = Prefs.token, !current.isEmpty, current != previousToken { return current }
+
+        if let existing = refreshTask {
+            return await existing.value
+        }
+
+        guard let refreshToken = Prefs.refreshToken else { return nil }
+        let task = Task<String?, Never> { await self.doRefresh(refreshToken) }
+        refreshTask = task
+        let result = await task.value
+        refreshTask = nil
+        return result
     }
 
     private func doRefresh(_ refreshToken: String) async -> String? {
