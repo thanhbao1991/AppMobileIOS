@@ -57,15 +57,19 @@ private struct GamificationConfigForm: View {
 
     var body: some View {
         Form {
-            Section("Ly Bí Mật 🎁") {
+            Section {
                 moneyRow("Giá khách trả", value: $config.lyBiMatGiaTraTien)
                 moneyRow("Ngưỡng giá thật tối đa", value: $config.lyBiMatNguongGiaThat)
+            } header: {
+                Text("Ly Bí Mật 🎁")
             } footer: {
                 Text("Chỉ món có giá thật ≤ ngưỡng mới được đưa vào bốc ngẫu nhiên.")
             }
 
-            Section("Giới thiệu bạn bè 👥") {
+            Section {
                 moneyRow("Thưởng mỗi bên", value: $config.gioiThieuThuong)
+            } header: {
+                Text("Giới thiệu bạn bè 👥")
             } footer: {
                 Text("Cả người giới thiệu và người được giới thiệu đều nhận số tiền này vào ví.")
             }
