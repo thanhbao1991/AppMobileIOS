@@ -118,6 +118,11 @@ private struct MoreMenuView: View {
                     } label: {
                         Label("Ảnh menu", systemImage: "photo.on.rectangle.angled")
                     }
+                    NavigationLink {
+                        ThongBaoQuanListView()
+                    } label: {
+                        Label("Thông báo/Khuyến mãi", systemImage: "megaphone")
+                    }
                 }
 
                 Section {

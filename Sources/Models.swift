@@ -262,6 +262,22 @@ struct CongViecNoiBoRequest: Encodable {
     let ngayGio: String?
 }
 
+// ---- Thông báo/khuyến mãi (app khách AppDatHangIOS đọc qua ThongBaoService, quản trị ở đây) ----
+
+struct ThongBaoQuanDto: Codable, Identifiable {
+    let id: String
+    var tieude: String
+    var noiDung: String
+    var dangHoatDong: Bool
+    let ngayTao: String?
+}
+
+struct ThongBaoQuanRequest: Encodable {
+    let tieude: String
+    let noiDung: String
+    let dangHoatDong: Bool
+}
+
 // ---- Thống kê (port từ TraSuaApp.Desktop ThongKeTabControl — nguồn chính xác, KHÔNG dùng
 // TraSuaApp.Mobile/Pages/ThongKe.cshtml vì trang đó không còn liên kết từ navbar) ----
 

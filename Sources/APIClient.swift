@@ -274,6 +274,31 @@ actor APIClient {
         return await executeAction(req)
     }
 
+    // Tin khuyến mãi hiện cho app khách (AppDatHangIOS) — quản trị từ đây.
+    func getThongBaoQuanList() async -> [ThongBaoQuanDto] {
+        let req = makeRequest("/api/ThongBaoQuan")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<[ThongBaoQuanDto]>.self, from: data), env.isSuccess else { return [] }
+        return env.data ?? []
+    }
+
+    func createThongBaoQuan(tieude: String, noiDung: String, dangHoatDong: Bool) async -> ActionResult {
+        let body = ThongBaoQuanRequest(tieude: tieude, noiDung: noiDung, dangHoatDong: dangHoatDong)
+        let req = makeRequest("/api/ThongBaoQuan", method: "POST", body: jsonBody(body))
+        return await executeAction(req)
+    }
+
+    func updateThongBaoQuan(id: String, tieude: String, noiDung: String, dangHoatDong: Bool) async -> ActionResult {
+        let body = ThongBaoQuanRequest(tieude: tieude, noiDung: noiDung, dangHoatDong: dangHoatDong)
+        let req = makeRequest("/api/ThongBaoQuan/\(id)", method: "PUT", body: jsonBody(body))
+        return await executeAction(req)
+    }
+
+    func deleteThongBaoQuan(id: String) async -> ActionResult {
+        let req = makeRequest("/api/ThongBaoQuan/\(id)", method: "DELETE")
+        return await executeAction(req)
+    }
+
     func getThongKeChiTieu(ngay: Int, thang: Int, nam: Int) async -> ThongKeChiTieuDto? {
         await getThongKe("chi-tieu-ngay", ngay: ngay, thang: thang, nam: nam)
     }
