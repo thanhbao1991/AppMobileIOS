@@ -123,6 +123,11 @@ private struct MoreMenuView: View {
                     } label: {
                         Label("Thông báo/Khuyến mãi", systemImage: "megaphone")
                     }
+                    NavigationLink {
+                        GamificationConfigView()
+                    } label: {
+                        Label("Cấu hình Ưu đãi", systemImage: "gift")
+                    }
                 }
 
                 Section {

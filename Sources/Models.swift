@@ -278,6 +278,24 @@ struct ThongBaoQuanRequest: Encodable {
     let dangHoatDong: Bool
 }
 
+// ---- Cấu hình ngưỡng/số tiền gamification (app khách AppDatHangIOS) ----
+
+struct VongQuayPhanThuongDto: Codable, Identifiable, Hashable {
+    var id: String = UUID().uuidString
+    var label: String
+    var trongSo: Int
+    var thuong: Double
+}
+
+struct GamificationConfigDto: Codable {
+    var lyBiMatGiaTraTien: Double
+    var lyBiMatNguongGiaThat: Double
+    var gioiThieuThuong: Double
+    var sinhNhatThuong: Double
+    var stampMocThuong: Int
+    var vongQuayPhanThuong: [VongQuayPhanThuongDto]
+}
+
 // ---- Thống kê (port từ TraSuaApp.Desktop ThongKeTabControl — nguồn chính xác, KHÔNG dùng
 // TraSuaApp.Mobile/Pages/ThongKe.cshtml vì trang đó không còn liên kết từ navbar) ----
 

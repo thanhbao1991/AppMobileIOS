@@ -299,6 +299,20 @@ actor APIClient {
         return await executeAction(req)
     }
 
+    // Ngưỡng/số tiền các tính năng giữ chân khách (Ly Bí Mật, giới thiệu, sinh nhật, vòng quay, thẻ
+    // tem) trong app khách — trước đây hardcode, giờ chỉnh được từ đây.
+    func getGamificationConfig() async -> GamificationConfigDto? {
+        let req = makeRequest("/api/GamificationConfig")
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<GamificationConfigDto>.self, from: data), env.isSuccess else { return nil }
+        return env.data
+    }
+
+    func updateGamificationConfig(_ dto: GamificationConfigDto) async -> ActionResult {
+        let req = makeRequest("/api/GamificationConfig", method: "PUT", body: jsonBody(dto))
+        return await executeAction(req)
+    }
+
     func getThongKeChiTieu(ngay: Int, thang: Int, nam: Int) async -> ThongKeChiTieuDto? {
         await getThongKe("chi-tieu-ngay", ngay: ngay, thang: thang, nam: nam)
     }
