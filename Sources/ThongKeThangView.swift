@@ -24,6 +24,7 @@ struct ThongKeThangView: View {
     @State private var selectedNoKhachHang: TongNoItemDto?
     @State private var selectedThanhToanTen: String?
     @State private var selectedDoanhThuTen: String?
+    @State private var selectedGiamGiaCategory: GiamGiaCategorySelection?
 
     var body: some View {
         NavigationStack {
@@ -96,27 +97,22 @@ struct ThongKeThangView: View {
                                 }
                             }
                             if let giamGia {
+                                // Chỉ hiện 3 dòng phân loại chung (khớp hành vi card "Doanh thu") thay vì
+                                // liệt kê từng đơn ngay trong card — bấm vào 1 phân loại mới mở sheet ra
+                                // danh sách đơn của phân loại đó (GiamGiaChiTietSheet, dữ liệu đã có sẵn
+                                // trong response nên không cần gọi thêm API).
                                 StatCard(icon: "tag", title: "Giảm giá", value: giamGia.tongGiamGia, color: .thongKePurple, isExpanded: expandedCards.contains(.giamGia)) {
                                     toggle(.giamGia)
                                 } content: {
-                                    SubTotalRow(label: "Đơn Quán", value: giamGia.tongDonQuan, color: .thongKePurple)
-                                    ForEach(giamGia.danhSachDonQuan) { item in
-                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
-                                            .contentShape(Rectangle())
-                                            .onTapGesture { selectedHoaDonId = item.hoaDonId }
-                                    }
-                                    SubTotalRow(label: "Đơn App", value: giamGia.tongDonApp, color: .thongKePurple)
-                                    ForEach(giamGia.danhSachDonApp) { item in
-                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
-                                            .contentShape(Rectangle())
-                                            .onTapGesture { selectedHoaDonId = item.hoaDonId }
-                                    }
-                                    SubTotalRow(label: "Đơn Mua hộ", value: giamGia.tongDonMuaHo, color: .thongKePurple)
-                                    ForEach(giamGia.danhSachDonMuaHo) { item in
-                                        AmountRow(label: item.tenKhachHang, value: item.soTien)
-                                            .contentShape(Rectangle())
-                                            .onTapGesture { selectedHoaDonId = item.hoaDonId }
-                                    }
+                                    AmountRow(label: "Đơn Quán", value: giamGia.tongDonQuan)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { selectedGiamGiaCategory = GiamGiaCategorySelection(label: "Đơn Quán", items: giamGia.danhSachDonQuan) }
+                                    AmountRow(label: "Đơn App", value: giamGia.tongDonApp)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { selectedGiamGiaCategory = GiamGiaCategorySelection(label: "Đơn App", items: giamGia.danhSachDonApp) }
+                                    AmountRow(label: "Đơn Mua hộ", value: giamGia.tongDonMuaHo)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { selectedGiamGiaCategory = GiamGiaCategorySelection(label: "Đơn Mua hộ", items: giamGia.danhSachDonMuaHo) }
                                 }
                             }
                         }
@@ -164,6 +160,9 @@ struct ThongKeThangView: View {
             set: { selectedDoanhThuTen = $0?.ten }
         )) { selection in
             DoanhThuChiTietSheet(ten: selection.ten, currentDate: currentDate)
+        }
+        .sheet(item: $selectedGiamGiaCategory) { selection in
+            GiamGiaChiTietSheet(label: selection.label, items: selection.items)
         }
     }
 
@@ -495,6 +494,70 @@ struct DoanhThuChiTietSheet: View {
             }
             items = fetched
             hasLoaded = true
+        }
+        .sheet(item: Binding(
+            get: { selectedHoaDonId.map { IdentifiableId($0) } },
+            set: { selectedHoaDonId = $0?.value }
+        )) { wrapped in
+            HoaDonDetailView(hoaDonId: wrapped.value) {}
+        }
+        .presentationDragIndicator(.visible)
+    }
+}
+
+/// Không private — ThongKeView (bản ngày) tái dùng chung để bấm vào 1 phân loại giảm giá.
+struct GiamGiaCategorySelection: Identifiable {
+    let label: String
+    let items: [GiamGiaItemDto]
+    var id: String { label }
+}
+
+/// Danh sách đơn của 1 phân loại giảm giá (Đơn Quán/App/Mua hộ) — khớp hành vi DoanhThuChiTietSheet,
+/// nhưng KHÔNG gọi thêm API vì response /api/ThongKe/*-giam-gia-thang đã kèm sẵn danh sách đơn từng
+/// phân loại. Không private — ThongKeView (bản ngày) tái dùng chung.
+struct GiamGiaChiTietSheet: View {
+    let label: String
+    let items: [GiamGiaItemDto]
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedHoaDonId: String?
+
+    private var total: Double { items.reduce(0) { $0 + $1.soTien } }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    HStack {
+                        Text("Tổng cộng").foregroundColor(.textMuted)
+                        Spacer()
+                        Text(HoaDonFormatting.money(total)).font(.headline).monospacedDigit()
+                    }
+                }
+                ForEach(items) { item in
+                    Button {
+                        selectedHoaDonId = item.hoaDonId
+                    } label: {
+                        HStack {
+                            Text(item.tenKhachHang)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Text(HoaDonFormatting.money(item.soTien))
+                                .font(.subheadline.weight(.semibold))
+                                .monospacedDigit()
+                        }
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle(label)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Đóng") { dismiss() }
+                }
+            }
         }
         .sheet(item: Binding(
             get: { selectedHoaDonId.map { IdentifiableId($0) } },
