@@ -248,7 +248,7 @@ struct HoaDonDetailView: View {
     /// khớp tên với đơn giá trong d.chiTietHoaDonToppings (đơn giá 1 loại topping cố định, không đổi
     /// theo món/dòng nào áp dụng) để vừa tính tiền vừa ghi giá ngay sau tên topping ("Trân châu
     /// +5.000"), thay vì hiện tên trơn không ai biết tốn thêm bao nhiêu.
-    private static func toppingParts(_ toppingText: String?, allToppings: [ChiTietHoaDonToppingResponseDto]) -> [(text: String, tien: Double)] {
+    fileprivate static func toppingParts(_ toppingText: String?, allToppings: [ChiTietHoaDonToppingResponseDto]) -> [(text: String, tien: Double)] {
         guard let toppingText, !toppingText.isEmpty else { return [] }
         return toppingText.split(separator: ",").compactMap { part -> (text: String, tien: Double)? in
             let trimmed = part.trimmingCharacters(in: .whitespaces)
@@ -632,10 +632,14 @@ enum BillTextBuilder {
         }
         sb += "\n"
 
+        let allToppings = d.chiTietHoaDonToppings ?? []
         for ct in d.chiTietHoaDons ?? [] where ct.donGia > 0 {
             let bienThe = (ct.tenBienThe?.isEmpty == false && ct.tenBienThe != "Size Chuẩn") ? " (\(ct.tenBienThe!))" : ""
+            // Cộng thêm toppingTien vào thành tiền dòng — khớp itemRow trên màn hình chi tiết (dòng
+            // 242), tránh lệch giữa hiển thị app và text gửi khách khi món có topping.
+            let toppingTien = HoaDonDetailView.toppingParts(ct.toppingText, allToppings: allToppings).reduce(0.0) { $0 + $1.tien }
             sb += "- \(ct.tenSanPham)\(bienThe)\n"
-            sb += "   \(ct.soLuong) x \(moneyPlain(ct.donGia)) = \(moneyPlain(ct.donGia * Double(ct.soLuong)))\n"
+            sb += "   \(ct.soLuong) x \(moneyPlain(ct.donGia)) = \(moneyPlain(ct.donGia * Double(ct.soLuong) + toppingTien))\n"
             if let topping = ct.toppingText, !topping.isEmpty {
                 sb += "      + \(topping)\n"
             }
