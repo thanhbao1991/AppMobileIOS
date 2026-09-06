@@ -637,11 +637,14 @@ enum BillTextBuilder {
             let bienThe = (ct.tenBienThe?.isEmpty == false && ct.tenBienThe != "Size Chuẩn") ? " (\(ct.tenBienThe!))" : ""
             // Cộng thêm toppingTien vào thành tiền dòng — khớp itemRow trên màn hình chi tiết (dòng
             // 242), tránh lệch giữa hiển thị app và text gửi khách khi món có topping.
-            let toppingTien = HoaDonDetailView.toppingParts(ct.toppingText, allToppings: allToppings).reduce(0.0) { $0 + $1.tien }
+            let toppings = HoaDonDetailView.toppingParts(ct.toppingText, allToppings: allToppings)
+            let toppingTien = toppings.reduce(0.0) { $0 + $1.tien }
             sb += "- \(ct.tenSanPham)\(bienThe)\n"
             sb += "   \(ct.soLuong) x \(moneyPlain(ct.donGia)) = \(moneyPlain(ct.donGia * Double(ct.soLuong) + toppingTien))\n"
-            if let topping = ct.toppingText, !topping.isEmpty {
-                sb += "      + \(topping)\n"
+            // In kèm giá từng topping ("Kem Flan x2 +16k") thay vì chỉ tên trơn — khớp cách hiển thị
+            // trên màn hình chi tiết (itemRow), tránh khách không biết +16k đến từ đâu.
+            for topping in toppings {
+                sb += "      + \(topping.text)\n"
             }
             if let note = ct.noteText, !note.isEmpty {
                 sb += "      * \(note)\n"
