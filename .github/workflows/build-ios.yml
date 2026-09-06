@@ -9,6 +9,28 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  test:
+    # Job riêng, chạy trên simulator (không -sdk iphoneos như job build) — build cho thiết bị thật
+    # không code-sign được thì cũng không chạy test được (XCTest cần app thật thực thi, không chỉ
+    # build). Test target thêm 2026-09-06, xem Tests/ — trước đó app này không có test nào.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Run unit tests (iOS Simulator)
+        run: |
+          xcodebuild test \
+            -project AppMobileIOS.xcodeproj \
+            -scheme AppMobileIOS \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            CODE_SIGNING_ALLOWED=NO
+
   build:
     # macos-14 chỉ có Xcode 15.4 sẵn — xcodegen bản mới ghi project file format 77 (Xcode 16+),
     # Xcode 15.4 không mở được ("future Xcode project file format"). macos-15 có Xcode 16 mặc định.
