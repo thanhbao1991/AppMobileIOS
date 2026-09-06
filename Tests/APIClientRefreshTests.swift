@@ -139,9 +139,12 @@ final class APIClientRefreshTests: XCTestCase {
         XCTAssertTrue(sessions.isEmpty)
         XCTAssertEqual(Prefs.token, "token-moi")
         XCTAssertEqual(Prefs.refreshToken, "refresh-moi")
-        // Đúng 1 request nghiệp vụ với token cũ (401) + 1 refresh + 1 request nghiệp vụ retry với
-        // token mới — không lặp vô hạn, không bỏ sót retry.
-        let businessCalls = MockURLProtocol.captured.filter { $0.path != "/api/auth/refresh" }
+        // Đúng 1 request /api/Auth/sessions với token cũ (401) + 1 refresh + 1 request retry với
+        // token mới — không lặp vô hạn, không bỏ sót retry. Lọc đúng path "/api/Auth/sessions" thay
+        // vì "khác /api/auth/refresh" — host app khi khởi động trong môi trường test có thể tự bắn
+        // request khác (LoginView.task auto-login) trùng lúc MockURLProtocol đang đăng ký, đếm nhầm
+        // vào "business calls" nếu chỉ loại trừ mỗi path refresh (từng gây flaky 7 != 2).
+        let businessCalls = MockURLProtocol.captured.filter { $0.path == "/api/Auth/sessions" }
         XCTAssertEqual(businessCalls.count, 2)
         XCTAssertEqual(MockURLProtocol.captured.filter { $0.path == "/api/auth/refresh" }.count, 1)
     }
