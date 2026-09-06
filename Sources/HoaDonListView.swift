@@ -43,8 +43,10 @@ struct HoaDonListView: View {
     /// Tổng tiền theo từng phân loại đơn, gộp trên 1 dòng gọn — icon thay chữ để đỡ tốn ngang, khỏi
     /// bị xuống 2 dòng như bản text cũ ("Ship 203k, T.chỗ 230k...").
     private var phanLoaiTotals: [(phanLoai: String, icon: String, color: Color, text: String)] {
+        // Thiếu AppDatHang ở đây thì doanh thu đơn app khách biến mất khỏi thanh tổng, dù vẫn còn
+        // trong sortedItems — mirror đúng lỗi đã sửa ở ThongKeService (Backend, thêm nhãn "Đặt qua app").
         let order: [(code: String, icon: String)] = [
-            ("Ship", "scooter"), ("Tại Chỗ", "chair.fill"), ("Mv", "bag.fill"),
+            ("Ship", "scooter"), ("AppDatHang", "iphone.gen3"), ("Tại Chỗ", "chair.fill"), ("Mv", "bag.fill"),
             ("Mh", "hand.raised.fill"), ("App", "iphone"),
         ]
         return order.compactMap { entry in
@@ -391,7 +393,10 @@ enum HoaDonQuickFilter: CaseIterable, Hashable {
     func matches(_ item: HoaDonListDto) -> Bool {
         switch self {
         case .tiNuaChuyenKhoan, .ghiNo, .traNo, .chuaChon:
-            guard item.phanLoai == "Ship", item.nguoiShip == "Khánh" else { return false }
+            // AppDatHang cùng bản chất giao hàng với Ship — ShipperQueryService (Backend) giờ trả cả
+            // 2 loại cho app shipper (fix 2026-09-06), nên bộ lọc ghi chú shipper ở đây cũng phải
+            // khớp cả AppDatHang, không chỉ Ship.
+            guard item.phanLoai == "Ship" || item.phanLoai == "AppDatHang", item.nguoiShip == "Khánh" else { return false }
             let note = (item.ghiChuShipper ?? "").trimmingCharacters(in: .whitespaces).lowercased()
             switch self {
             case .tiNuaChuyenKhoan:
@@ -478,10 +483,10 @@ private struct HoaDonRowView: View {
     }
 
     /// Shipper đánh dấu "Tí nữa chuyển khoản" (GhiChuShipper == chuỗi cố định, xem
-    /// ShipperActionService.TiNuaChuyenKhoanAsync) — chỉ set được cho đơn Ship (ShipperQueryService
-    /// chỉ trả PhanLoai='Ship' cho app shipper), Mv không bao giờ có giá trị này.
+    /// ShipperActionService.TiNuaChuyenKhoanAsync) — set được cho Ship/AppDatHang (ShipperQueryService
+    /// trả cả 2 loại cho app shipper từ 2026-09-06), Mv không bao giờ có giá trị này.
     private var shipTiNuaChuyenKhoan: Bool {
-        item.phanLoai == "Ship" && item.ghiChuShipper == "Tí nữa chuyển khoản" && item.conLai > 0
+        (item.phanLoai == "Ship" || item.phanLoai == "AppDatHang") && item.ghiChuShipper == "Tí nữa chuyển khoản" && item.conLai > 0
     }
 
     var body: some View {
@@ -496,7 +501,7 @@ private struct HoaDonRowView: View {
                     Text(HoaDonFormatting.phanLoaiLabel(item.phanLoai))
                         .font(.caption.bold())
                         .foregroundColor(HoaDonFormatting.phanLoaiColor(item.phanLoai))
-                    if item.phanLoai == "Ship", let nguoiShip = item.nguoiShip, !nguoiShip.isEmpty {
+                    if (item.phanLoai == "Ship" || item.phanLoai == "AppDatHang"), let nguoiShip = item.nguoiShip, !nguoiShip.isEmpty {
                         ShipperAvatarView(name: nguoiShip, size: 16)
                     }
                     Spacer()
@@ -513,7 +518,7 @@ private struct HoaDonRowView: View {
                 }
                 Text(item.tenKhachHangText?.isEmpty == false ? item.tenKhachHangText! : (item.tenBan.map { "Bàn \($0)" } ?? "Khách lẻ"))
                     .font(.subheadline.bold())
-                if item.phanLoai == "Ship", let diaChi = item.diaChiText, !diaChi.isEmpty {
+                if (item.phanLoai == "Ship" || item.phanLoai == "AppDatHang"), let diaChi = item.diaChiText, !diaChi.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "location.fill").font(.caption2).foregroundColor(.textMuted)
                         Text(diaChi).font(.footnote).foregroundColor(.textMuted).lineLimit(1)

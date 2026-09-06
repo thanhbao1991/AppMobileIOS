@@ -41,7 +41,8 @@ struct HoaDonDetailView: View {
                             Text(HoaDonFormatting.phanLoaiLabel(detail.phanLoai))
                                 .font(.caption.bold())
                                 .foregroundColor(HoaDonFormatting.phanLoaiColor(detail.phanLoai))
-                            if detail.phanLoai == "Ship", let nguoiShip = detail.nguoiShip, !nguoiShip.isEmpty {
+                            if (detail.phanLoai == "Ship" || detail.phanLoai == "AppDatHang"),
+                               let nguoiShip = detail.nguoiShip, !nguoiShip.isEmpty {
                                 ShipperAvatarView(name: nguoiShip, size: 20)
                             }
                         }
@@ -317,7 +318,10 @@ struct HoaDonDetailView: View {
             // Đổi phương thức ngay trước Hoàn tác (4 nút cuối) — Ship/Ghi nợ (nếu có) xếp trước,
             // không đụng vị trí các nút này.
             LazyVGrid(columns: twoColumns, spacing: 10) {
-                if d.phanLoai == "Ship" {
+                // AppDatHang cùng cần gán shipper y hệt Ship — thiếu điều kiện này thì staff KHÔNG
+                // GÁN ĐƯỢC SHIPPER cho đơn app khách qua mobile (mirror bug đã sửa ở Desktop
+                // HoaDonTabControl.Actions.cs EscAsync).
+                if d.phanLoai == "Ship" || d.phanLoai == "AppDatHang" {
                     ActionButtonView(icon: "scooter", code: "Esc", caption: "Đi Ship", color: .pinkColor) {
                         showShipperPicker = true
                     }

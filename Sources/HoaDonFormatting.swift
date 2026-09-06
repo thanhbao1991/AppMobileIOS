@@ -107,6 +107,10 @@ enum HoaDonFormatting {
         case "Mv": return "Mua về"
         case "Mh": return "Mua hộ"
         case "App": return "App"
+        // AppDatHang (đơn qua app khách của quán, thêm 2026-09-06) — trước khi thêm dòng này, rơi
+        // vào default và hiện SAI thành "Ship" (không phải chỉ thiếu phân biệt, mà hiện nhầm loại
+        // khác hẳn — mirror đúng bug đã tìm thấy và sửa ở Desktop HoaDonTabControl.xaml).
+        case "AppDatHang": return "App Khách"
         default: return "Ship"
         }
     }
@@ -117,6 +121,8 @@ enum HoaDonFormatting {
         case "Mv": return .warningColor
         case "Mh": return .pinkColor
         case "App": return .dangerColor
+        // AppDatHang rơi vào default (.brandPrimary) là ĐÚNG — cùng tông màu Ship, khớp quyết định
+        // đã áp dụng ở Desktop (HoaDonDomain.AccentResourceKey). Không cần case riêng.
         default: return .brandPrimary
         }
     }
@@ -127,9 +133,9 @@ enum HoaDonFormatting {
         phanLoaiColor(phanLoai).pastelBackground()
     }
 
-    /// Khớp PhanLoai.NeedKhachHang (Desktop, HoaDonDomain.cs) — 3 phân loại này cần SĐT/địa chỉ giao.
+    /// Khớp PhanLoai.NeedKhachHang (Desktop, HoaDonDomain.cs) — 4 phân loại này cần SĐT/địa chỉ giao.
     static func needKhachHang(_ phanLoai: String?) -> Bool {
-        phanLoai == "Ship" || phanLoai == "Mh" || phanLoai == "App"
+        phanLoai == "Ship" || phanLoai == "Mh" || phanLoai == "App" || phanLoai == "AppDatHang"
     }
 
     /// Khớp PhanLoai.HasAutoDiscount (Desktop) — App/Mua hộ tự giảm 5%, làm tròn 1000 gần nhất
@@ -153,14 +159,18 @@ enum HoaDonFormatting {
     static func sortPriority(_ item: HoaDonListDto) -> Int {
         let phanLoai = item.phanLoai
         let conLai = item.conLai
-        let chuaCoShipper = phanLoai == "Ship" && (item.nguoiShip?.isEmpty ?? true)
+        // AppDatHang (đơn qua app khách của quán) cùng bản chất giao hàng với Ship — phải xếp CÙNG
+        // mức ưu tiên, không thì đơn app khách chưa gán shipper rớt xuống ưu tiên 4 (ngang Tại Chỗ)
+        // thay vì 1 (mirror đúng bug đã sửa ở Desktop HoaDonSortService.GetSortOrder).
+        let laGiaoHang = phanLoai == "Ship" || phanLoai == "AppDatHang"
+        let chuaCoShipper = laGiaoHang && (item.nguoiShip?.isEmpty ?? true)
         let isNo = !(item.ngayNo?.isEmpty ?? true)
 
-        if conLai <= 0.0 && phanLoai == "Ship" && chuaCoShipper { return 1 }
+        if conLai <= 0.0 && laGiaoHang && chuaCoShipper { return 1 }
         if conLai <= 0.0 { return 6 }
         if isNo { return 7 }
-        if phanLoai == "Ship" && chuaCoShipper { return 1 }
-        if phanLoai == "Ship" { return 5 }
+        if laGiaoHang && chuaCoShipper { return 1 }
+        if laGiaoHang { return 5 }
         if phanLoai == "Mv" || phanLoai == "Mh" { return 2 }
         if phanLoai == "App" { return 3 }
         return 4 // Tại Chỗ
