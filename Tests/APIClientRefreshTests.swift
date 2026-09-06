@@ -30,7 +30,13 @@ final class MockURLProtocol: URLProtocol {
         awaitRequestCount = 0
     }
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
+    // Chỉ chặn đúng request đi tới backend giả lập — canInit trả true vô điều kiện từng vô tình bắt
+    // luôn cả traffic hệ thống không liên quan (app-launch telemetry của OS chạy nền lúc host app
+    // khởi động cho test), làm lệch số đếm request nghiệp vụ trong bài test (7 thay vì 2 — không
+    // phải bug thật của APIClient, mà do mock quá tham request).
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.host == URL(string: Prefs.apiBase)?.host
+    }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
