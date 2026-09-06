@@ -247,6 +247,10 @@ struct NguyenLieuDto: Decodable, Identifiable {
     let giaNhap: Double
 }
 
+struct NguyenLieuCreateRequest: Encodable {
+    let ten: String
+}
+
 // ---- Công việc nội bộ ----
 
 struct CongViecNoiBoDto: Decodable, Identifiable {

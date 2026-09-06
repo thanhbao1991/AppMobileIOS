@@ -31,6 +31,8 @@ struct DeviceSessionsView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Color(.systemGroupedBackground))
                 .refreshable { await load() }
             }
         }

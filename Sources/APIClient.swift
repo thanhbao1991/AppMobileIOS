@@ -255,6 +255,18 @@ actor APIClient {
         return env.data ?? []
     }
 
+    /// Thêm nguyên liệu mới ngay trong form Thêm chi tiêu — chỉ Ten là bắt buộc phía server
+    /// (NguyenLieuService.CreateAsync), các field khác server tự để mặc định (0/false/null).
+    func createNguyenLieu(ten: String) async -> (success: Bool, message: String?, nguyenLieu: NguyenLieuDto?) {
+        let body = NguyenLieuCreateRequest(ten: ten)
+        let req = makeRequest("/api/NguyenLieu", method: "POST", body: jsonBody(body))
+        let (data, _) = await send(req)
+        guard let data, let env = try? JSONDecoder().decode(ApiEnvelope<NguyenLieuDto>.self, from: data) else {
+            return (false, "Không có phản hồi từ server.", nil)
+        }
+        return (env.isSuccess, env.message, env.data)
+    }
+
     func getCongViecList() async -> [CongViecNoiBoDto] {
         let req = makeRequest("/api/CongViecNoiBo")
         let (data, _) = await send(req)

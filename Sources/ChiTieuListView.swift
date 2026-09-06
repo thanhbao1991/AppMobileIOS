@@ -399,6 +399,7 @@ struct AddExpenseSheet: View {
     @State private var billThang = false
     @State private var saving = false
     @State private var errorMessage: String?
+    @State private var addingNguyenLieu = false
 
     /// Rỗng khi chưa gõ gì — danh sách nguyên liệu quá dài để liệt kê hết như dropdown, phải gõ
     /// tìm mới hiện kết quả (khớp cách sửa "Thêm món" bên HoaDonCreateFormView.ProductPickerSheet).
@@ -429,6 +430,21 @@ struct AddExpenseSheet: View {
                             } label: {
                                 Text(nl.ten)
                             }
+                        }
+
+                        // Gõ tên không khớp nguyên liệu nào có sẵn (VD "Dao Thái Lan" lần đầu mua) —
+                        // cho thêm mới ngay tại đây thay vì phải mở Desktop/web quản lý danh mục.
+                        if !searchText.isEmpty && filteredList.isEmpty {
+                            Button {
+                                Task { await addNewNguyenLieu() }
+                            } label: {
+                                if addingNguyenLieu {
+                                    ProgressView()
+                                } else {
+                                    Label("Thêm nguyên liệu mới \"\(searchText)\"", systemImage: "plus.circle")
+                                }
+                            }
+                            .disabled(addingNguyenLieu)
                         }
                     }
                 }
@@ -463,6 +479,22 @@ struct AddExpenseSheet: View {
             }
         }
         .task { nguyenLieuList = await APIClient.shared.getNguyenLieu() }
+    }
+
+    private func addNewNguyenLieu() async {
+        let ten = searchText.trimmingCharacters(in: .whitespaces)
+        guard !ten.isEmpty else { return }
+        addingNguyenLieu = true
+        errorMessage = nil
+        let result = await APIClient.shared.createNguyenLieu(ten: ten)
+        addingNguyenLieu = false
+        if result.success, let nl = result.nguyenLieu {
+            nguyenLieuList.append(nl)
+            selected = nl
+            searchText = ""
+        } else {
+            errorMessage = result.message ?? "Không thêm được nguyên liệu."
+        }
     }
 
     private func save() async {
