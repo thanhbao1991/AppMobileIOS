@@ -227,7 +227,7 @@ struct HoaDonDetailView: View {
         let toppings = Self.toppingParts(ct.toppingText, allToppings: allToppings)
         let toppingTien = toppings.reduce(0.0) { $0 + $1.tien }
         let hinhAnh = ct.sanPhamId.flatMap { hinhAnhMap[$0] }
-        return HStack(alignment: .top, spacing: 10) {
+        return HStack(alignment: .center, spacing: 10) {
             itemThumbnail(hinhAnh, ten: ct.tenSanPham)
             Text("\(ct.soLuong)")
                 .font(.caption.bold())
