@@ -17,6 +17,10 @@ struct HoaDonDetailView: View {
     @State private var showSmsComposer = false
     @State private var qrImage: UIImage?
     @State private var showEditForm = false
+    /// SanPhamId -> HinhAnh — API /HoaDon/{id} không kèm ảnh (chỉ ChiTietHoaDon, không join SanPham),
+    /// nên tự tra qua catalog (khớp cách Desktop gán HinhAnh client-side theo SanPhamId, xem
+    /// ChiTietHoaDonDto.cs).
+    @State private var hinhAnhMap: [String: String] = [:]
 
     var body: some View {
         NavigationStack {
@@ -222,7 +226,9 @@ struct HoaDonDetailView: View {
     private func itemRow(_ ct: ChiTietHoaDonResponseDto, allToppings: [ChiTietHoaDonToppingResponseDto]) -> some View {
         let toppings = Self.toppingParts(ct.toppingText, allToppings: allToppings)
         let toppingTien = toppings.reduce(0.0) { $0 + $1.tien }
+        let hinhAnh = ct.sanPhamId.flatMap { hinhAnhMap[$0] }
         return HStack(alignment: .top, spacing: 10) {
+            itemThumbnail(hinhAnh, ten: ct.tenSanPham)
             Text("\(ct.soLuong)")
                 .font(.caption.bold())
                 .foregroundColor(.white)
@@ -241,6 +247,31 @@ struct HoaDonDetailView: View {
             Spacer()
             Text(HoaDonFormatting.money(ct.donGia * Double(ct.soLuong) + toppingTien))
                 .font(.subheadline.bold())
+        }
+    }
+
+    @ViewBuilder
+    private func itemThumbnail(_ hinhAnh: String?, ten: String) -> some View {
+        if let hinhAnh, let url = URL(string: hinhAnh) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                default:
+                    Color.textMuted.opacity(0.12)
+                }
+            }
+            .frame(width: 36, height: 36)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        } else {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.textMuted.opacity(0.12))
+                .frame(width: 36, height: 36)
+                .overlay(
+                    Text(ten.trimmingCharacters(in: .whitespaces).prefix(1).uppercased())
+                        .font(.caption.bold())
+                        .foregroundColor(.brandPrimary)
+                )
         }
     }
 
@@ -501,7 +532,10 @@ struct HoaDonDetailView: View {
 
     private func load() async {
         loading = true
-        detail = await APIClient.shared.getHoaDonDetail(hoaDonId)
+        async let d = APIClient.shared.getHoaDonDetail(hoaDonId)
+        async let sp = APIClient.shared.getSanPhamList()
+        detail = await d
+        hinhAnhMap = Dictionary(uniqueKeysWithValues: await sp.compactMap { p in p.hinhAnh.map { (p.id, $0) } })
         loading = false
         await loadQrImage()
     }

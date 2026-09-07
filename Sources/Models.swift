@@ -81,6 +81,7 @@ struct ChiTietHoaDonToppingResponseDto: Decodable, Identifiable {
 
 struct ChiTietHoaDonResponseDto: Decodable, Identifiable {
     let id: String
+    let sanPhamId: String?
     let tenSanPham: String
     let tenBienThe: String?
     let soLuong: Int
